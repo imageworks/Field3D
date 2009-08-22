@@ -1,0 +1,113 @@
+------------------------------------------------------------------------
+  ABOUT THE FIELD3D LIBRARY
+------------------------------------------------------------------------
+
+Field3D is an open source library for storing voxel data. It provides C++ 
+classes that handle in-memory storage and a file format based on HDF5 that 
+allows the C++ objects to be written to and read from disk.
+
+The majority of the documentation is available in the project Wiki at 
+http://code.google.com/p/field3d/
+
+------------------------------------------------------------------------
+  LICENSE
+------------------------------------------------------------------------
+
+The Field3D source code is distributed under the "New BSD" license.
+See the file called COPYING for details.
+
+------------------------------------------------------------------------
+  FIELD3D DEPENDENCIES
+------------------------------------------------------------------------
+
+Field3D was originally developed under CentOS. It has also been tested
+under MacOS X Leopard.
+
+The make system used by Field3D is SCons. You will need to install it
+before compiling Field3D if you want to use the supplied setup.
+More information about SCons is available at: http://www.scons.org/
+
+The libraries required for Field3D are:
+
+  boost (1.32.0)
+  IlmBase (1.0.1)
+  HDF5 (1.8.x)
+
+Boost can be downloaded from 
+  http://www.boost.org/
+
+More information about HDF5 can be found at: 
+  http://www.hdfgroup.org/HDF5/
+
+Field3D has only been compiled and tested using the IlmBase 1.0.1, 
+though earlier versions of the combined OpenEXR, which included the
+Imath library, may also work.
+More information about IlmBase/OpenEXR can be found at: 
+  http://www.openexr.com/
+
+To use a math library other than Imath - see the section USING A 
+CUSTOM MATH LIBRARY below.
+
+Under MacOS X, MacPorts is a useful utility for installing the libraries
+needed. The installation files for MacPorts can be found at:
+  http://www.macports.org/
+
+After installing MacPorts, just type:
+
+> sudo port install scons
+> sudo port install boost
+> sudo port install hdf5-18
+> sudo port install ilmbase
+
+------------------------------------------------------------------------
+  BUILDING FIELD3D
+------------------------------------------------------------------------
+
+Field3D was originally developed under CentOS. It has also been tested
+under MacOS X Leopard.
+
+By default, Field3D will look in your platform's standard directories 
+for include files and libraries. If your libraries reside elsewhere,
+refer to the CUSTOMIZING THE BUILD ENVIRONMENT section below.
+
+If you are compiling on an untested platform, you may need to extend the
+"systemIncludePaths" and "systemLibPaths" dictionaries in the file
+called BuildSupport.py. 
+
+To build Field3D, go to the root directory and type "scons". This will
+build a shared and a static library and place them in the "install"
+folder. By default an optimized/release build is created.
+
+To build a debug version, type "scons debug=1".
+
+To build a 64-bit version, type "scons do64=1".
+
+------------------------------------------------------------------------
+  CUSTOMIZING THE BUILD ENVIRONMENT
+------------------------------------------------------------------------
+
+Field3D will look in your platform's standard directories for include
+files and libraries. If you need to add further library paths, include
+paths etc., add a "Site.py" file in the root directory. 
+
+The file ExampleSite.py can be used for reference.
+
+------------------------------------------------------------------------
+  USING A CUSTOM MATH LIBRARY
+------------------------------------------------------------------------
+
+The "Site.py" file can be used to change the math library used by
+Field3D. The only current requirement is that the other library is
+syntactically equivalent to Imath. At Sony Imageworks, the Imath library
+is wrapped in an "SPI" namespace - the ExampleSite.py and SpiMathLib.h 
+files shows an example of how to configure it.
+
+------------------------------------------------------------------------
+  QUESTIONS AND COMMENTS
+------------------------------------------------------------------------
+
+For questions and/or comments, please join the field3d-dev discussion
+group at Google Groups. http://groups.google.com/group/field3d-dev
+
+The project web page URL is: http://code.google.com/p/field3d/
+

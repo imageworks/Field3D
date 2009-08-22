@@ -1,0 +1,31 @@
+# ------------------------------------------------------------------------------
+
+import os
+import sys
+
+# ------------------------------------------------------------------------------
+
+pathToRoot = "../../.."
+
+sys.path.append(pathToRoot)
+
+from BuildSupport import *
+
+buildPath = buildDir()
+binPath   = join(buildPath, os.path.basename(os.getcwd()))
+
+# ------------------------------------------------------------------------------
+
+Import("env")
+appEnv = env.Clone()
+
+setupEnv(appEnv, pathToRoot)
+addField3DInstall(appEnv, pathToRoot)
+
+appEnv.VariantDir(buildPath, ".", duplicate = 0)
+files = Glob(join(buildPath, "*.cpp"))
+
+app = appEnv.Program(binPath, files)
+appEnv.Default(app)
+
+# ------------------------------------------------------------------------------

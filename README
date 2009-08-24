@@ -29,7 +29,7 @@ More information about SCons is available at: http://www.scons.org/
 
 The libraries required for Field3D are:
 
-  boost (1.32.0)
+  boost (1.34.0)
   IlmBase (1.0.1)
   HDF5 (1.8.x)
 

@@ -96,6 +96,22 @@ FieldMapping::FieldMapping(const Box3i &extents)
 }
 //----------------------------------------------------------------------------//
 
+FieldMapping::FieldMapping(const FieldMapping& src)
+{
+  *this = src;
+  m_counter = 0;
+}
+
+//----------------------------------------------------------------------------//
+    
+FieldMapping & FieldMapping::operator = (const FieldMapping &src)
+{
+  m_origin = src.m_origin;
+  m_res = src.m_res;
+}
+
+//----------------------------------------------------------------------------//
+
 FieldMapping::~FieldMapping()
 { 
   /* Empty */ 

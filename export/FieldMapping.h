@@ -50,6 +50,7 @@
 #include <algorithm>
 
 #include <boost/intrusive_ptr.hpp>
+#include <boost/thread/mutex.hpp>
 
 #include "Types.h"
 
@@ -93,8 +94,15 @@ class FieldMapping
   //! \name Constructors & destructor
   //! \{
 
+  //! Constructor
   FieldMapping();
+  //! Construct with known extents
   FieldMapping(const Box3i &extents);
+  //! Copy constructor
+  FieldMapping(const FieldMapping& src);
+  //! Assignment operator
+  FieldMapping& operator = (const FieldMapping &src);
+  //! Destructor
   virtual ~FieldMapping();
 
   //! \}
@@ -117,14 +125,26 @@ class FieldMapping
 
   // Reference counting --------------------------------------------------------
 
+  //! Used by boost::intrusive_pointer
   size_t refcnt(void) 
-  { return m_counter; }
+  { 
+    boost::mutex::scoped_lock lock(m_refMutex);
+    return m_counter; 
+  }
 
+  //! Used by boost::intrusive_pointer
   void ref(void) 
-  { m_counter++; }
+  {         
+    boost::mutex::scoped_lock lock(m_refMutex);
+    m_counter++; 
+  }
 
+  //! Used by boost::intrusive_pointer
   void unref(void) 
-  { m_counter--; }
+  { 
+    boost::mutex::scoped_lock lock(m_refMutex);
+    m_counter--; 
+  }
   
   // To be implemented by subclasses -------------------------------------------
 
@@ -204,6 +224,8 @@ class FieldMapping
 
   //! Reference counter
   mutable int m_counter;
+  //! mutex for ref counting
+  mutable boost::mutex m_refMutex;     
 };
 
 //----------------------------------------------------------------------------//

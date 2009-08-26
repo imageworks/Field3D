@@ -108,6 +108,7 @@ FieldMapping & FieldMapping::operator = (const FieldMapping &src)
 {
   m_origin = src.m_origin;
   m_res = src.m_res;
+  return *this;
 }
 
 //----------------------------------------------------------------------------//

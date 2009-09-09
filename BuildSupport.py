@@ -100,8 +100,7 @@ def getMathHeader():
         import Site
         if hasattr(Site, "mathInc"):
             return Site.mathInc
-    else:
-        return stdMathHeader
+    return stdMathHeader
 
 # ------------------------------------------------------------------------------
 

@@ -36,7 +36,7 @@
 //----------------------------------------------------------------------------//
 
 #define FIELD3D_MAJOR_VER 1
-#define FIELD3D_MINOR_VER 1
+#define FIELD3D_MINOR_VER 0
 #define FIELD3D_MICRO_VER 1
 
 #define FIELD3D_VERSION_NS v1_0

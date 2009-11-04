@@ -117,6 +117,66 @@ inline std::string dataTypeToString<V3d>()
 
 //----------------------------------------------------------------------------//
 
+enum DataTypeEnum {
+  DataTypeHalf=0,
+  DataTypeFloat,
+  DataTypeDouble,
+  DataTypeVecHalf,
+  DataTypeVecFloat,
+  DataTypeVecDouble,
+  DataTypeUnknown
+};
+
+//----------------------------------------------------------------------------//
+
+//! \todo Remove this implementation so compiler will catch non-specialized
+//! cases.
+template <typename T>
+inline DataTypeEnum dataTypeToEnum() { return DataTypeUnknown; }
+
+//----------------------------------------------------------------------------//
+
+// template specializations
+
+template<>
+inline DataTypeEnum dataTypeToEnum<SPI::OpenEXR::half>()
+{
+  return DataTypeHalf;
+}
+
+template<>
+inline DataTypeEnum dataTypeToEnum<float>()
+{
+  return DataTypeFloat;
+}
+
+template<>
+inline DataTypeEnum dataTypeToEnum<double>()
+{
+  return DataTypeDouble;
+}
+
+template<>
+inline DataTypeEnum
+dataTypeToEnum<SPI::OpenEXR::Imath::Vec3<SPI::OpenEXR::half> >()
+{
+  return DataTypeVecHalf;
+}
+
+template<>
+inline DataTypeEnum dataTypeToEnum<SPI::OpenEXR::Imath::V3f>()
+{
+  return DataTypeVecFloat;
+}
+
+template<>
+inline DataTypeEnum dataTypeToEnum<SPI::OpenEXR::Imath::V3d>()
+{
+  return DataTypeVecDouble;
+}
+
+//----------------------------------------------------------------------------//
+
 FIELD3D_NAMESPACE_HEADER_CLOSE
 
 //----------------------------------------------------------------------------//

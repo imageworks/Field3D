@@ -56,6 +56,15 @@ using namespace Field3D;
 
 //----------------------------------------------------------------------------//
 
+//! Converts any class with operator<< to a string using boost::lexical_cast
+template <class T>
+std::string str(const T& t)
+{
+  return boost::lexical_cast<std::string>(t);
+}
+
+//----------------------------------------------------------------------------//
+
 int main(int argc, char **argv) 
 {
   std::string filename("test_file.f3d");
@@ -71,19 +80,19 @@ int main(int argc, char **argv)
       numFields = lexical_cast<int>(argv[1]);
     } 
     catch (boost::bad_lexical_cast &e) {
-      Log::print("Couldn't parse integer number. Aborting");
+      Msg::print("Couldn't parse integer number. Aborting");
       exit(1);
     }
   } else {
     // No voxel res given
-    Log::print("Usage: " + lexical_cast<string>(argv[0]) + 
+    Msg::print("Usage: " + str(argv[0]) + 
                " <num_fields>");
-    Log::print("Got no number of fields. Using default.");
+    Msg::print("Got no number of fields. Using default.");
   }
 
   // Create fields ---
 
-  Log::print("Creating " + str(numFields) + " fields");
+  Msg::print("Creating " + str(numFields) + " fields");
 
   SparseFieldf::Vec fields;
 
@@ -103,7 +112,7 @@ int main(int argc, char **argv)
 
   // Write fields ---
 
-  Log::print("Writing fields");
+  Msg::print("Writing fields");
 
   Field3DOutputFile out;
   out.create(filename);
@@ -114,7 +123,7 @@ int main(int argc, char **argv)
 
   // Read with dynamic loading ---
 
-  Log::print("Reading fields");
+  Msg::print("Reading fields");
 
   SparseFileManager::singleton().setLimitMemUse(true);
 
@@ -126,7 +135,7 @@ int main(int argc, char **argv)
   for (int i = 0; i < numFields; i++) {  
     Field<float>::Vec fields = in.readScalarLayers<float>(str(i), attribName);
     if (fields.size() != 1) {
-      Log::print("Got the wrong # of fields. Aborting.");
+      Msg::print("Got the wrong # of fields. Aborting.");
       exit(1);
     }
     loadedFields.push_back(fields[0]);
@@ -134,20 +143,20 @@ int main(int argc, char **argv)
 
   // Compare fields ---
 
-  Log::print("Comparing fields");
+  Msg::print("Comparing fields");
 
   FIELD3D_RAND48 rng(10512);
 
-  Log::print("  Mem use before access: ");
+  Msg::print("  Mem use before access: ");
 
   for (int i = 0; i < numFields; i++) {
-    Log::print("    Field " + str(i) + "       : " + 
+    Msg::print("    Field " + str(i) + "       : " + 
                str(fields[i]->memSize()));
-    Log::print("    Loaded field " + str(i) + ": " + 
+    Msg::print("    Loaded field " + str(i) + ": " + 
                str(loadedFields[i]->memSize()));
   }
 
-  SparseFieldf::LinearInterp interp;
+  LinearFieldInterp<float> interp;
   for (int sample = 0; sample < 1000; sample++) {  
     V3d lsP(rng.nextf(), rng.nextf(), rng.nextf()), vsP;
     for (int i = 0; i < numFields; i++) {
@@ -155,18 +164,18 @@ int main(int argc, char **argv)
       float value = interp.sample(*fields[i], vsP);
       float loadedValue = interp.sample(*loadedFields[i], vsP);
       if (value != loadedValue) {
-        Log::print("Got a bad value at " + str(vsP));
+        Msg::print("Got a bad value at " + str(vsP));
         exit(1);
       }
     }
   }
 
-  Log::print("  Mem use after access: ");
+  Msg::print("  Mem use after access: ");
 
   for (int i = 0; i < numFields; i++) {
-    Log::print("    Field " + str(i) + "       : " + 
+    Msg::print("    Field " + str(i) + "       : " + 
                str(fields[i]->memSize()));
-    Log::print("    Loaded field " + str(i) + ": " + 
+    Msg::print("    Loaded field " + str(i) + ": " + 
                str(loadedFields[i]->memSize()));
   }
 

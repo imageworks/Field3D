@@ -118,22 +118,22 @@ class CubicFieldInterp : public FieldInterp<Data_T>
 };
 
 //----------------------------------------------------------------------------//
-// LinearDenseFieldInterp
+// LinearGenericFieldInterp
 //----------------------------------------------------------------------------//
 
-/* \class LinearDenseFieldInterp
+/* \class LinearGenericFieldInterp
    \ingroup field
-   \brief Linear interpolator optimized for dense fields
+   \brief Linear interpolator optimized for fields with a fastValue function 
 */
 
 //----------------------------------------------------------------------------//
 
-template <class Data_T>
-class LinearDenseFieldInterp
+template <class Field_T>
+class LinearGenericFieldInterp
 {
  public:
-  typedef boost::shared_ptr<LinearDenseFieldInterp> Ptr;
-  Data_T sample(const DenseField<Data_T> &data, const V3d &vsP) const;
+  typedef boost::shared_ptr<LinearGenericFieldInterp> Ptr;
+  typename Field_T::value_type sample(const Field_T &data, const V3d &vsP) const;
 };
 
 //----------------------------------------------------------------------------//
@@ -158,22 +158,22 @@ class LinearMACFieldInterp
 };
 
 //----------------------------------------------------------------------------//
-// CubicDenseFieldInterp
+// CubicGenericFieldInterp
 //----------------------------------------------------------------------------//
 
-/* \class CubicDenseFieldInterp
+/* \class CubicGenericFieldInterp
    \ingroup field
-   \brief Linear interpolator optimized for dense fields
+   \brief Cubic interpolator optimized for fields with a fastValue function 
 */
 
 //----------------------------------------------------------------------------//
 
-template <class Data_T>
-class CubicDenseFieldInterp
+template <class Field_T>
+class CubicGenericFieldInterp
 {
 public:
-  typedef boost::shared_ptr<CubicDenseFieldInterp> Ptr;
-  Data_T sample(const DenseField<Data_T> &data, const V3d &vsP) const;
+  typedef boost::shared_ptr<CubicGenericFieldInterp> Ptr;
+  typename Field_T::value_type sample(const Field_T &data, const V3d &vsP) const;
 };
 
 //----------------------------------------------------------------------------//
@@ -444,10 +444,13 @@ Data_T CubicFieldInterp<Data_T>::sample(const Field<Data_T> &data,
 
 //----------------------------------------------------------------------------//
 
-template <class Data_T>
-Data_T LinearDenseFieldInterp<Data_T>::sample(const DenseField<Data_T> &data, 
-                                              const V3d &vsP) const
+template <class Field_T>
+typename Field_T::value_type
+LinearGenericFieldInterp<Field_T>::sample(const Field_T &data, 
+                                          const V3d &vsP) const
 {
+  typedef typename Field_T::value_type Data_T;
+
   // Pixel centers are at .5 coordinates
   // NOTE: Don't use contToDisc for this, we're looking for sample
   // point locations, not coordinate shifts.
@@ -610,10 +613,13 @@ Data_T LinearMACFieldInterp<Data_T>::sample(const MACField<Data_T> &data,
 
 //----------------------------------------------------------------------------//
 
-template <class Data_T>
-Data_T CubicDenseFieldInterp<Data_T>::sample(const DenseField<Data_T> &data, 
-                                             const V3d &vsP) const
+template <class Field_T>
+typename Field_T::value_type
+CubicGenericFieldInterp<Field_T>::sample(const Field_T &data, 
+                                         const V3d &vsP) const
 {
+  typedef typename Field_T::value_type Data_T;
+
   // Pixel centers are at .5 coordinates
   // NOTE: Don't use contToDisc for this, we're looking for sample
   // point locations, not coordinate shifts.

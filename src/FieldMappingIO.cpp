@@ -35,15 +35,16 @@
 
 //----------------------------------------------------------------------------//
 
-/*! \file FieldIOFactory.cpp
-  \brief Contains implementation of FieldIOFactory class
+/*! \file FieldMappingIO.cpp
+  \brief Contains the FieldMapping base class and the NullFieldMapping and
+  MatrixFieldMapping subclass implementations.
 */
 
 //----------------------------------------------------------------------------//
 
-#include "FieldIOFactory.h"
-
 #include "Hdf5Util.h"
+
+#include "FieldMappingIO.h"
 
 //----------------------------------------------------------------------------//
 
@@ -53,92 +54,99 @@ FIELD3D_NAMESPACE_OPEN
 // Field3D namespaces
 //----------------------------------------------------------------------------//
 
+using namespace std;
 using namespace Exc;
 using namespace Hdf5Util;
 
 //----------------------------------------------------------------------------//
 
-FieldIOFactory* FieldIOFactory::m_fieldIOFactory = 0;
+namespace {
+  //! \todo This is duplicated in FieldMapping.cpp. Fix.
+  const string k_nullMappingName("NullFieldMapping");
+  //! \todo This is duplicated in FieldMapping.cpp. Fix.
+  const string k_matrixMappingName("MatrixFieldMapping");
 
-//----------------------------------------------------------------------------//
-// Static data members
-//----------------------------------------------------------------------------//
-
-std::string FieldIO::classNameAttrName("class_name");
-std::string FieldIO::versionAttrName("version");
-
-//----------------------------------------------------------------------------//
-
-bool
-FieldIOFactory::write(hid_t layerGroup, FieldBase::Ptr field) const
-{
-  if (m_ioClasses.size() == 0) {
-    Log::print(Log::SevWarning, 
-               "No I/O classes registered. Did you forget to call initIO()?");
-    return false;
-  }
-
-  IoClassMap::const_iterator i = m_ioClasses.find(field->className());
-  if (i == m_ioClasses.end()) {
-    Log::print(Log::SevWarning, "Unable to find class type: " + 
-              field->className());
-    return false;
-  }
-
-  // Add class name attribute
-  if (!writeAttribute(layerGroup, FieldIO::classNameAttrName, 
-                      field->className())) {
-    Log::print(Log::SevWarning, "Error adding class name attribute.");
-    return false;
-  }
-
-
-  FieldIO::Ptr io = i->second;
-
-  assert(io != 0);
-
-  return io->write(layerGroup, field);
-}
-
-
-//----------------------------------------------------------------------------//
-
-FieldIOFactory& 
-FieldIOFactory::fieldIOFactoryInstance()
-{
-
-  if (!FieldIOFactory::m_fieldIOFactory) {
-    FieldIOFactory::m_fieldIOFactory = new FieldIOFactory;
-  }
-
-  return *FieldIOFactory::m_fieldIOFactory;
-
+  const string k_nullMappingDataName("NullFieldMapping data");
+  const string k_matrixMappingDataName("MatrixFieldMapping data");
 }
 
 //----------------------------------------------------------------------------//
 
-void
-FieldIOFactory::clear()
+FieldMapping::Ptr
+NullFieldMappingIO::read(hid_t mappingGroup)
 {
-  m_ioClasses.clear();
+  string nfmData;
+  if (!readAttribute(mappingGroup, k_nullMappingDataName, nfmData)) {
+    Msg::print(Msg::SevWarning, "Couldn't read attribute " + k_nullMappingDataName);
+    return NullFieldMapping::Ptr();
+  }
+  return NullFieldMapping::Ptr(new NullFieldMapping);
 }
 
 //----------------------------------------------------------------------------//
 
 bool
-FieldIOFactory::registerClass(FieldIO::Ptr io)
+NullFieldMappingIO::write(hid_t mappingGroup, FieldMapping::Ptr /* nm */)
 {
-  if (!io) 
-    return false;
-
-  if (m_ioClasses.find(io->className()) != m_ioClasses.end()) {
+  string nfmAttrData("NullFieldMapping has no data");
+  if (!writeAttribute(mappingGroup, k_nullMappingDataName, nfmAttrData)) {
+    Msg::print(Msg::SevWarning, "Couldn't add attribute " + k_nullMappingDataName);
     return false;
   }
+  return true;
+}
 
-  m_ioClasses[io->className()] = io;
+//----------------------------------------------------------------------------//
+
+//! Returns the class name
+std::string NullFieldMappingIO::className() const
+{ return k_nullMappingName; }
+
+//----------------------------------------------------------------------------//
+
+FieldMapping::Ptr
+MatrixFieldMappingIO::read(hid_t mappingGroup)
+{
+  SPI::OpenEXR::Imath::M44d mtx;
+
+  if (!readAttribute(mappingGroup, k_matrixMappingDataName, 16,
+                     mtx.x[0][0])) {
+    Msg::print(Msg::SevWarning, "Couldn't read attribute " + k_matrixMappingDataName);
+    return MatrixFieldMapping::Ptr();
+  }
+
+  MatrixFieldMapping::Ptr mm(new MatrixFieldMapping);
+
+  mm->setLocalToWorld(mtx);
+
+  return mm;
+}
+
+//----------------------------------------------------------------------------//
+
+bool
+MatrixFieldMappingIO::write(hid_t mappingGroup, FieldMapping::Ptr mapping)
+{
+  MatrixFieldMapping::Ptr mm =
+    boost::dynamic_pointer_cast<MatrixFieldMapping>(mapping);
+  if (!mm) {
+    Msg::print(Msg::SevWarning, "Couldn't get MatrixFieldMapping from pointer");
+    return false;
+  }
+  if (!writeAttribute(mappingGroup, k_matrixMappingDataName, 16, 
+                    mm->localToWorld().x[0][0])) {
+    Msg::print(Msg::SevWarning, "Couldn't add attribute " + k_matrixMappingDataName);
+    return false;
+  }
 
   return true;
 }
+
+//----------------------------------------------------------------------------//
+
+//! Returns the class name
+std::string MatrixFieldMappingIO::className() const
+{ return k_matrixMappingName; }
 
 //----------------------------------------------------------------------------//
 

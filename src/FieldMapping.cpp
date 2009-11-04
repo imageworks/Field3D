@@ -46,7 +46,6 @@
 #include <vector>
 
 #include "FieldMapping.h"
-#include "Hdf5Util.h"
 #include "Types.h"
 
 //----------------------------------------------------------------------------//
@@ -62,8 +61,6 @@ FIELD3D_NAMESPACE_OPEN
 // Field3D namespaces
 //----------------------------------------------------------------------------//
 
-using namespace Exc;
-using namespace Hdf5Util;
 
 //----------------------------------------------------------------------------//
 // Local namespace
@@ -80,9 +77,9 @@ namespace {
 //----------------------------------------------------------------------------//
 
 FieldMapping::FieldMapping()
-  : m_origin(V3i(0)),
-    m_res(V3i(1)),
-    m_counter(0)
+  : RefBase(), 
+    m_origin(V3i(0)),
+    m_res(V3i(1))
 { 
   /* Empty */ 
 }
@@ -90,25 +87,9 @@ FieldMapping::FieldMapping()
 //----------------------------------------------------------------------------//
 
 FieldMapping::FieldMapping(const Box3i &extents)
+  : RefBase()
 { 
-  m_counter = 0;
   setExtents(extents);
-}
-//----------------------------------------------------------------------------//
-
-FieldMapping::FieldMapping(const FieldMapping& src)
-{
-  *this = src;
-  m_counter = 0;
-}
-
-//----------------------------------------------------------------------------//
-    
-FieldMapping & FieldMapping::operator = (const FieldMapping &src)
-{
-  m_origin = src.m_origin;
-  m_res = src.m_res;
-  return *this;
 }
 
 //----------------------------------------------------------------------------//
@@ -165,7 +146,7 @@ void FieldMapping::voxelToLocal(const V3d &vsP, V3d &lsP) const
 // NullFieldMapping
 //----------------------------------------------------------------------------//
 
-std::string NullFieldMapping::typeName() const
+std::string NullFieldMapping::className() const
 {
   return k_nullMappingName;
 }
@@ -178,7 +159,7 @@ bool NullFieldMapping::isIdentical(FieldMapping::Ptr other,
   // For null mappings it's simple - if the other one is also a null mapping
   // then true, otherwise it's false.
   
-  return other->typeName() == k_nullMappingName;
+  return other->className() == k_nullMappingName;
 }
 
 //----------------------------------------------------------------------------//
@@ -231,7 +212,7 @@ void MatrixFieldMapping::extentsChanged()
 
 //----------------------------------------------------------------------------//
 
-std::string MatrixFieldMapping::typeName() const
+std::string MatrixFieldMapping::className() const
 {
   return k_matrixMappingName;
 }
@@ -241,7 +222,7 @@ std::string MatrixFieldMapping::typeName() const
 bool MatrixFieldMapping::isIdentical(FieldMapping::Ptr other, 
                                      double tolerance) const
 {
-  if (other->typeName() != k_matrixMappingName) {
+  if (other->className() != k_matrixMappingName) {
     return false;
   } else {
     MatrixFieldMapping::Ptr mm = 

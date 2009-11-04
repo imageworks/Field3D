@@ -65,10 +65,10 @@ FIELD3D_NAMESPACE_OPEN
 // Forward declarations 
 //----------------------------------------------------------------------------//
 
-template <class T>
-class LinearFieldInterp; 
-template <class T>
-class CubicFieldInterp; 
+template <class Field_T>
+class LinearGenericFieldInterp;
+template <class Field_T>
+class CubicGenericFieldInterp; 
 
 class SparseFileManager;
 
@@ -155,8 +155,8 @@ public:
   typedef boost::intrusive_ptr<SparseField> Ptr;
   typedef std::vector<Ptr> Vec;
 
-  typedef LinearFieldInterp<Data_T> LinearInterp;
-  typedef CubicFieldInterp<Data_T> CubicInterp;
+  typedef LinearGenericFieldInterp<SparseField<Data_T> > LinearInterp;
+  typedef CubicGenericFieldInterp<SparseField<Data_T> > CubicInterp;
 
   // Constructors --------------------------------------------------------------
 
@@ -485,6 +485,13 @@ class SparseField<Data_T>::const_iterator
     m_manager = m_field->m_fileManager;
     setupNextBlock(x, y, z);
   }
+  ~const_iterator() {
+    if (m_manager && m_blockId >= 0 && 
+        m_blockId < static_cast<int>(m_field->m_blocks.size())) {
+      if (m_field->m_blocks[m_blockId].isAllocated)
+        m_manager->decBlockRef<Data_T>(m_field->m_fileId, m_blockId);
+    }
+  }
   const const_iterator& operator ++ ()
   {
     bool resetPtr = false;
@@ -506,7 +513,7 @@ class SparseField<Data_T>::const_iterator
     // These can both safely be incremented here
     ++m_blockStepsTicker;
     // ... but only step forward if we're in a non-empty block
-    if (!m_isEmptyBlock)
+    if (!m_isEmptyBlock && (!m_manager || m_blockIsActivated))
       ++m_p;   
     // Check if we've reached the end of this block
     if (m_blockStepsTicker == (1 << m_blockOrder))
@@ -533,6 +540,10 @@ class SparseField<Data_T>::const_iterator
     if (!m_isEmptyBlock && m_manager && !m_blockIsActivated) {
       m_manager->activateBlock<Data_T>(m_field->m_fileId, m_blockId);
       m_blockIsActivated = true;
+      const Block &block = m_field->m_blocks[m_blockId];
+      int vi, vj, vk;
+      m_field->getVoxelInBlock(x, y, z, vi, vj, vk);
+      m_p = &block.value(vi, vj, vk, m_blockOrder);
     }
     return *m_p;
   }
@@ -542,6 +553,10 @@ class SparseField<Data_T>::const_iterator
       SparseFileManager *manager = m_field->m_fileManager;
       manager->activateBlock<Data_T>(m_field->m_fileId, m_blockId);
       m_blockIsActivated = true;
+      const Block &block = m_field->m_blocks[m_blockId];
+      int vi, vj, vk;
+      m_field->getVoxelInBlock(x, y, z, vi, vj, vk);
+      m_p = &block.value(vi, vj, vk, m_blockOrder);
     }
     return m_p;
   }
@@ -563,18 +578,34 @@ private:
   {
     m_field->applyDataWindowOffset(i, j, k);
     m_field->getBlockCoord(i, j, k, m_blockI, m_blockJ, m_blockK);
+    int oldBlockId = m_blockId;
     m_blockId = m_field->blockId(m_blockI, m_blockJ, m_blockK);
+    if (m_manager && oldBlockId != m_blockId &&
+        oldBlockId >= 0 && 
+        oldBlockId < static_cast<int>(m_field->m_blocks.size()) &&
+        m_field->m_blocks[oldBlockId].isAllocated) {
+      m_manager->decBlockRef<Data_T>(m_field->m_fileId, oldBlockId);
+    }
     if (m_blockId >= m_field->m_blockXYSize * m_field->m_blockRes.z) {
       m_isEmptyBlock = true;
       return;
     }
 
     const Block &block = m_field->m_blocks[m_blockId];
+    int vi, vj, vk;
+    m_field->getVoxelInBlock(i, j, k, vi, vj, vk);      
+    m_blockStepsTicker = vi;
     if (block.isAllocated) {
-      int vi, vj, vk;
-      m_field->getVoxelInBlock(i, j, k, vi, vj, vk);      
-      m_p = &block.value(vi, vj, vk, m_blockOrder);
-      m_blockStepsTicker = vi;
+      if (m_manager && oldBlockId != m_blockId && m_blockId >= 0) {
+        m_manager->incBlockRef<Data_T>(m_field->m_fileId, m_blockId);
+        // this is a managed field, so the block may not be loaded
+        // yet, so don't bother setting m_p yet (it'll get set in the
+        // * and -> operators when the block is activated)
+      } else {
+        // only set m_p to the voxel's address if this is not a
+        // managed field, i.e., if the data is already in memory.
+        m_p = &block.value(vi, vj, vk, m_blockOrder);
+      }
       m_isEmptyBlock = false;
     } else {
       m_p = &block.emptyValue;
@@ -586,7 +617,7 @@ private:
   }
 
   //! Current pointed-to element
-  const Data_T *m_p;
+  mutable const Data_T *m_p;
   //! Whether we're at an empty block and we don't increment m_p 
   bool m_isEmptyBlock;
   //! Used with delayed-load fields. Check if we've already activated the
@@ -670,7 +701,7 @@ class SparseField<Data_T>::iterator
   {
     if (m_field->m_fileManager) {
       assert(false && "Dereferencing iterator on a dynamic-read sparse field");
-      Log::print(Log::SevWarning, "Dereferencing iterator on a dynamic-read "
+      Msg::print(Msg::SevWarning, "Dereferencing iterator on a dynamic-read "
                 "sparse field");
       return *m_p;      
     }
@@ -687,7 +718,7 @@ class SparseField<Data_T>::iterator
   {
     if (m_field->m_fileManager) {
       assert(false && "Dereferencing iterator on a dynamic-read sparse field");
-      Log::print(Log::SevWarning, "Dereferencing iterator on a dynamic-read "
+      Msg::print(Msg::SevWarning, "Dereferencing iterator on a dynamic-read "
                 "sparse field");
       return m_p;      
     }
@@ -715,11 +746,11 @@ private:
       return;
     }
     Block &block = m_field->m_blocks[m_blockId];
+    int vi, vj, vk;
+    m_field->getVoxelInBlock(i, j, k, vi, vj, vk);      
+    m_blockStepsTicker = vi;
     if (block.isAllocated) {
-      int vi, vj, vk;
-      m_field->getVoxelInBlock(i, j, k, vi, vj, vk);      
       m_p = &block.value(vi, vj, vk, m_blockOrder);
-      m_blockStepsTicker = vi;
       m_isEmptyBlock = false;
     } else {
       m_p = &block.emptyValue;
@@ -990,9 +1021,14 @@ Data_T SparseField<Data_T>::fastValue(int i, int j, int k) const
   // Check if block data is allocated
   if (block.isAllocated) {
     if (m_fileManager) {
+      m_fileManager->incBlockRef<Data_T>(m_fileId, id);
       m_fileManager->activateBlock<Data_T>(m_fileId, id);
+      Data_T tmpValue = block.value(vi, vj, vk, m_blockOrder);
+      m_fileManager->decBlockRef<Data_T>(m_fileId, id);
+      return tmpValue;
+    } else {
+      return block.value(vi, vj, vk, m_blockOrder);
     }
-    return block.value(vi, vj, vk, m_blockOrder);
   } else {
     return block.emptyValue;
   }
@@ -1013,7 +1049,7 @@ Data_T& SparseField<Data_T>::fastLValue(int i, int j, int k)
 
   if (m_fileManager) {
     assert(false && "Called fastLValue() on a dynamic-read sparse field");
-    Log::print(Log::SevWarning, "Called fastLValue() on a dynamic-read "
+    Msg::print(Msg::SevWarning, "Called fastLValue() on a dynamic-read "
               "sparse field");
     return m_dummy;
   }

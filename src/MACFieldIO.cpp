@@ -94,7 +94,7 @@ MACFieldIO::read(hid_t layerGroup, const std::string &filename,
 
   if (version != k_versionNumber)
     throw UnsupportedVersionException("MACField version not supported: " + 
-                                      str(version));
+                                      lexical_cast<std::string>(version));
 
   if (!readAttribute(layerGroup, k_extentsStr, 6, extents.min.x)) 
     throw MissingAttributeException("Couldn't find attribute " + 
@@ -158,10 +158,10 @@ MACFieldIO::write(hid_t layerGroup, FieldBase::Ptr field)
   }
 
   // Add version attribute
-  if (!writeAttribute(layerGroup, FieldIO::versionAttrName, 
+  if (!writeAttribute(layerGroup, k_versionAttrName, 
                       1, k_versionNumber)) {
     throw WriteAttributeException("Couldn't write attribute " + 
-                                  FieldIO::versionAttrName);
+                                  k_versionAttrName);
   }
 
   MACField<V3h>::Ptr vecHalfField = 

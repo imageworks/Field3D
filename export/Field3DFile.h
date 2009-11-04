@@ -59,7 +59,7 @@
 
 #include "EmptyField.h"
 #include "Field.h"
-#include "FieldIOFactory.h"
+#include "ClassFactory.h"
 #include "Hdf5Util.h"
 
 //----------------------------------------------------------------------------//
@@ -67,6 +67,36 @@
 #include "ns.h"
 
 FIELD3D_NAMESPACE_OPEN
+
+
+
+//----------------------------------------------------------------------------//
+// Function Declarations
+//----------------------------------------------------------------------------//
+
+//! \name classFactory IO functions
+// \{
+
+//! This function creates a FieldIO instance based on className
+//! which then reads the field data from layerGroup location
+template <class Data_T>
+typename Field<Data_T>::Ptr 
+readField(const std::string &className, hid_t layerGroup,
+          const std::string &filename, const std::string &layerPath);
+//! This function creates a FieldIO instance based on field->className()
+//! which then writes the field data in layerGroup location
+bool writeField(hid_t layerGroup, FieldBase::Ptr field);
+
+//! This function creates a FieldMappingIO instance based on className 
+//! read from mappingGroup location which then reads FieldMapping data
+FieldMapping::Ptr readFieldMapping(hid_t mappingGroup);
+
+//! This function creates a FieldMappingIO instance based on
+//! mapping->className() which then writes FieldMapping 
+//! data to mappingGroup location
+bool writeFieldMapping(hid_t mappingGroup, FieldMapping::Ptr mapping);
+
+//! \}
 
 //----------------------------------------------------------------------------//
 // Layer
@@ -108,7 +138,7 @@ namespace File {
   mapping.
 */
 
-class Partition
+class Partition : public RefBase
 {
 public:
 
@@ -121,8 +151,7 @@ public:
   // Ctors, dtor ---------------------------------------------------------------
 
   //! Ctor
-  Partition() 
-  { m_counter = 0; }
+  Partition() : RefBase() {}
 
   // Main methods --------------------------------------------------------------
 
@@ -141,18 +170,6 @@ public:
   //! Gets all the vector layer names
   void getVectorLayerNames(std::vector<std::string> &names) const;
 
-  //! For boost::intrusive_pointer
-  size_t refcnt() 
-  { return m_counter; }
-
-  //! For boost::intrusive_pointer
-  void ref() 
-  { m_counter++; }
-
-  //! For boost::intrusive_pointer
-  void unref() 
-  { m_counter--; }
-
   // Public data members -------------------------------------------------------
 
   //! Name of the partition
@@ -168,31 +185,9 @@ private:
   ScalarLayerList m_scalarLayers;
   //! The vector-valued layers belonging to this partition
   VectorLayerList m_vectorLayers;
-  //! For boost intrusive pointer
-  mutable int m_counter;
 
 };
 
-//----------------------------------------------------------------------------//
-// Intrusive Pointer reference counting 
-//----------------------------------------------------------------------------//
-
-inline void
-intrusive_ptr_add_ref(Partition* r)
-{
-    r->ref();
-}
-
-//----------------------------------------------------------------------------//
-
-inline void
-intrusive_ptr_release(Partition* r)
-{
-    r->unref();
-
-    if (r->refcnt() == 0)
-      delete r;
-}
 
 } // namespace File
 
@@ -853,7 +848,7 @@ Field3DInputFile::readLayer(const std::string &intPartitionName,
   // Find the partition
   File::Partition::Ptr part = partition(intPartitionName);
   if (!part) {
-    Log::print(Log::SevWarning, "Couldn't find partition: " + intPartitionName);
+    Msg::print(Msg::SevWarning, "Couldn't find partition: " + intPartitionName);
     return nullPtr;
   }
 
@@ -864,7 +859,7 @@ Field3DInputFile::readLayer(const std::string &intPartitionName,
   else
     l = part->scalarLayer(layerName);
   if (!l) {
-    Log::print(Log::SevWarning, "Couldn't find layer: " + layerName );
+    Msg::print(Msg::SevWarning, "Couldn't find layer: " + layerName );
     return nullPtr;
   }
 
@@ -873,7 +868,7 @@ Field3DInputFile::readLayer(const std::string &intPartitionName,
   H5ScopedGopen layerGroup(m_file, layerPath.c_str());
 
   if (layerGroup.id() < 0) {
-    Log::print(Log::SevWarning, "Couldn't find layer group " + layerName 
+    Msg::print(Msg::SevWarning, "Couldn't find layer group " + layerName 
               + " in .f3d file ");
     return nullPtr;
   }
@@ -881,7 +876,7 @@ Field3DInputFile::readLayer(const std::string &intPartitionName,
   // Get the class name
   string className;
   if (!readAttribute(layerGroup.id(), "class_name", className)) {
-    Log::print(Log::SevWarning, "Couldn't find class_name attrib in layer " + 
+    Msg::print(Msg::SevWarning, "Couldn't find class_name attrib in layer " + 
               layerName);
     return nullPtr;
   }
@@ -890,12 +885,11 @@ Field3DInputFile::readLayer(const std::string &intPartitionName,
   // Construct the field and load the data
  
   typename Field<Data_T>::Ptr field;
-  field = g_fieldIOFactory.read<Data_T>(className, layerGroup.id(),
-                                         m_filename, layerPath);
+  field = readField<Data_T>(className, layerGroup.id(), m_filename, layerPath);
 
   if (!field) {
 #if 0 // This isn't really an error
-    Log::print(Log::SevWarning, "Couldn't read the layer data of layer: " 
+    Msg::print(Msg::SevWarning, "Couldn't read the layer data of layer: " 
               + layerName);
 #endif
     return nullPtr;
@@ -1091,7 +1085,7 @@ Field3DInputFile::readProxyLayer(const std::string &partitionName,
           // Find the partition
           File::Partition::Ptr part = partition(*p);
           if (!part) {
-            Log::print(Log::SevWarning, "Couldn't find partition: " + *p);
+            Msg::print(Msg::SevWarning, "Couldn't find partition: " + *p);
             return emptyList;
           }
           // Find the layer
@@ -1101,14 +1095,14 @@ Field3DInputFile::readProxyLayer(const std::string &partitionName,
           else
             layer = part->scalarLayer(layerName);
           if (!layer) {
-            Log::print(Log::SevWarning, "Couldn't find layer: " + layerName);
+            Msg::print(Msg::SevWarning, "Couldn't find layer: " + layerName);
             return emptyList;
           }
           // Open the layer group
           string layerPath = layer->parent + "/" + layer->name;
           H5ScopedGopen layerGroup(m_file, layerPath.c_str());
           if (layerGroup.id() < 0) {
-            Log::print(Log::SevWarning, "Couldn't find layer group " 
+            Msg::print(Msg::SevWarning, "Couldn't find layer group " 
                       + layerName + " in .f3d file ");
             return emptyList;
           }
@@ -1136,7 +1130,7 @@ Field3DInputFile::readProxyLayer(const std::string &partitionName,
   }
 
   if (!foundPartition) {
-    Log::print(Log::SevWarning, "Couldn't find partition: " + partitionName);
+    Msg::print(Msg::SevWarning, "Couldn't find partition: " + partitionName);
     return emptyList;    
   }
   
@@ -1249,13 +1243,13 @@ Field3DOutputFile::writeLayer(const std::string &userPartitionName,
   using namespace Hdf5Util;
 
   if (!field) {
-    Log::print(Log::SevWarning, 
+    Msg::print(Msg::SevWarning, 
                "Called writeLayer with null pointer. Ignoring...");
     return false;
   }
 
   if (m_file < 0) {
-    Log::print(Log::SevWarning, 
+    Msg::print(Msg::SevWarning, 
                "Attempting to write layer without opening file first. ");
     return false;
   }
@@ -1274,7 +1268,7 @@ Field3DOutputFile::writeLayer(const std::string &userPartitionName,
 
     H5ScopedGcreate partGroup(m_file, newPart->name.c_str());
     if (partGroup.id() < 0) {
-      Log::print(Log::SevWarning, 
+      Msg::print(Msg::SevWarning, 
                  "Error creating partition: " + newPart->name);
       return false;
     } 
@@ -1289,18 +1283,18 @@ Field3DOutputFile::writeLayer(const std::string &userPartitionName,
     //! the mapping
     try {
       if (!writeMapping(partGroup.id(), field->mapping())) {
-        Log::print(Log::SevWarning, 
+        Msg::print(Msg::SevWarning, 
                   "writeMapping returned false for an unknown reason ");
         return false;
       }
     }
     catch (WriteMappingException &e) {
-      Log::print(Log::SevWarning, "Couldn't write mapping for partition: " 
+      Msg::print(Msg::SevWarning, "Couldn't write mapping for partition: " 
                 + partitionName);
       return false;
     }
     catch (...) {
-      Log::print(Log::SevWarning, 
+      Msg::print(Msg::SevWarning, 
                  "Unknown error when writing mapping for partition: " 
                  + partitionName);
       return false;
@@ -1314,7 +1308,7 @@ Field3DOutputFile::writeLayer(const std::string &userPartitionName,
     // Tag node as partition
     // Create a version attribute on the root node
     if (!writeAttribute(partGroup.id(), "is_field3d_partition", "1")) {
-      Log::print(Log::SevWarning, "Adding partition string.");
+      Msg::print(Msg::SevWarning, "Adding partition string.");
       return false;
     }    
 
@@ -1324,13 +1318,13 @@ Field3DOutputFile::writeLayer(const std::string &userPartitionName,
     // doesn't also exist
     if (!isVectorLayer) {
       if (part->scalarLayer(layerName)) {
-        Log::print(Log::SevWarning, 
+        Msg::print(Msg::SevWarning, 
                   "Trying to add layer that already exists in file. Ignoring");
         return false;
       }
     } else {
       if (part->vectorLayer(layerName)) {
-        Log::print(Log::SevWarning, 
+        Msg::print(Msg::SevWarning, 
                   "Trying to add layer that already exists in file. Ignoring");
         return false;
       }
@@ -1338,21 +1332,21 @@ Field3DOutputFile::writeLayer(const std::string &userPartitionName,
   }
 
   if (!field->mapping()) {
-    Log::print(Log::SevWarning, 
+    Msg::print(Msg::SevWarning, 
               "Couldn't add layer \"" + layerName + "\" to partition \""
               + partitionName + "\" because the layer's mapping is null.");
     return false;    
   }
 
   if (!part->mapping) {
-    Log::print(Log::SevWarning, "Severe error - partition mapping is null: " 
+    Msg::print(Msg::SevWarning, "Severe error - partition mapping is null: " 
               + partitionName);
     return false;    
   }
 
   // Check that the mapping matches what's already in the Partition
   if (!field->mapping()->isIdentical(part->mapping)) {
-    Log::print(Log::SevWarning, "Couldn't add layer \"" + layerName 
+    Msg::print(Msg::SevWarning, "Couldn't add layer \"" + layerName 
               + "\" to partition \"" + partitionName 
               + "\" because mapping doesn't match");
     return false;
@@ -1373,29 +1367,29 @@ Field3DOutputFile::writeLayer(const std::string &userPartitionName,
                              H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
   if (layerGroup.id() < 0) {
-    Log::print(Log::SevWarning, "Error creating layer: " + layerName);
+    Msg::print(Msg::SevWarning, "Error creating layer: " + layerName);
     return false;
   }
 
   // Tag as layer
   if (!writeAttribute(layerGroup.id(), "class_type", "field3d_layer")) {
-    Log::print(Log::SevWarning, "Error adding layer string.");
+    Msg::print(Msg::SevWarning, "Error adding layer string.");
     return false;
   }    
 
   // Add metadata group and write it out  
   H5ScopedGcreate metadataGroup(layerGroup.id(), "metadata");
   if (metadataGroup.id() < 0) {
-    Log::print(Log::SevWarning, "Error creating group: metadata");
+    Msg::print(Msg::SevWarning, "Error creating group: metadata");
     return false;
   }  
   if (!writeMetadata(metadataGroup.id(), field)) {
-    Log::print(Log::SevWarning, "Error writing metadata.");
+    Msg::print(Msg::SevWarning, "Error writing metadata.");
     return false;
   }    
 
-  if (!g_fieldIOFactory.write(layerGroup.id(), field)) {
-    Log::print(Log::SevWarning, "Error writing layer: " + layer.name);
+  if (!writeField(layerGroup.id(), field)) {
+    Msg::print(Msg::SevWarning, "Error writing layer: " + layer.name);
     return false;
   }
   
@@ -1427,12 +1421,12 @@ bool
 Field3DOutputFile::writeScalarLayer(typename Field<Data_T>::Ptr layer)
 {
   if (layer->name.size() == 0) {
-    Log::print(Log::SevWarning, "Field3DOutputFile::writeScalarLayer: "
+    Msg::print(Msg::SevWarning, "Field3DOutputFile::writeScalarLayer: "
                "Tried to write a scalar layer with no name");
     return false;
   }
   if (layer->attribute.size() == 0) {
-    Log::print(Log::SevWarning, "Field3DOutputFile::writeScalarLayer: "
+    Msg::print(Msg::SevWarning, "Field3DOutputFile::writeScalarLayer: "
                "Tried to write a scalar layer with no attribute name");
     return false;
   }
@@ -1460,16 +1454,53 @@ Field3DOutputFile::writeVectorLayer
   (typename Field<FIELD3D_VEC3_T<Data_T> >::Ptr layer)
 {
   if (layer->name.size() == 0) {
-    Log::print(Log::SevWarning, "Field3DOutputFile::writeVectorLayer: "
+    Msg::print(Msg::SevWarning, "Field3DOutputFile::writeVectorLayer: "
                "Tried to write a vector layer with no name");
     return false;
   }
   if (layer->attribute.size() == 0) {
-    Log::print(Log::SevWarning, "Field3DOutputFile::writeVectorLayer: "
+    Msg::print(Msg::SevWarning, "Field3DOutputFile::writeVectorLayer: "
                "Tried to write a vector layer with no attribute name");
     return false;
   }
   return writeVectorLayer<Data_T>(layer->name, layer->attribute, layer);
+}
+
+//----------------------------------------------------------------------------//
+// Template Function Implementations
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+typename Field<Data_T>::Ptr 
+readField(const std::string &className, hid_t layerGroup,
+          const std::string &filename, const std::string &layerPath)
+{
+
+  ClassFactory &factory = ClassFactory::singleton();
+  
+  typedef typename Field<Data_T>::Ptr FieldPtr;
+
+  FieldIO::Ptr io = factory.createFieldIO(className);
+  assert(io != 0);
+  if (!io) {
+    Msg::print(Msg::SevWarning, "Unable to find class type: " + 
+               className);
+    return FieldPtr();
+  }
+
+  FieldBase::Ptr field = io->read(layerGroup, filename, layerPath);
+  
+  if (!field) {
+    Msg::print(Msg::SevWarning, "Couldn't read layer");
+    return FieldPtr();
+  }
+
+  FieldPtr result = field_dynamic_cast<Field<Data_T> >(field);
+
+  if (result)
+    return result;
+
+  return FieldPtr();
 }
 
 //----------------------------------------------------------------------------//

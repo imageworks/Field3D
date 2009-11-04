@@ -53,6 +53,15 @@ using namespace Field3D;
 
 //----------------------------------------------------------------------------//
 
+//! Converts any class with operator<< to a string using boost::lexical_cast
+template <class T>
+std::string str(const T& t)
+{
+  return boost::lexical_cast<std::string>(t);
+}
+
+//----------------------------------------------------------------------------//
+
 template <class Field_T>
 Field3D::V3f testDenseSpeed(const Field3D::V3i &res)
 {
@@ -78,9 +87,9 @@ Field3D::V3f testDenseSpeed(const Field3D::V3i &res)
   }
   float readTime = tRead.elapsed();
 
-  Log::print("    Resize time       : " + str(resizeTime));
-  Log::print("    Write time        : " + str(writeTime));
-  Log::print("    Read time         : " + str(readTime));
+  Msg::print("    Resize time       : " + str(resizeTime));
+  Msg::print("    Write time        : " + str(writeTime));
+  Msg::print("    Read time         : " + str(readTime));
 
   return V3f(resizeTime, writeTime, readTime);
 }
@@ -116,9 +125,9 @@ Field3D::V3f testStdVector(const Field3D::V3i &res)
   }
   float readTime = tRead.elapsed();
 
-  Log::print("    Resize time       : " + str(resizeTime));
-  Log::print("    Write time        : " + str(writeTime));
-  Log::print("    Read time         : " + str(readTime));
+  Msg::print("    Resize time       : " + str(resizeTime));
+  Msg::print("    Write time        : " + str(writeTime));
+  Msg::print("    Read time         : " + str(readTime));
 
   return V3f(resizeTime, writeTime, readTime);  
 }
@@ -177,10 +186,10 @@ Field3D::V3f testDenseSparseSpeed(const Field3D::V3i &res)
   }
   float readTime = tRead.elapsed();
 
-  Log::print("    Resize time       : " + str(resizeTime));
-  Log::print("    Write time        : " + str(writeTime));
-  Log::print("    Second write time : " + str(writeTime2));
-  Log::print("    Read time         : " + str(readTime));  
+  Msg::print("    Resize time       : " + str(resizeTime));
+  Msg::print("    Write time        : " + str(writeTime));
+  Msg::print("    Second write time : " + str(writeTime2));
+  Msg::print("    Read time         : " + str(readTime));  
 
   return V3f(resizeTime, writeTime2, readTime);
 }
@@ -197,7 +206,7 @@ int main(int argc, char **argv)
       res = V3i(xRes);
     } 
     catch (boost::bad_lexical_cast &e) {
-      Log::print("Couldn't parse integer resolution. Aborting");
+      Msg::print("Couldn't parse integer resolution. Aborting");
       exit(1);
     }
   }
@@ -208,33 +217,33 @@ int main(int argc, char **argv)
     res = V3i(xRes, yRes, zRes);
   } else {
     // No voxel res given
-    Log::print("Usage: " + lexical_cast<string>(argv[0]) + 
+    Msg::print("Usage: " + lexical_cast<string>(argv[0]) + 
                " <xres> <yres> <zres>");
-    Log::print("Got no voxel size. Using default.");
+    Msg::print("Got no voxel size. Using default.");
   }
 
-  Log::print("\nTesting lookup speed with resolution: " + str(res) + "\n");
+  Msg::print("\nTesting lookup speed with resolution: " + str(res) + "\n");
 
-  Log::print("Test 1: Write and read all voxels");
+  Msg::print("Test 1: Write and read all voxels");
 
-  Log::print("  std::vector<float>: ");
+  Msg::print("  std::vector<float>: ");
   V3f svf = testStdVector<float>(res);
 
-  Log::print("  DenseField<float>: ");
+  Msg::print("  DenseField<float>: ");
   V3f df = testDenseSpeed<DenseFieldf>(res);
 
-  Log::print("  SparseField<float>: ");
+  Msg::print("  SparseField<float>: ");
   V3f sf = testDenseSpeed<SparseFieldf>(res);
 
-  Log::print("  SparseField<float> with block_iterator: ");
+  Msg::print("  SparseField<float> with block_iterator: ");
   V3f sof = testDenseSparseSpeed<float>(res);
 
-  Log::print("  Reading StdVec<->Dense ratio         : " + str(df.z / svf.z));
-  Log::print("  Reading Dense<->Sparse ratio         : " + str(sf.z / df.z));
-  Log::print("  Reading Dense<->Sparse (opt) ratio   : " + str(sof.z / df.z));
-  Log::print("  Writing StdVec<->Dense ratio         : " + str(df.y / svf.y));
-  Log::print("  Writing Dense<->Sparse ratio         : " + str(sf.y / df.y));
-  Log::print("  Writing Dense<->Sparse (opt) ratio   : " + str(sof.y / df.y));
+  Msg::print("  Reading StdVec<->Dense ratio         : " + str(df.z / svf.z));
+  Msg::print("  Reading Dense<->Sparse ratio         : " + str(sf.z / df.z));
+  Msg::print("  Reading Dense<->Sparse (opt) ratio   : " + str(sof.z / df.z));
+  Msg::print("  Writing StdVec<->Dense ratio         : " + str(df.y / svf.y));
+  Msg::print("  Writing Dense<->Sparse ratio         : " + str(sf.y / df.y));
+  Msg::print("  Writing Dense<->Sparse (opt) ratio   : " + str(sof.y / df.y));
   
 }
 

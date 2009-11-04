@@ -90,7 +90,7 @@ DenseFieldIO::read(hid_t layerGroup, const std::string &/*filename*/,
 
   if (version != k_versionNumber)
     throw UnsupportedVersionException("DenseField version not supported: " + 
-                                      str(version));
+                                      lexical_cast<std::string>(version));
 
   if (!readAttribute(layerGroup, k_extentsStr, 6, extents.min.x)) 
     throw MissingAttributeException("Couldn't find attribute " + 
@@ -163,10 +163,10 @@ DenseFieldIO::write(hid_t layerGroup, FieldBase::Ptr field)
     throw BadHdf5IdException("Bad layer group in DenseFieldIO::write");
 
   // Add version attribute
-  if (!writeAttribute(layerGroup, FieldIO::versionAttrName, 
+  if (!writeAttribute(layerGroup, k_versionAttrName, 
                     1, k_versionNumber))
     throw WriteAttributeException("Couldn't write attribute " + 
-                                  FieldIO::versionAttrName);
+                                  k_versionAttrName);
 
   DenseField<half>::Ptr halfField = 
     dynamic_pointer_cast<DenseField<half> >(field);

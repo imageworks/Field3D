@@ -54,7 +54,7 @@
 
 #include "DenseField.h"
 #include "Exception.h"
-#include "FieldIOFactory.h"
+#include "FieldIO.h"
 #include "Field3DFile.h"
 #include "Hdf5Util.h"
 
@@ -90,6 +90,14 @@ public:
   DenseFieldIO() 
    : FieldIO()
   { }
+
+  //! Dtor
+  virtual ~DenseFieldIO() 
+  { /* Empty */ }
+
+
+  static FieldIO::Ptr create()
+  { return Ptr(new DenseFieldIO); }
 
   // From FieldIO --------------------------------------------------------------
 

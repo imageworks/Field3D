@@ -35,40 +35,126 @@
 
 //----------------------------------------------------------------------------//
 
-/*! \file InitIO.cpp
-  Contains implementation of initIO function.
+/*! \file RefCount.h
+  \brief Contains base class for reference counting with Mutex
 */
 
 //----------------------------------------------------------------------------//
 
-#include "InitIO.h"
+#ifndef _INCLUDED_Field3D_REF_COUNT_H_
+#define _INCLUDED_Field3D_REF_COUNT_H_
 
-#include "DenseFieldIO.h"
-#include "SparseFieldIO.h"
-#include "MACFieldIO.h"
-#include "FieldMappingIO.h"
+//#define FIELD3D_USE_ATOMIC_COUNT
 
 //----------------------------------------------------------------------------//
+#include <boost/intrusive_ptr.hpp> 
+
+#ifdef FIELD3D_USE_ATOMIC_COUNT
+#include <boost/detail/atomic_count.hpp>
+#else
+#include <boost/thread/mutex.hpp>
+#endif
+
+#include "ns.h"
 
 FIELD3D_NAMESPACE_OPEN
 
 //----------------------------------------------------------------------------//
 
-void initIO() 
+class RefBase 
 {
-  ClassFactory &factory = ClassFactory::singleton();
+public:
 
-  factory.registerFieldIO(DenseFieldIO::create);
-  factory.registerFieldIO(SparseFieldIO::create);
-  factory.registerFieldIO(MACFieldIO::create);
+  // Typedefs ------------------------------------------------------------------
 
-  factory.registerFieldMappingIO(NullFieldMappingIO::create);
-  factory.registerFieldMappingIO(MatrixFieldMappingIO::create);
+  typedef boost::intrusive_ptr<RefBase> Ptr;
+
+  // Constructors --------------------------------------------------------------
+
+  //! \name Constructors, destructors, copying
+  //! \{
+
+  RefBase() 
+    : m_counter(0) 
+  {}
+    
+  //! Copy constructor
+  RefBase(const RefBase&) 
+    : m_counter(0) 
+  {}
+
+  //! Assignment operator
+  RefBase& operator= (const RefBase&)
+  { return *this; }
+
+  //! Destructor
+  virtual ~RefBase() 
+  {}
+
+  //! \}
+
+  //! Used by boost::intrusive_pointer
+  size_t refcnt() 
+  { return m_counter; }
+    
+  //! Used by boost::intrusive_pointer
+  void ref() const
+  { 
+#ifndef FIELD3D_USE_ATOMIC_COUNT
+    boost::mutex::scoped_lock lock(m_refMutex);
+#endif
+    ++m_counter; 
+  }
+
+  //! Used by boost::intrusive_pointer
+  void unref() const
+  {
+#ifndef FIELD3D_USE_ATOMIC_COUNT
+    boost::mutex::scoped_lock lock(m_refMutex);
+#endif
+    --m_counter; 
+    // since we use intrusive_pointer no need
+    // to delete the object ourselves.
+  }
+
+private:
+  //! For boost intrusive pointer
+#ifdef FIELD3D_USE_ATOMIC_COUNT
+  mutable boost::detail::atomic_count m_counter;
+#else
+  mutable long m_counter;
+  //! Mutex for ref counting
+  mutable boost::mutex m_refMutex;     
+#endif
+
+};
+
+//----------------------------------------------------------------------------//
+// Intrusive Pointer reference counting 
+//----------------------------------------------------------------------------//
+
+inline void 
+intrusive_ptr_add_ref(RefBase* r)
+{
+  r->ref();
 }
 
 //----------------------------------------------------------------------------//
 
-FIELD3D_NAMESPACE_SOURCE_CLOSE
+inline void
+intrusive_ptr_release(RefBase* r)
+{
+  r->unref();
+
+  if (r->refcnt() == 0)
+    delete r;
+}
 
 //----------------------------------------------------------------------------//
+
+FIELD3D_NAMESPACE_HEADER_CLOSE
+
+//----------------------------------------------------------------------------//
+
+#endif // Include guard
 

@@ -35,19 +35,28 @@
 
 //----------------------------------------------------------------------------//
 
-/*! \file FieldMappingFactory.h
-  \ingroup field
-  \brief Contains the FieldMappingFactory class
+/*! \file FieldIO.h
+  \brief Contains FieldIO class.
 */
 
 //----------------------------------------------------------------------------//
 
-#ifndef _INCLUDED_Field3D_FieldMappingFactory_H_
-#define _INCLUDED_Field3D_FieldMappingFactory_H_
+#ifndef _INCLUDED_Field3D_FieldIO_H_
+#define _INCLUDED_Field3D_FieldIO_H_
+
+//----------------------------------------------------------------------------//
+
+#include <boost/intrusive_ptr.hpp>
+
+#include <string>
+#include <map>
+#include <list>
 
 #include <hdf5.h>
+#include <typeinfo>
 
-#include "FieldMapping.h"
+#include "Field.h"
+#include "Log.h"
 
 //----------------------------------------------------------------------------//
 
@@ -56,60 +65,62 @@
 FIELD3D_NAMESPACE_OPEN
 
 //----------------------------------------------------------------------------//
-// FieldMappingFactory
+// FieldIO
 //----------------------------------------------------------------------------//
 
-/*! \class FieldMappingFactory
+/*! \class FieldIO
   \ingroup file_int
-  Responsible for writing and reading FieldMapping object to and from Hdf5 
-  files.
-  \todo Merge this into ClassFactory
-  \note This is a singleton object
+   A creation class.  The application needs to derive from this class
+   for any new voxel field data structions.  Within the read and write methods 
+   it is expected that the derived object knows how to read and write to an 
+   hdf5 file through the layerGroup id.  
+
+   \todo Merge this into ClassFactory.
 */
 
-class FieldMappingFactory
-{
-public:
-  
-  // Main methods --------------------------------------------------------------
-
-  //! Writes the mapping to the specified Hdf5 location
-  bool write(hid_t loc, FieldMapping::Ptr mapping);
-
-  //! Reads and constructs a mapping object based on the given Hdf5 group
-  FieldMapping::Ptr read(hid_t loc);
-
-  //! Returns the singleton instance. Don't worry about the long name,
-  //! there's a macro to help out
-  static FieldMappingFactory& theFieldMappingFactoryInstance();
-
-private:
-
-  // Specialied methods for writing each mapping type --------------------------
-  
-  //! Writes a NullFieldMapping
-  bool writeNullMapping(hid_t mappingGroup, NullFieldMapping::Ptr nm);
-  //! Reads a NullFieldMapping
-  NullFieldMapping::Ptr readNullMapping(hid_t mappingGroup);
-
-  //! Writes a MatrixFieldMapping
-  bool writeMatrixMapping(hid_t mappingGroup, MatrixFieldMapping::Ptr nm);
-  //! Reads a MatrixFieldMapping
-  MatrixFieldMapping::Ptr readMatrixMapping(hid_t mappingGroup);
-
-  //! Private to prevent instantiation
-  FieldMappingFactory() 
-  { }
-
-  //! Singleton instance
-  static FieldMappingFactory* ms_theFieldMappingFactory;
-};
-
 //----------------------------------------------------------------------------//
 
-//! Convenience macro
-#define theFieldMappingFactory \
-  (FieldMappingFactory::theFieldMappingFactoryInstance())
+class FieldIO : public RefBase
+{
+
+public:
+
+  // Typedefs ------------------------------------------------------------------
+
+  typedef boost::intrusive_ptr<FieldIO> Ptr;
+
+  // Ctors, dtor ---------------------------------------------------------------
+
+  //! Ctor
+  FieldIO() : RefBase() {}
+  
+  //! Dtor
+  virtual ~FieldIO() {}
+
+  // Methods to be implemented by subclasses -----------------------------------
+
+  //! Read the field at the given hdf5 group
+  //! \returns Pointer to the created field, or a null pointer if the field
+  //! couldn't be read.
+  virtual FieldBase::Ptr read(hid_t layerGroup, const std::string &filename, 
+                              const std::string &layerPath) = 0;
+
+  //! Write the field to the given layer group
+  //! \returns Whether the operation was successful
+  virtual bool write(hid_t layerGroup, FieldBase::Ptr field) = 0;
+
+  //! Returns the class name. This is used when registering the class to the
+  //! FieldIOFactory object.
+  virtual std::string className() const = 0;
+
+  // Strings used when reading/writing -----------------------------------------
+
+ private:
+
+
+};
+
+
 
 //----------------------------------------------------------------------------//
 
@@ -117,4 +128,4 @@ FIELD3D_NAMESPACE_HEADER_CLOSE
 
 //----------------------------------------------------------------------------//
 
-#endif // Include guard
+#endif

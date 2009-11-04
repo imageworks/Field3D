@@ -60,10 +60,11 @@ FIELD3D_NAMESPACE_OPEN
 // Forward declarations 
 //----------------------------------------------------------------------------//
 
-template <class T>
-class LinearDenseFieldInterp; 
-template <class T>
-class CubicDenseFieldInterp; 
+template <class Field_T>
+class LinearGenericFieldInterp;
+template <class Field_T>
+class CubicGenericFieldInterp; 
+
 
 //----------------------------------------------------------------------------//
 // DenseField
@@ -89,8 +90,8 @@ public:
   typedef boost::intrusive_ptr<DenseField> Ptr;
   typedef std::vector<Ptr> Vec;
 
-  typedef LinearDenseFieldInterp<Data_T> LinearInterp;
-  typedef CubicDenseFieldInterp<Data_T> CubicInterp;
+  typedef LinearGenericFieldInterp<DenseField<Data_T> > LinearInterp;
+  typedef CubicGenericFieldInterp<DenseField<Data_T> > CubicInterp;
 
   typedef ResizableField<Data_T> base;
 
@@ -567,7 +568,7 @@ void DenseField<Data_T>::sizeChanged()
   if (std::min(std::min(m_memSize.x, m_memSize.y), m_memSize.z) < 0)
     throw Exc::ResizeException("Attempt to resize ResizableField object "
                                "using negative size. Data window was: " +
-                               str(m_memSize));
+                               boost::lexical_cast<std::string>(m_memSize));
 
   // Allocate memory
   try {
@@ -575,7 +576,7 @@ void DenseField<Data_T>::sizeChanged()
   }
   catch (std::bad_alloc &e) {
     throw Exc::MemoryException("Couldn't allocate DenseField of size " + 
-                               str(m_memSize));
+                               boost::lexical_cast<std::string>(m_memSize));
   }
 }
 

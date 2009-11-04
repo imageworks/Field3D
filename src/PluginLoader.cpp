@@ -238,14 +238,14 @@ void PluginLoader::loadPlugins()
           // Call the registration function
           int res = (*fptr)(ClassFactory::singleton());
           if (!res) {
-            Log::print(Log::SevWarning,
+            Msg::print(Msg::SevWarning,
                       "failed to init Field3D plugin " + sofile);
           } else {
-            Log::print(msg);
+            Msg::print(msg);
           }
         }
       } else {
-        Log::print(Log::SevWarning,
+        Msg::print(Msg::SevWarning,
                   "Field3D plugin loader: failed to load "
                   "the symbol registerField3DPlugin");
       }
@@ -313,7 +313,7 @@ bool PluginLoader::resolveGlobalsForPlugins(const char *dso) {
   std::string sofile;
   if (!getDso(cptr,dso,sofile)) {
     std::string dsostring = dso;
-    Log::print(dsostring + " is not in HOUDINI_DSO_PATH");
+    Msg::print(dsostring + " is not in HOUDINI_DSO_PATH");
     return false;
   }
   
@@ -326,9 +326,9 @@ bool PluginLoader::resolveGlobalsForPlugins(const char *dso) {
   }
 
 #if 0 
-  Log::print("---------------------------------------------------------");
-  Log::print("Loaded " + sofile);
-  Log::print("---------------------------------------------------------");
+  Msg::print("---------------------------------------------------------");
+  Msg::print("Loaded " + sofile);
+  Msg::print("---------------------------------------------------------");
 #endif
   
   return true;

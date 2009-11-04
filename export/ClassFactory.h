@@ -48,6 +48,8 @@
 #include <vector>
 
 #include "Field.h"
+#include "FieldIO.h"
+#include "FieldMappingIO.h"
 
 //----------------------------------------------------------------------------//
 
@@ -73,6 +75,9 @@ public:
   // Typedefs ------------------------------------------------------------------
 
   typedef FieldRes::Ptr (*CreateFieldFnPtr) ();
+  typedef FieldIO::Ptr (*CreateFieldIOFnPtr) ();
+  typedef FieldMapping::Ptr (*CreateFieldMappingFnPtr) ();
+  typedef FieldMappingIO::Ptr (*CreateFieldMappingIOFnPtr) ();
 
   // Ctors, dtor ---------------------------------------------------------------
 
@@ -81,12 +86,44 @@ public:
 
   // Main methods --------------------------------------------------------------
 
+  //! \name Field class 
+  //! \{
+
   //! Registers a class with the class pool. 
   //! \param createFunc Pointer to creation function
-  void registerFieldClass(CreateFieldFnPtr createFunc);
+  void registerField(CreateFieldFnPtr createFunc);
 
   //! Instances an object by name
   FieldRes::Ptr createField(const std::string &className) const;
+
+  //! Registers an IO class with the class pool. 
+  //! \param createFunc Pointer to creation function
+  void registerFieldIO(CreateFieldIOFnPtr createFunc);
+
+  //! Instances an IO object by name
+  FieldIO::Ptr createFieldIO(const std::string &className) const;
+
+  //! }
+
+  //! \name FieldMapping class 
+  //! \{
+
+  //! Registers a class with the class pool. 
+  //! \param createFunc Pointer to creation function
+  void registerFieldMapping(CreateFieldMappingFnPtr createFunc);
+
+  //! Instances an object by name
+  FieldMapping::Ptr createFieldMapping(const std::string &className) const;
+
+  //! Registers an IO class with the class pool. 
+  //! \param createFunc Pointer to creation function
+  void registerFieldMappingIO(CreateFieldMappingIOFnPtr createFunc);
+
+  //! Instances an IO object by name
+  FieldMappingIO::Ptr createFieldMappingIO(const std::string &className) const;
+
+  //! }
+
 
   //! Access point for the singleton instance.
   static ClassFactory& singleton();
@@ -95,15 +132,35 @@ private:
       
   // Typedefs ------------------------------------------------------------------
 
-  typedef std::vector<std::string> SimpleNameVec;
-  typedef std::map<std::string, CreateFieldFnPtr> FieldNameToFuncMap;
+  typedef std::vector<std::string> NameVec;
+  typedef std::map<std::string, CreateFieldFnPtr> FieldFuncMap;
+  typedef std::map<std::string, CreateFieldIOFnPtr> FieldIOFuncMap;
+  typedef std::map<std::string, CreateFieldMappingFnPtr> FieldMappingFuncMap;
+  typedef std::map<std::string, CreateFieldMappingIOFnPtr> FieldMappingIOFuncMap;
 
   // Data members --------------------------------------------------------------
 
   //! Map of create functions for Fields.  The key is the class name.
-  FieldNameToFuncMap m_fields;
+  FieldFuncMap m_fields;
   //! 
-  SimpleNameVec m_fieldSimpleNames;
+  NameVec m_fieldNames;
+
+  //! Map of create functions for FieldIO classes.  The key is the class name.
+  FieldIOFuncMap m_fieldIOs;
+  //! 
+  NameVec m_fieldIONames;
+
+  //! Map of create functions for FieldMappings.  The key is the class name.
+  FieldMappingFuncMap m_mappings;
+  //! 
+  NameVec m_fieldMappingNames;
+
+
+  //! Map of create functions for FieldMapping IO classes.  The key is the class name.
+  FieldMappingIOFuncMap m_mappingIOs;
+  //! 
+  NameVec m_fieldMappingIONames;
+
 
   //! Pointer to static instance
   static ClassFactory *ms_instance;

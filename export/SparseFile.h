@@ -47,12 +47,14 @@
 //----------------------------------------------------------------------------//
 
 #include <vector>
+#include <list>
 
 #include <hdf5.h>
 
 #include "Exception.h"
 #include "Hdf5Util.h"
 #include "SparseDataReader.h"
+#include "DataTypeConversion.h"
 
 //----------------------------------------------------------------------------//
 
@@ -110,12 +112,33 @@ public:
   //! Pointers to each block. This is so we can go in and manipulate them
   //! as we please
   BlockPtrs blocks;
+  //! Flags of whether the blocks have been accessed since they were
+  //! last considered for deallocation by the Second-chance/Clock
+  //! caching system
+  std::vector<bool> blockUsed;
+  //! Per-block counts of the number of times each block has been
+  //! loaded, for cache statistics
+  std::vector<int> loadCounts;
+  //! Per-block counts of the number of current references to the
+  //! blocks.  If a block's ref count is non-zero, then the block
+  //! shouldn't be unloaded.
+  std::vector<int> refCounts;
+  //! Allocated array of mutexes, one per block, to lock each block
+  //! individually, for guaranteeing thread-safe updates of the ref
+  //! counts
+  boost::mutex *blockMutex;
 
   // Ctors, dtor ---------------------------------------------------------------
 
   //! Constructor. Requires the filename and layer path of the field to be known
   Reference(const std::string filename, const std::string layerPath);
   ~Reference();
+
+  //! Copy constructor. Clears ref counts and rebuilds mutex array.
+  Reference(const Reference &o);
+
+  //! Assignment operator.  Clears ref counts and rebuilds mutex array.
+  Reference & operator=(const Reference &o);
 
   // Main methods --------------------------------------------------------------
 
@@ -131,6 +154,29 @@ public:
   //! a reference to where the data should go since this is already know in the
   //! blocks data member.
   void loadBlock(int blockIdx);
+  //! Unloads the block with the given index from memory.
+  void unloadBlock(int blockIdx);
+  //! Increment reference count on a block, indicates the block is
+  //! currently in use, so prevents it from being unloaded
+  void incBlockRef(int blockIdx);
+  //! Decrement reference count on a block
+  void decBlockRef(int blockIdx);
+  //! Returns the number of bytes used by the data in the block
+  int blockSize(int blockIdx) const;
+  //! Returns the total number of loads of the blocks of this file,
+  //! for cache statistics
+  int totalLoads() const;
+  //! Returns the total number of blocks that are currently loaded,
+  //! for statistics.
+  int numLoadedBlocks() const;
+  //! Returns the total number of blocks that were ever loaded (max 1
+  //! per block, not the number of blocks), for statistics.
+  int totalLoadedBlocks() const;
+  //! Returns the average number of loads per accessed block in this file,
+  //! for cache statistics
+  float averageLoads() const;
+  //! Resets counts of total block loads
+  void resetCacheStatistics();
 
 private:
 
@@ -144,6 +190,9 @@ private:
   //! Pointer to the reader object. NULL at construction time. Created in 
   //! openFile().
   SparseDataReader<Data_T> *m_reader;
+
+  //! Mutex to prevent two threads from modifying conflicting data
+  boost::mutex m_mutex;
 
 };
 
@@ -167,6 +216,10 @@ public:
   template <class Data_T>
   int append(const Reference<Data_T>& ref);
 
+  //! Returns the number of file references of the corresponding collection
+  template <class Data_T>
+    int numRefs() const;
+
 private:
 
   // Data members --------------------------------------------------------------
@@ -178,6 +231,18 @@ private:
   std::vector<Reference<double> > m_dRefs;
   std::vector<Reference<V3d> > m_vdRefs;
 
+};
+
+//----------------------------------------------------------------------------//
+
+class CacheBlock {
+public:
+  DataTypeEnum blockType;
+  int refIdx;
+  int blockIdx;
+  CacheBlock::CacheBlock(DataTypeEnum blockTypeIn,
+                         int refIdxIn,  int blockIdxIn) :
+    blockType(blockTypeIn), refIdx(refIdxIn), blockIdx(blockIdxIn) { }
 };
 
 //----------------------------------------------------------------------------//
@@ -201,6 +266,10 @@ class SparseFileManager
 
 public:
 
+  // typedefs ------------------------------------------------------------------
+
+  typedef std::list<SparseFile::CacheBlock> CacheList;
+
   // Main methods --------------------------------------------------------------
 
   //! Returns a reference to the singleton instance
@@ -218,6 +287,16 @@ public:
   //! \note This is not yet implemented.
   void setMaxMemUse(float maxMemUse);
 
+  //! Reclaims the specified number of bytes by deallocating unneeded blocks
+  void deallocateBlocks(int bytesNeeded);
+
+  //! Flushes the entire block cache for all files, should probably
+  //! only be used for debugging
+  void flushCache();
+
+  //! Adds the newly loaded block to the cache, managed by the paging algorithm
+  void addBlockToCache(DataTypeEnum blockType, int fileId, int blockIdx);
+
   //! Returns the id of the next cache item. This is stored in the SparseField
   //! in order to reference its fields at a later time
   template <class Data_T>
@@ -231,6 +310,39 @@ public:
   template <class Data_T>
   void activateBlock(int fileId, int blockIdx);
 
+  //! Increments the usage reference count on the specified block,
+  //! to prevent it from getting unloaded while it's still in use
+  template <class Data_T>
+  void incBlockRef(int fileId, int blockIdx);
+
+  //! Decrements the usage reference count on the specified block,
+  //! after its value is no longer being used
+  template <class Data_T>
+  void decBlockRef(int fileId, int blockIdx);
+
+  //! Returns the total number of block loads in the cache
+  long long totalLoads();
+
+  //! Returns the total number of blocks currently loaded into cache
+  long long numLoadedBlocks();
+
+  //! Returns the total number of blocks loaded (max 1 per block) into cache
+  long long totalLoadedBlocks();
+
+  //! Computes the ratio of blocks in the cache to the total number of
+  //! blocks that have been loaded (including unloaded blocks)
+  float cacheFractionLoaded();
+
+  //! Computes the overall loaded-blocks-to-load ratio for cached files
+  float cacheLoadsPerBlock();
+
+  //! Computes the efficiency, the ratio of the number of blocks ever
+  //! loaded to the number of loads.  If this is <1, then there were reloads.
+  float cacheEfficiency();
+
+  //! Resets block load
+  void resetCacheStatistics();
+
 private:
 
   //! Private to prevent instantiation
@@ -239,8 +351,23 @@ private:
   //! Pointer to singleton
   static SparseFileManager *ms_singleton;
 
+  //! Utility function to attempt to deallocate a single block and
+  //! advance the "hand"
+  template <class Data_T>
+  int deallocateBlock(const SparseFile::CacheBlock &cb);
+
+  //! Utility function to deallocate a single block
+  template <class Data_T>
+  void deallocateBlock(CacheList::iterator &it);
+
   //! Max amount om memory to use in megabytes
   float m_maxMemUse;
+
+  //! Max amount om memory to use in bytes
+  int m_maxMemUseInBytes;
+
+  //! Current amount of memory in use in bytes
+  int m_memUse;
 
   //! Whether to limit memory use of sparse fields from disk. Enables the
   //! cache and dynamic loading when true.
@@ -249,6 +376,21 @@ private:
   //! Vector containing information for each of the managed fields.
   //! The order matches the index stored in each SparseField::m_fileId
   SparseFile::FileReferences m_fileData;
+
+  //! List of dynamically loaded blocks to be considered for unloading
+  //! when the cache is full.
+  //! Currently using Second-chance/Clock paging algorithm.
+  //! For a description of the algorithm, look at:
+  //! http://en.wikipedia.org/wiki/Page_replacement_algorithm#Second-chance
+  CacheList m_blockCacheList;
+
+  //! Pointer to the next block to test for unloading in the cache,
+  //! the "hand" of the clock
+  CacheList::iterator m_nextBlock;
+
+  //! Mutex to prevent multiple threads from deallocating blocks at
+  //! the same time
+  boost::mutex m_mutex;
 
 };
 
@@ -265,8 +407,7 @@ Reference<Data_T>::Reference(const std::string a_filename,
                              const std::string a_layerPath)
   : filename(a_filename), layerPath(a_layerPath),
     valuesPerBlock(-1), occupiedBlocks(-1),
-    m_fileHandle(-1), m_reader(NULL)    
-{ 
+    blockMutex(NULL), m_fileHandle(-1), m_reader(NULL) { 
   /* Empty */ 
 }
 
@@ -277,6 +418,50 @@ Reference<Data_T>::~Reference()
 {
   if (m_reader)
     delete m_reader;
+
+  if (blockMutex)
+    delete [] blockMutex;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+Reference<Data_T>::Reference(const Reference<Data_T> &o)
+{
+  m_reader = NULL;
+  blockMutex = NULL;
+  *this = o;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+Reference<Data_T> &
+Reference<Data_T>::operator=(const Reference<Data_T> &o)
+{
+  // copy public member variables (where appropriate)
+  filename = o.filename;
+  layerPath = o.layerPath;
+  valuesPerBlock = o.valuesPerBlock;
+  occupiedBlocks = o.occupiedBlocks;
+  fileBlockIndices = o.fileBlockIndices;
+  blockLoaded = o.blockLoaded;
+  blocks = o.blocks;
+  blockUsed = o.blockUsed;
+  loadCounts = o.loadCounts;
+  refCounts = o.refCounts;
+  if (blockMutex)
+    delete[] blockMutex;
+  blockMutex = new boost::mutex[blocks.size()];
+
+  // copy private member variables (where appropriate)
+  m_fileHandle = o.m_fileHandle;
+  m_layerGroup = o.m_layerGroup;
+  if (m_reader)
+    delete m_reader;
+  m_reader = NULL;
+
+  return *this;
 }
 
 //----------------------------------------------------------------------------//
@@ -292,9 +477,17 @@ bool Reference<Data_T>::fileIsOpen()
 template <class Data_T>
 void Reference<Data_T>::setNumBlocks(int numBlocks)
 {
+  boost::mutex::scoped_lock lock(m_mutex);
+
   fileBlockIndices.resize(numBlocks);
   blockLoaded.resize(numBlocks, 0);
   blocks.resize(numBlocks, 0);
+  blockUsed.resize(numBlocks, false);
+  loadCounts.resize(numBlocks, 0);
+  refCounts.resize(numBlocks, 0);
+  if (blockMutex)
+    delete[] blockMutex;
+  blockMutex = new boost::mutex[numBlocks];
 }
 
 //----------------------------------------------------------------------------//
@@ -305,13 +498,20 @@ void Reference<Data_T>::openFile()
   using namespace Exc;
   using namespace Hdf5Util;
 
+  boost::mutex::scoped_lock lock(m_mutex);
+
+  // check that the file wasn't already opened before obtaining the lock
+  if (fileIsOpen()) {
+    return;
+  }
+
   m_fileHandle = H5Fopen(filename.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
   if (m_fileHandle < 0)
     throw NoSuchFileException(filename);
 
   m_layerGroup.open(m_fileHandle, layerPath.c_str());
   if (m_layerGroup.id() < 0) {
-    Log::print(Log::SevWarning, "In SparseFile::Reference::openFile: "
+    Msg::print(Msg::SevWarning, "In SparseFile::Reference::openFile: "
               "Couldn't find layer group " + layerPath + 
               " in .f3d file ");
     throw FileIntegrityException(filename);
@@ -326,6 +526,7 @@ void Reference<Data_T>::openFile()
 template <class Data_T>
 void Reference<Data_T>::loadBlock(int blockIdx)
 {
+  boost::mutex::scoped_lock lock(m_mutex);
   // Allocate the block
   blocks[blockIdx]->data.resize(valuesPerBlock);
   assert(blocks[blockIdx]->data.size() > 0);
@@ -334,6 +535,117 @@ void Reference<Data_T>::loadBlock(int blockIdx)
   m_reader->readBlock(fileBlockIndices[blockIdx], blocks[blockIdx]->dataRef());
   // Mark block as loaded
   blockLoaded[blockIdx] = 1;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+void Reference<Data_T>::unloadBlock(int blockIdx)
+{
+  // Deallocate the block
+  std::vector<Data_T>().swap(blocks[blockIdx]->data);
+  // Mark block as unloaded
+  blockLoaded[blockIdx] = 0;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+void Reference<Data_T>::incBlockRef(int blockIdx)
+{
+  boost::mutex::scoped_lock lock(blockMutex[blockIdx]);
+  ++refCounts[blockIdx];
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+void Reference<Data_T>::decBlockRef(int blockIdx)
+{
+  boost::mutex::scoped_lock lock(blockMutex[blockIdx]);
+  --refCounts[blockIdx];
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+int Reference<Data_T>::blockSize(int blockIdx) const
+{
+  return valuesPerBlock * sizeof(Data_T);
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+int Reference<Data_T>::totalLoads() const
+{
+  std::vector<int>::const_iterator i = loadCounts.begin();
+  std::vector<int>::const_iterator end = loadCounts.end();
+  int numLoads = 0;
+  for (; i != end; ++i)
+    numLoads += *i;
+
+  return numLoads;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+int Reference<Data_T>::numLoadedBlocks() const
+{
+  std::vector<int>::const_iterator i = blockLoaded.begin();
+  std::vector<int>::const_iterator end = blockLoaded.end();
+  int numBlocks = 0;
+  for (; i != end; ++i)
+    if (*i)
+      numBlocks++;
+
+  return numBlocks;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+int Reference<Data_T>::totalLoadedBlocks() const
+{
+  std::vector<int>::const_iterator i = loadCounts.begin();
+  std::vector<int>::const_iterator li = blockLoaded.begin();
+  std::vector<int>::const_iterator end = loadCounts.end();
+  int numBlocks = 0;
+  for (; i != end; ++i, ++li)
+    if (*i || *li)
+      numBlocks++;
+
+  return numBlocks;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+float Reference<Data_T>::averageLoads() const
+{
+  std::vector<int>::const_iterator i = loadCounts.begin();
+  std::vector<int>::const_iterator end = loadCounts.end();
+  int numLoads = 0, numBlocks = 0;
+  for (; i != end; ++i) {
+    if (*i) {
+      numLoads += *i;
+      numBlocks++;
+    }
+  }
+
+  return (float)numLoads / std::max(1, numBlocks);
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+void Reference<Data_T>::resetCacheStatistics()
+{
+  std::vector<int>::iterator li = loadCounts.begin();
+  std::vector<int>::iterator lend = loadCounts.end();
+  for (; li != lend; ++li)
+    *li = 0;
 }
 
 //----------------------------------------------------------------------------//
@@ -455,6 +767,54 @@ inline int FileReferences::append(const Reference<V3d>& ref)
 }
 
 //----------------------------------------------------------------------------//
+
+template <>
+inline int FileReferences::numRefs<SPI::OpenEXR::half>() const
+{
+  return m_hRefs.size();
+}
+
+//----------------------------------------------------------------------------//
+
+template <>
+inline int FileReferences::numRefs<V3h>() const
+{
+  return m_vhRefs.size();
+}
+
+//----------------------------------------------------------------------------//
+
+template <>
+inline int FileReferences::numRefs<float>() const
+{
+  return m_fRefs.size();
+}
+
+//----------------------------------------------------------------------------//
+
+template <>
+inline int FileReferences::numRefs<SPI::OpenEXR::Imath::V3f>() const
+{
+  return m_vfRefs.size();
+}
+
+//----------------------------------------------------------------------------//
+
+template <>
+inline int FileReferences::numRefs<double>() const
+{
+  return m_dRefs.size();
+}
+
+//----------------------------------------------------------------------------//
+
+template <>
+inline int FileReferences::numRefs<SPI::OpenEXR::Imath::V3d>() const
+{
+  return m_vdRefs.size();
+}
+
+//----------------------------------------------------------------------------//
 // Implementations for FileReferences
 //----------------------------------------------------------------------------//
 
@@ -463,7 +823,7 @@ Reference<Data_T>& FileReferences::ref(int idx)
 {
   assert(false && "Do not use memory limiting on sparse fields that aren't "
          "simple scalars or vectors!");
-  Log::print(Log::SevWarning, 
+  Msg::print(Msg::SevWarning, 
              "FileReferences::ref(): Do not use memory limiting on sparse "
              "fields that aren't simple scalars or vectors!");
   static Reference<Data_T> dummy("", "");
@@ -477,10 +837,25 @@ int FileReferences::append(const Reference<Data_T>& ref)
 {
   assert(false && "Do not use memory limiting on sparse fields that aren't "
          "simple scalars or vectors!");
-  Log::print(Log::SevWarning,
+  Msg::print(Msg::SevWarning,
              "FileReferences::append(): Do not use memory limiting on sparse "
              "fields that aren't simple scalars or vectors!");
   return -1;    
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+int FileReferences::numRefs() const
+{
+  assert(false && "Do not use memory limiting on sparse fields that aren't "
+         "simple scalars or vectors!");
+  Msg::print(Msg::SevWarning,
+             "FileReferences::numRefs(): "
+             "Do not use memory limiting on sparse "
+             "fields that aren't "
+             "simple scalars or vectors!");
+  return -1;
 }
 
 //----------------------------------------------------------------------------//
@@ -519,12 +894,54 @@ SparseFileManager::activateBlock(int fileId, int blockIdx)
 {
   SparseFile::Reference<Data_T> &reference = m_fileData.ref<Data_T>(fileId);
 
-  if (reference.fileBlockIndices[blockIdx] >= 0 &&
-      !reference.blockLoaded[blockIdx]) {
-    if (!reference.fileIsOpen()) {
-      reference.openFile();
+  if (reference.fileBlockIndices[blockIdx] >= 0) {
+    if (!reference.blockLoaded[blockIdx]) {
+      int blockSize = reference.blockSize(blockIdx);
+      if (m_limitMemUse) {
+        // if we already have enough free memory, deallocateBlocks()
+        // will just return
+        deallocateBlocks(blockSize);
+      }
+      if (!reference.fileIsOpen()) {
+        reference.openFile();
+      }
+      boost::mutex::scoped_lock lock(reference.blockMutex[blockIdx]);
+      // check to see if it was loaded between when the function
+      // started and we got the lock on the block
+      if (!reference.blockLoaded[blockIdx]) {
+        reference.loadBlock(blockIdx);
+        reference.loadCounts[blockIdx]++;
+        addBlockToCache(dataTypeToEnum<Data_T>(), fileId, blockIdx);
+        m_memUse += blockSize;
+      }
     }
-    reference.loadBlock(blockIdx);
+  }
+  reference.blockUsed[blockIdx] = true;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+void 
+SparseFileManager::incBlockRef(int fileId, int blockIdx)
+{
+  SparseFile::Reference<Data_T> &reference = m_fileData.ref<Data_T>(fileId);
+
+  if (reference.fileBlockIndices[blockIdx] >= 0) {
+    reference.incBlockRef(blockIdx);
+  }
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+void 
+SparseFileManager::decBlockRef(int fileId, int blockIdx)
+{
+  SparseFile::Reference<Data_T> &reference = m_fileData.ref<Data_T>(fileId);
+
+  if (reference.fileBlockIndices[blockIdx] >= 0) {
+    reference.decBlockRef(blockIdx);
   }
 }
 

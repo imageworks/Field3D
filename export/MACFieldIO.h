@@ -54,7 +54,7 @@
 
 #include "Exception.h"
 #include "Field3DFile.h"
-#include "FieldIOFactory.h"
+#include "FieldIO.h"
 #include "Hdf5Util.h"
 #include "MACField.h"
 
@@ -94,6 +94,9 @@ public:
   //! Dtor
   virtual ~MACFieldIO() 
   { /* Empty */ }
+
+  static FieldIO::Ptr create()
+  { return Ptr(new MACFieldIO); }
 
   // From FieldIO --------------------------------------------------------------
 

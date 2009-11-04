@@ -54,8 +54,8 @@
 
 #include "Field3DFile.h"
 #include "Field.h"
-#include "FieldIOFactory.h"
-#include "FieldMappingFactory.h"
+#include "ClassFactory.h"
+
 
 //----------------------------------------------------------------------------//
 
@@ -82,11 +82,16 @@ namespace {
   // Strings used only in this file --------------------------------------------
 
   const std::string k_mappingStr("mapping");
-  const std::string k_versionAttrName("version");
+  const std::string k_versionAttrName("version_number");
+  const std::string k_classNameAttrName("class_name");
+  const std::string k_mappingTypeAttrName("mapping_type");
 
   //! This version is stored in every file to determine which library version
   //! produced it.
-  const std::string k_versionString("Field3D version 1.0.0");
+
+  int k_currentFileVersion[3] =
+    { FIELD3D_MAJOR_VER, FIELD3D_MINOR_VER, FIELD3D_MICRO_VER };
+  int k_minFileVersion[2] = { 0, 0 };
 
   // Function objects used only in this file -----------------------------------
 
@@ -100,6 +105,8 @@ namespace {
     std::copy(vec.begin(), newEnd, ret.begin()); 
     return ret;
   }
+
+//----------------------------------------------------------------------------//
 
   //! Functor used with for_each to print a container
   template <class T>
@@ -117,6 +124,8 @@ namespace {
     }
     int indent;
   };
+
+//----------------------------------------------------------------------------//
 
   /*! \brief checks to see if a file/directory exists or not
     \param[in] filename the file/directory to check
@@ -142,7 +151,44 @@ namespace {
     }
   }
 
-}
+//----------------------------------------------------------------------------//
+
+  bool isSupportedFileVersion(const int fileVersion[3],
+                              const int minVersion[2])
+  {
+    stringstream currentVersionStr;
+    currentVersionStr << k_currentFileVersion[0] << "."
+                      << k_currentFileVersion[1] << "."
+                      << k_currentFileVersion[2];
+    stringstream fileVersionStr;
+    fileVersionStr << fileVersion[0] << "."
+                   << fileVersion[1] << "."
+                   << fileVersion[2];
+    stringstream minVersionStr;
+    minVersionStr << minVersion[0] << "."
+                  << minVersion[1];
+
+    if (fileVersion[0] > k_currentFileVersion[0] ||
+        (fileVersion[0] == k_currentFileVersion[0] && 
+         fileVersion[1] > k_currentFileVersion[1])) {
+      Msg::print(Msg::SevWarning, "File version " + fileVersionStr.str() +
+                 " is higher than the current version " +
+                 currentVersionStr.str());
+      return true;
+    }
+
+    if (fileVersion[0] < minVersion[0] ||
+        (fileVersion[0] == minVersion[0] &&
+         fileVersion[1] < minVersion[1])) {
+      Msg::print(Msg::SevWarning, "File version " + fileVersionStr.str() +
+                 " is lower than the minimum supported version " +
+                 minVersionStr.str());
+      return false;
+    }
+    return true;
+  }
+
+} // end of local namespace
 
 //----------------------------------------------------------------------------//
 // Partition implementations
@@ -381,7 +427,7 @@ Field3DFileBase::getIntScalarLayerNames(vector<string> &names,
   Partition::Ptr part = partition(intPartitionName);
 
   if (!part) {
-    Log::print("getIntScalarLayerNames no partition: " + intPartitionName);
+    Msg::print("getIntScalarLayerNames no partition: " + intPartitionName);
     return;
   }
 
@@ -399,7 +445,7 @@ Field3DFileBase::getIntVectorLayerNames(vector<string> &names,
   Partition::Ptr part = partition(intPartitionName);
 
   if (!part) {
-    Log::print("getIntVectorLayerNames no partition: " + intPartitionName);    
+    Msg::print("getIntVectorLayerNames no partition: " + intPartitionName);    
     return;
   }
 
@@ -430,7 +476,7 @@ void Field3DFileBase::closeInternal()
 {
   if (m_file != -1) {
     if (H5Fclose(m_file) < 0) {
-      Log::print(Log::SevWarning, "Failed to close hdf5 file handle");
+      Msg::print(Msg::SevWarning, "Failed to close hdf5 file handle");
       return;
     }    
     m_file = -1;
@@ -464,7 +510,7 @@ string
 Field3DFileBase::makeIntPartitionName(const std::string &partitionName,
                                       int i) const
 {
-  return partitionName + "." + str(i);
+  return partitionName + "." + boost::lexical_cast<std::string>(i);
 }
 
 //----------------------------------------------------------------------------//
@@ -527,11 +573,23 @@ bool Field3DInputFile::open(const string &filename)
     if (m_file < 0)
       throw NoSuchFileException(filename);
 
-    if (!readAttribute(m_file, k_versionAttrName, version))
-      throw MissingAttributeException(k_versionAttrName);
-    
-    if (version != k_versionString)
-      throw UnsupportedVersionException(version);
+    int fileVersion[3];
+    try { 
+      if (!readAttribute(m_file, k_versionAttrName, 3, fileVersion[0])) {
+        //Msg::print(Msg::SevWarning, "Missing version_number attribute");
+      } else {
+        if (!isSupportedFileVersion(fileVersion, k_minFileVersion)) {
+          stringstream versionStr;
+          versionStr << fileVersion[0] << "."
+                     << fileVersion[1] << "."
+                     << fileVersion[2];
+          throw UnsupportedVersionException(versionStr.str());
+        }
+      }
+    }
+    catch (MissingAttributeException &e) {
+      //Msg::print(Msg::SevWarning, "Missing version_number attribute");
+    }
 
     try {
       if (!readPartitionAndLayerInfo()) {
@@ -539,50 +597,50 @@ bool Field3DInputFile::open(const string &filename)
       }
     } 
     catch (MissingGroupException &e) {
-      Log::print(Log::SevWarning, "Missing group: " + string(e.what()));
+      Msg::print(Msg::SevWarning, "Missing group: " + string(e.what()));
       throw BadFileHierarchyException(filename);
     }
     catch (ReadMappingException &e) {
-      Log::print(Log::SevWarning, "Couldn't read mapping for partition: " 
+      Msg::print(Msg::SevWarning, "Couldn't read mapping for partition: " 
                 + string(e.what()));
       throw BadFileHierarchyException(filename);
     }
     catch (Exception &e) {
-      Log::print(Log::SevWarning, "Unknown error when reading file hierarchy: "
+      Msg::print(Msg::SevWarning, "Unknown error when reading file hierarchy: "
                 + string(e.what()));
       throw BadFileHierarchyException(filename);
     }
     catch (...) {
-      Log::print(Log::SevWarning, 
+      Msg::print(Msg::SevWarning, 
                  "Unknown error when reading file hierarchy. ");
       throw BadFileHierarchyException(filename);
     }
 
   }
   catch (NoSuchFileException &e) {
-    Log::print(Log::SevWarning, "Couldn't open file: " 
+    Msg::print(Msg::SevWarning, "Couldn't open file: " 
               + string(e.what()) );
     success = false;    
   }
   catch (MissingAttributeException &e) {
-    Log::print(Log::SevWarning, 
-               "In file: " + filename + " - Couldn't find attribute "
+    Msg::print(Msg::SevWarning, 
+               "In file: " + filename + " - "
               + string(e.what()) );
     success = false;
   }
   catch (UnsupportedVersionException &e) {    
-    Log::print(Log::SevWarning, 
+    Msg::print(Msg::SevWarning, 
                "In file: " + filename + " - File version can not be read: " 
               + string(e.what()));
     success = false;    
   }
   catch (BadFileHierarchyException &e) {
-    Log::print(Log::SevWarning, 
+    Msg::print(Msg::SevWarning, 
                "In file: " + filename + " - Bad file hierarchy. ");
     success = false;    
   }
   catch (...) {
-    Log::print(Log::SevWarning, 
+    Msg::print(Msg::SevWarning, 
                "In file: " + filename + " Unknown exception ");
     success = false;
   }
@@ -632,9 +690,9 @@ bool Field3DInputFile::readPartitionAndLayerInfo()
     // Try to build a mapping from it
     FieldMapping::Ptr mapping;
 
-    mapping = theFieldMappingFactory.read(mappingGroup.id());
+    mapping = readFieldMapping(mappingGroup.id());
     if (!mapping) {
-      Log::print(Log::SevWarning, "Got a null pointer when reading mapping");
+      Msg::print(Msg::SevWarning, "Got a null pointer when reading mapping");
       throw ReadMappingException((**i).name);
     }
     
@@ -707,7 +765,7 @@ herr_t Field3DInputFile::parseLayer(hid_t layerGroup,
 {
   int components;
   if (!readAttribute(layerGroup, string("components"), 1, components)) {
-    Log::print(Log::SevWarning, "Couldn't read components attribute for layer " 
+    Msg::print(Msg::SevWarning, "Couldn't read components attribute for layer " 
               + partitionName + "/" + layerName);
     return 0;
   }
@@ -744,7 +802,7 @@ readMetadata(hid_t metadata_id, FieldBase::Ptr field) const
           if (typeClass == H5T_STRING) { 
             string value;
             if (!readAttribute(metadata_id, name, value)) {
-              Log::print(Log::SevWarning, 
+              Msg::print(Msg::SevWarning, 
                          "Failed to read metadata " + string(name));
               if (name) {
                 delete[] name;
@@ -757,7 +815,7 @@ readMetadata(hid_t metadata_id, FieldBase::Ptr field) const
           else {
 
             if (H5Sget_simple_extent_ndims(attrSpace) != 1) {
-              Log::print(Log::SevWarning, "Bad attribute rank for attribute " 
+              Msg::print(Msg::SevWarning, "Bad attribute rank for attribute " 
                         + string(name));
               if (name) {
                 delete[] name;
@@ -772,20 +830,21 @@ readMetadata(hid_t metadata_id, FieldBase::Ptr field) const
               if (dims[0] == 1){
                 int value;
                 if (!readAttribute(metadata_id, name, dims[0], value))
-                  Log::print(Log::SevWarning, "Failed to read metadata " 
+                  Msg::print(Msg::SevWarning, "Failed to read metadata " 
                             + string(name));
                 field->setIntMetadata(name, value);
               }
               else if (dims[0] == 3){
                 V3i value;
                 if (!readAttribute(metadata_id, name, dims[0], value.x))
-                  Log::print(Log::SevWarning, "Failed to read metadata " + 
+                  Msg::print(Msg::SevWarning, "Failed to read metadata " + 
                             string(name) );
                 field->setVecIntMetadata(name, value);
               }
               else {
-                Log::print(Log::SevWarning, 
-                           "Attribute of size " + str(dims[0]) 
+                Msg::print(Msg::SevWarning, 
+                           "Attribute of size " + 
+                           boost::lexical_cast<std::string>(dims[0]) 
                            + " is not valid for metadata");
               }
             }
@@ -793,7 +852,7 @@ readMetadata(hid_t metadata_id, FieldBase::Ptr field) const
               if (dims[0] == 1){
                 float value;
                 if (!readAttribute(metadata_id, name, dims[0], value))
-                  Log::print(Log::SevWarning, "Failed to read metadata " + 
+                  Msg::print(Msg::SevWarning, "Failed to read metadata " + 
                             string(name) );
                 
                 field->setFloatMetadata(name, value);
@@ -801,17 +860,18 @@ readMetadata(hid_t metadata_id, FieldBase::Ptr field) const
               else if (dims[0] == 3){
                 V3f value;
                 if (!readAttribute(metadata_id, name, dims[0], value.x))
-                  Log::print(Log::SevWarning, "Failed to read metadata "+ 
+                  Msg::print(Msg::SevWarning, "Failed to read metadata "+ 
                             string(name) );
                 field->setVecFloatMetadata(name, value);
               }
               else {
-                Log::print(Log::SevWarning, "Attribute of size " +
-                          str(dims[0]) + " is not valid for metadata");
+                Msg::print(Msg::SevWarning, "Attribute of size " +
+                           boost::lexical_cast<std::string>(dims[0]) +
+                           " is not valid for metadata");
               }
             }
             else {               
-              Log::print(Log::SevWarning, "Attribute '" + string(name) + 
+              Msg::print(Msg::SevWarning, "Attribute '" + string(name) + 
                         + "' has unsupported data type for metadata");
               
             }
@@ -865,7 +925,7 @@ readGroupMembership(GroupMembershipMap &gpMembershipMap)
           if (typeClass == H5T_STRING) { 
             string value;
             if (!readAttribute(memberGroup, name, value)) {
-              Log::print(Log::SevWarning, 
+              Msg::print(Msg::SevWarning, 
                          "Failed to read group membership data  " 
                         + string(name));
               continue;
@@ -1035,24 +1095,25 @@ bool Field3DOutputFile::create(const string &filename, CreateMode cm)
       throw ErrorCreatingFileException(filename);
     
     // Create a version attribute on the root node
-    if (!writeAttribute(m_file, k_versionAttrName, k_versionString)) {
-      Log::print(Log::SevWarning, "Adding version string.");
+    if (!writeAttribute(m_file, k_versionAttrName, 3,
+                        k_currentFileVersion[0])) {
+      Msg::print(Msg::SevWarning, "Adding version number.");
       closeInternal();
       return false;
     }
 
   }
   catch (ErrorCreatingFileException &e) {
-    Log::print(Log::SevWarning, "Couldn't create file: " + string(e.what()) );
+    Msg::print(Msg::SevWarning, "Couldn't create file: " + string(e.what()) );
     success = false;
   } 
   catch (WriteAttributeException &e) {
-    Log::print(Log::SevWarning, "In file : " + filename +
+    Msg::print(Msg::SevWarning, "In file : " + filename +
               " - Couldn't add attribute " + string(e.what()) );
     success = false;
   }
   catch (...) {
-    Log::print(Log::SevWarning, 
+    Msg::print(Msg::SevWarning, 
                "Unknown error when creating file: " + filename );
     success = false;
   }
@@ -1071,11 +1132,11 @@ bool Field3DOutputFile::writeMapping(hid_t partitionGroup,
     if (mappingGroup.id() < 0)
       throw CreateGroupException(k_mappingStr);
     // Let FieldMappingIO handle the rest
-    if (!theFieldMappingFactory.write(mappingGroup.id(), mapping))
+    if (!writeFieldMapping(mappingGroup.id(), mapping))
       throw WriteMappingException(k_mappingStr);       
   }
   catch (CreateGroupException &e) {
-    Log::print(Log::SevWarning, "Couldn't create group: " + string(e.what()) );
+    Msg::print(Msg::SevWarning, "Couldn't create group: " + string(e.what()) );
     throw WriteMappingException(k_mappingStr);
   }
   return true;
@@ -1093,7 +1154,7 @@ bool Field3DOutputFile::writeMetadata(hid_t metadataGroup, FieldBase::Ptr field)
     for (; i != end; ++i) {
       if (!writeAttribute(metadataGroup, i->first, i->second))
       {
-        Log::print(Log::SevWarning, "Writing attribute " + i->first );
+        Msg::print(Msg::SevWarning, "Writing attribute " + i->first );
         return false;
       }
     }
@@ -1105,7 +1166,7 @@ bool Field3DOutputFile::writeMetadata(hid_t metadataGroup, FieldBase::Ptr field)
     for (; i != end; ++i) {
       if (!writeAttribute(metadataGroup, i->first, 1, i->second))
       {
-        Log::print(Log::SevWarning, "Writing attribute " + i->first);
+        Msg::print(Msg::SevWarning, "Writing attribute " + i->first);
         return false;
       }
     }
@@ -1117,7 +1178,7 @@ bool Field3DOutputFile::writeMetadata(hid_t metadataGroup, FieldBase::Ptr field)
     for (; i != end; ++i) {
       if (!writeAttribute(metadataGroup, i->first, 1, i->second))
       {
-        Log::print(Log::SevWarning, "Writing attribute " + i->first);
+        Msg::print(Msg::SevWarning, "Writing attribute " + i->first);
         return false;
       }
     }
@@ -1131,7 +1192,7 @@ bool Field3DOutputFile::writeMetadata(hid_t metadataGroup, FieldBase::Ptr field)
     for (; i != end; ++i) {
       if (!writeAttribute(metadataGroup, i->first, 3, i->second.x))
       {
-        Log::print(Log::SevWarning, "Writing attribute " + i->first);
+        Msg::print(Msg::SevWarning, "Writing attribute " + i->first);
         return false;
       }
     }
@@ -1145,7 +1206,7 @@ bool Field3DOutputFile::writeMetadata(hid_t metadataGroup, FieldBase::Ptr field)
     for (; i != end; ++i) {
       if (!writeAttribute(metadataGroup, i->first, 3, i->second.x))
       {
-        Log::print(Log::SevWarning, "Writing attribute " + i->first);
+        Msg::print(Msg::SevWarning, "Writing attribute " + i->first);
         return false;
       }
     }
@@ -1169,13 +1230,13 @@ Field3DOutputFile::writeGroupMembership()
 
   H5ScopedGcreate group(m_file, "field3d_group_membership");
   if (group < 0) {
-    Log::print(Log::SevWarning, 
+    Msg::print(Msg::SevWarning, 
                "Error creating field3d_group_membership group.");      
     return false;
   } 
 
   if (!writeAttribute(group, "is_field3d_group_membership", "1")) {
-    Log::print(Log::SevWarning, 
+    Msg::print(Msg::SevWarning, 
                "Failed to write field3d_group_membership attribute.");
     return false;
   }    
@@ -1187,7 +1248,7 @@ Field3DOutputFile::writeGroupMembership()
   
   for (; iter != iEnd; ++iter) {
     if (!writeAttribute(group, iter->first, iter->second)) {
-      Log::print(Log::SevWarning, 
+      Msg::print(Msg::SevWarning, 
                  "Failed to write groupMembership string: "+ iter->first);
       return false;
     }        
@@ -1207,7 +1268,7 @@ void Field3DFileBase::printHierarchy() const
        i != m_partitions.end(); ++i) {
     cout << "Name: " << (**i).name << endl;
     if ((**i).mapping)
-      cout << "  Mapping: " << (**i).mapping->typeName() << endl;
+      cout << "  Mapping: " << (**i).mapping->className() << endl;
     else 
       cout << "  Mapping: NULL" << endl;
     cout << "  Scalar layers: " << endl;
@@ -1219,6 +1280,88 @@ void Field3DFileBase::printHierarchy() const
     (**i).getVectorLayerNames(vNames);
     for_each(vNames.begin(), vNames.end(), print<string>(4));
   }
+}
+
+//----------------------------------------------------------------------------//
+// Function Implementations
+//----------------------------------------------------------------------------//
+
+bool writeField(hid_t layerGroup, FieldBase::Ptr field)
+{
+  ClassFactory &factory = ClassFactory::singleton();
+    
+  FieldIO::Ptr io = factory.createFieldIO(field->className());
+  assert(io != 0);
+  if (!io) {
+    Msg::print(Msg::SevWarning, "Unable to find class type: " + 
+               field->className());
+    return false;
+  }
+
+  // Add class name attribute
+  if (!writeAttribute(layerGroup, k_classNameAttrName, 
+                      field->className())) {
+    Msg::print(Msg::SevWarning, "Error adding class name attribute.");
+    return false;
+  }
+
+  return io->write(layerGroup, field);
+}
+
+//----------------------------------------------------------------------------//
+
+FieldMapping::Ptr readFieldMapping(hid_t mappingGroup)
+{
+  ClassFactory &factory = ClassFactory::singleton();
+
+  std::string className;
+
+  if (!readAttribute(mappingGroup, k_mappingTypeAttrName, className)) {
+    Msg::print(Msg::SevWarning, "Couldn't find " + k_mappingTypeAttrName + 
+              " attribute");
+    return FieldMapping::Ptr();    
+  }
+
+  FieldMappingIO::Ptr io = factory.createFieldMappingIO(className);
+  assert(io != 0);
+  if (!io) {
+    Msg::print(Msg::SevWarning, "Unable to find class type: " + 
+               className);
+    return FieldMapping::Ptr();
+  }
+
+
+  FieldMapping::Ptr mapping = io->read(mappingGroup);
+  if (!mapping) {
+    Msg::print(Msg::SevWarning, "Couldn't read mapping");
+    return FieldMapping::Ptr();
+  }
+  
+  return mapping;
+}
+
+//----------------------------------------------------------------------------//
+
+bool writeFieldMapping(hid_t mappingGroup, FieldMapping::Ptr mapping)
+{
+  ClassFactory &factory = ClassFactory::singleton();
+
+  std::string className = mapping->className();
+
+  if (!writeAttribute(mappingGroup, k_mappingTypeAttrName, className)) {
+    Msg::print(Msg::SevWarning, "Couldn't add " + className + " attribute");
+    return false;
+  }
+
+  FieldMappingIO::Ptr io = factory.createFieldMappingIO(className);
+  assert(io != 0);
+  if (!io) {
+    Msg::print(Msg::SevWarning, "Unable to find class type: " + 
+               className);
+    return false;
+  }
+
+  return io->write(mappingGroup, mapping);
 }
 
 //----------------------------------------------------------------------------//

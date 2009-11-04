@@ -93,7 +93,7 @@ namespace {
     boost::timer timer;
     ~ScopedPrintTimer()
     {
-      Log::print("  Time elapsed: " + str(timer.elapsed()));
+      Msg::print("  Time elapsed: " + boost::lexical_cast<std::string>(timer.elapsed()));
     }
   };
 }
@@ -109,7 +109,7 @@ void testBasicField()
 
   SField dummy;
   string TName(NameForType<Data_T>::name());
-  Log::print("Basic Field tests for type " + dummy.className() + 
+  Msg::print("Basic Field tests for type " + dummy.className() + 
             "<" + TName + ">");
 
   string currentTest;
@@ -117,7 +117,7 @@ void testBasicField()
   currentTest = "Checking empty field";
 
   {
-    Log::print(currentTest);
+    Msg::print(currentTest);
     ScopedPrintTimer t;
     SField sField;
     VField vField;    
@@ -128,7 +128,7 @@ void testBasicField()
   currentTest = "Checking non-empty field";
 
   {
-    Log::print(currentTest);
+    Msg::print(currentTest);
     ScopedPrintTimer t;
     SField sField;
     sField.setSize(V3i(10));
@@ -141,7 +141,7 @@ void testBasicField()
   currentTest = "Checking value in cleared field";
 
   {
-    Log::print(currentTest);
+    Msg::print(currentTest);
     ScopedPrintTimer t;
     Data_T sVal(1.1f);
     Vec3_T vVal(1.2f);
@@ -159,7 +159,7 @@ void testBasicField()
   currentTest = "Checking reading and writing entire field";
 
   {
-    Log::print(currentTest);
+    Msg::print(currentTest);
     ScopedPrintTimer t;
     V3i size(50);
     SField sField;
@@ -186,7 +186,7 @@ void testBasicField()
   currentTest = "Checking large extents, small data window";
 
   {
-    Log::print(currentTest);
+    Msg::print(currentTest);
     ScopedPrintTimer t;
     Box3i extents(V3i(-5), V3i(50));
     Box3i data(V3i(20), V3i(30));
@@ -216,7 +216,7 @@ void testBasicField()
   currentTest = "Checking large extents, small data window, with safeValue()";
 
   {
-    Log::print(currentTest);
+    Msg::print(currentTest);
     ScopedPrintTimer t;
     Box3i extents(V3i(-5), V3i(50));
     Box3i data(V3i(40), V3i(45));
@@ -253,7 +253,7 @@ void testBasicField()
   currentTest = "Checking std::fill works with iterators";
 
   if (true) {
-    Log::print(currentTest);
+    Msg::print(currentTest);
     ScopedPrintTimer t;
     Data_T testVal = 1.5f;
     Box3i extents(V3i(-5), V3i(25));
@@ -273,7 +273,7 @@ void testBasicField()
   currentTest = "Checking read from const_iterator - full field";
 
   if (true) {
-    Log::print(currentTest);
+    Msg::print(currentTest);
     ScopedPrintTimer t;
     Data_T testVal = 1.5f;
     Box3i extents(V3i(-5), V3i(25));
@@ -297,7 +297,7 @@ void testBasicField()
   currentTest = "Checking read from const_iterator - empty field";
 
   {
-    Log::print(currentTest);
+    Msg::print(currentTest);
     ScopedPrintTimer t;
     Data_T testVal = 1.5f;
     Box3i extents(V3i(-5), V3i(25));
@@ -328,7 +328,7 @@ void testBasicField()
   currentTest = "Checking read of subset from const_iterator - empty field";
 
   {
-    Log::print(currentTest);
+    Msg::print(currentTest);
     ScopedPrintTimer t;
     Data_T testVal = 1.5f;
     Box3i extents(V3i(-5), V3i(25));
@@ -352,7 +352,7 @@ void testBasicField()
     typename SField::const_iterator j = sField.cbegin(toRead);
     int cellCountJ = 0;
     for (; j != end; ++j) {
-      // Log::print("Checking " + str(j.x) + " " + str(j.y) + " " + str(j.z));
+      // Msg::print("Checking " + str(j.x) + " " + str(j.y) + " " + str(j.z));
       BOOST_CHECK_EQUAL(*j, testVal);    
       cellCountJ++;
     }
@@ -362,7 +362,7 @@ void testBasicField()
   currentTest = "Checking read from iterator";
 
   {
-    Log::print(currentTest);
+    Msg::print(currentTest);
     ScopedPrintTimer t;
     Data_T testVal = 1.5f;
     Box3i extents(V3i(-5), V3i(25));
@@ -394,7 +394,7 @@ void testBasicField()
   currentTest = "Checking iterator correctness";
 
   {
-    Log::print(currentTest);
+    Msg::print(currentTest);
     ScopedPrintTimer t;
     Box3i extents(V3i(-5), V3i(25));
     SField sField;
@@ -427,7 +427,7 @@ void testBasicField()
   currentTest = "Checking random writes";
 
   {
-    Log::print(currentTest);
+    Msg::print(currentTest);
     ScopedPrintTimer t;
     int numWrites = 1000000;
     FIELD3D_RAND48 rng(134664222);
@@ -449,7 +449,7 @@ void testBasicField()
   currentTest = "Checking that mapping picks up resizes";
 
   {
-    Log::print(currentTest);
+    Msg::print(currentTest);
     ScopedPrintTimer t;
     int start = 5;
     int end = 50;
@@ -476,7 +476,7 @@ void testBasicField()
   currentTest = "Checking clone and copy constructors";
 
   {
-    Log::print(currentTest);
+    Msg::print(currentTest);
     ScopedPrintTimer t;
     Box3i extents(V3i(-5), V3i(25));
     typename SField::Ptr sField(new SField);
@@ -541,7 +541,7 @@ void testEmptyField()
 
   EmptyField<Data_T> dummy;
   string TName(NameForType<Data_T>::name());
-  Log::print("Basic Field tests for type " + dummy.className() + 
+  Msg::print("Basic Field tests for type " + dummy.className() + 
             "<" + TName + ">");
 
   string currentTest;
@@ -549,7 +549,7 @@ void testEmptyField()
   currentTest = "Checking empty field";
 
   {
-    Log::print(currentTest);
+    Msg::print(currentTest);
     ScopedPrintTimer t;
     EmptyField<Data_T> sField;
     EmptyField<Vec3_T>   vField;    
@@ -560,7 +560,7 @@ void testEmptyField()
   currentTest = "Checking non-empty field";
 
   {
-    Log::print(currentTest);
+    Msg::print(currentTest);
     ScopedPrintTimer t;
     EmptyField<Data_T> sField;
     EmptyField<Vec3_T> vField;
@@ -573,7 +573,7 @@ void testEmptyField()
   currentTest = "Checking value in cleared field";
 
   {
-    Log::print(currentTest);
+    Msg::print(currentTest);
     ScopedPrintTimer t;
     Data_T sVal(1.1f);
     Vec3_T vVal(1.2f);
@@ -591,7 +591,7 @@ void testEmptyField()
   currentTest = "Checking (bogus) reading and writing a nonexistent cell";
 
   {
-    Log::print(currentTest);
+    Msg::print(currentTest);
     ScopedPrintTimer t;
     V3i size(50);
     EmptyField<Data_T> sField;
@@ -611,7 +611,7 @@ void testEmptyField()
   currentTest = "Checking reading and writing the constant value";
 
   {
-    Log::print(currentTest);
+    Msg::print(currentTest);
     ScopedPrintTimer t;
     V3i size(50);
     EmptyField<Data_T> sField;
@@ -631,7 +631,7 @@ void testEmptyField()
   currentTest = "Checking that mapping picks up resizes";
 
   {
-    Log::print(currentTest);
+    Msg::print(currentTest);
     ScopedPrintTimer t;
     int start = 5;
     int end = 50;
@@ -661,7 +661,7 @@ void testFieldMapping()
 
   DenseField<Data_T> dummy;
   string TName(NameForType<Data_T>::name());
-  Log::print("FieldMapping tests for type " + dummy.className() + 
+  Msg::print("FieldMapping tests for type " + dummy.className() + 
             "<" + TName + ">");
 
   string currentTest;
@@ -669,7 +669,7 @@ void testFieldMapping()
   currentTest = "Checking field mapping";
 
   {
-    Log::print(currentTest);
+    Msg::print(currentTest);
     ScopedPrintTimer t;
     V3i size(5);
     Box3i extents(V3i(-5), V3i(25));
@@ -709,13 +709,13 @@ void testLinearInterp()
 
   SField dummy;
   string TName(NameForType<Data_T>::name());
-  Log::print("Linear interpolation tests for type " + dummy.className() + 
+  Msg::print("Linear interpolation tests for type " + dummy.className() + 
             "<" + TName + ">");
 
   string currentTest = "Simple linear inter test";
 
   {
-    Log::print(currentTest);
+    Msg::print(currentTest);
     ScopedPrintTimer t;
     SField sField;
     sField.setSize(V3i(10), 2);
@@ -742,13 +742,13 @@ void testCubicInterp()
 
   SField dummy;
   string TName(NameForType<Data_T>::name());
-  Log::print("Cubic interpolation tests for type " + dummy.className() + 
+  Msg::print("Cubic interpolation tests for type " + dummy.className() + 
             "<" + TName + ">");
 
   string currentTest = "Simple Cubic inter test";
 
   {
-    Log::print(currentTest);
+    Msg::print(currentTest);
     ScopedPrintTimer t;
     typename SField::Ptr sField(new SField);
 
@@ -777,7 +777,7 @@ void testField3DFile()
 
   SField dummy;
   string TName(NameForType<Data_T>::name());
-  Log::print("Field3DFile tests for type " + dummy.className() + 
+  Msg::print("Field3DFile tests for type " + dummy.className() + 
             "<" + TName + ">");
 
   string currentTest;
@@ -786,7 +786,7 @@ void testField3DFile()
 
   // This isn't good to test - hdf5 spits out tons of errors
   if (!true) {
-    Log::print(currentTest);
+    Msg::print(currentTest);
     ScopedPrintTimer t;    
     string filename("/mpp/misspelled.f3d");
     Field3DOutputFile out;
@@ -797,7 +797,7 @@ void testField3DFile()
   currentTest = "Checking write file, then read";
 
   {
-    Log::print(currentTest);
+    Msg::print(currentTest);
     ScopedPrintTimer t;
     string filename("/tmp/test_" + dummy.className() + "." + TName + ".f3d");
     Box3i extents(V3i(0), V3i(160));
@@ -862,13 +862,13 @@ void testField3DFile()
     iFile.getPartitionNames(partitions);
     bool field1InFile = find(partitions.begin(), partitions.end(),
                              field1Name) != partitions.end();
-    Log::print("Checking that partition " + field1Name + " exists in file.");
+    Msg::print("Checking that partition " + field1Name + " exists in file.");
     bool field2InFile = find(partitions.begin(), partitions.end(),
                              field2Name) != partitions.end();
-    Log::print("Checking that partition " + field2Name + " exists in file.");
+    Msg::print("Checking that partition " + field2Name + " exists in file.");
     bool field3InFile = find(partitions.begin(), partitions.end(),
                              field3Name) != partitions.end();
-    Log::print("Checking that partition " + field3Name + " exists in file.");
+    Msg::print("Checking that partition " + field3Name + " exists in file.");
     BOOST_CHECK_EQUAL(field1InFile, true);
     BOOST_CHECK_EQUAL(field2InFile, true);
     BOOST_CHECK_EQUAL(field3InFile, false);
@@ -912,14 +912,14 @@ void testField3DFile()
 
     // Check scalar layer data
     {
-      Log::print("Verifying scalar data is identical");
+      Msg::print("Verifying scalar data is identical");
       ScopedPrintTimer t;
       BOOST_CHECK_EQUAL(isIdentical<Data_T>(s1, s2), true);
     }
     
     // Check vector layer data
     {
-      Log::print("Verifying vector data is identical");
+      Msg::print("Verifying vector data is identical");
       ScopedPrintTimer t;
       BOOST_CHECK_EQUAL(isIdentical<Vec3_T>(v1, v2), true);
     }
@@ -934,7 +934,7 @@ template <class Data_T>
 void testEmptySparseFieldToDisk()
 {
   string TName(NameForType<Data_T>::name());
-  Log::print(string("Testing empty sparse field to disk for ") + 
+  Msg::print(string("Testing empty sparse field to disk for ") + 
             "<" + TName + ">");
 
   ScopedPrintTimer t;    
@@ -975,7 +975,7 @@ void testLayerFetching()
 
   SField dummy;
   string TName(NameForType<Data_T>::name());
-  Log::print("Testing layer fetching for " + dummy.className() + 
+  Msg::print("Testing layer fetching for " + dummy.className() + 
             "<" + TName + ">");
 
   ScopedPrintTimer t;    
@@ -1078,7 +1078,7 @@ void testReadAsDifferentType()
 
   SField dummy;
   string TName(NameForType<Data_T>::name());
-  Log::print("Testing on-the-fly conversion for " + dummy.className() + 
+  Msg::print("Testing on-the-fly conversion for " + dummy.className() + 
             "<" + TName + ">");
 
   ScopedPrintTimer t;    
@@ -1154,7 +1154,7 @@ void testReadAsDifferentType()
 
 void testDiscreteToContinuous()
 {
-  Log::print("Testing disc2cont and cont2disc");
+  Msg::print("Testing disc2cont and cont2disc");
 
   BOOST_CHECK_EQUAL(contToDisc(0.5), 0);
   BOOST_CHECK_EQUAL(contToDisc(0.1), 0);
@@ -1175,7 +1175,7 @@ void testDiscreteToContinuous()
 //! \todo Rewrite this for new metadata types
 void testFieldMetadata()
 {
-  Log::print("Testing meta data container for FieldBase");
+  Msg::print("Testing meta data container for FieldBase");
 
 #if USE_ANY_METADATA
 // not used anymore, leaving the test code in for legacy in case it's
@@ -1216,7 +1216,7 @@ void testFieldMetadata()
 
 void testUnnamedFieldError()
 {
-  Log::print("Testing that unnamed fields error out when writing");
+  Msg::print("Testing that unnamed fields error out when writing");
   {
     Field3DOutputFile out;
     DenseFieldf::Ptr dense(new DenseFieldf);
@@ -1233,7 +1233,7 @@ void testUnnamedFieldError()
 
 void testBasicFileOpen()
 {
-  Log::print("Testing basic Field3DFile open/close");
+  Msg::print("Testing basic Field3DFile open/close");
   {
     Field3DInputFile in;
     in.open("/tmp/test_DenseField.float.f3d");
@@ -1248,7 +1248,7 @@ void testMACField()
 {
   typedef MACField<FIELD3D_VEC3_T<Float_T> > MACField_T;
 
-  Log::print("Testing MAC Field");
+  Msg::print("Testing MAC Field");
   {
     Float_T clearVal(0.0);
     Float_T uVal(10.0);
@@ -1349,7 +1349,7 @@ void testMACField()
   }
 
 
-  Log::print("Testing MAC Field subset iterator");
+  Msg::print("Testing MAC Field subset iterator");
   {
     V3i res(5, 6, 7);
     MACField<FIELD3D_VEC3_T<Float_T> > field;
@@ -1523,7 +1523,7 @@ void testEmptyMACFieldToDisk()
   typedef MACField<FIELD3D_VEC3_T<Float_T> > MACField_T;
 
   string TName(NameForType<Float_T>::name());
-  Log::print(string("Testing empty MAC field to disk for ") + 
+  Msg::print(string("Testing empty MAC field to disk for ") + 
             "<" + TName + ">");
 
   ScopedPrintTimer t;    
@@ -1560,7 +1560,7 @@ void testSparseFieldBlockAccess()
 {
   // SparseField<Data_T> dummy;
   string TName(NameForType<Data_T>::name());
-  Log::print("Testing SparseField<" + TName + "> block iterator");
+  Msg::print("Testing SparseField<" + TName + "> block iterator");
   {
     SparseField<Data_T> field;
     field.setSize(V3i(100, 100, 100));
@@ -1610,7 +1610,7 @@ void testDuplicatePartitions()
 
   SField dummy;
   string TName(NameForType<Data_T>::name());
-  Log::print("Testing duplicate partition names for " + dummy.className() + 
+  Msg::print("Testing duplicate partition names for " + dummy.className() + 
             "<" + TName + ">");
 
   string filename("/tmp/testDuplicatePartitions_" + dummy.className() + 

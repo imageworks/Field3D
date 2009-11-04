@@ -680,7 +680,7 @@ template <class CppType_T>
 hid_t TypeToH5Type<CppType_T>::type()
 {
   assert(false && "Unsupported type in TypeToH5Type::type()");
-  Log::print(Log::SevWarning, "Unsupported type in TypeToH5Type::type()");
+  Msg::print(Msg::SevWarning, "Unsupported type in TypeToH5Type::type()");
   return -1;
 }
 
@@ -690,7 +690,7 @@ template <class T>
 std::string NameForType<T>::name()
 {
   assert(false && "Unsupported type in NameForType::name()");
-  Log::print(Log::SevWarning, "Unsupported type in NameForType::name()");
+  Msg::print(Msg::SevWarning, "Unsupported type in NameForType::name()");
   return std::string("ERROR in NameForType::name()");
 }
 
@@ -700,7 +700,7 @@ template <class T>
 int BitsForType<T>::bits()
 {
   assert(false && "Unsupported type in BitsForType::bits()");
-  Log::print(Log::SevWarning, "Unsupported type in BitsForType::bits()");
+  Msg::print(Msg::SevWarning, "Unsupported type in BitsForType::bits()");
   return -1;
 }
 

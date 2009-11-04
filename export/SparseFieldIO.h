@@ -56,7 +56,7 @@
 #include "SparseDataReader.h"
 #include "SparseField.h"
 #include "SparseFile.h"
-#include "FieldIOFactory.h"
+#include "FieldIO.h"
 #include "Field3DFile.h"
 
 //----------------------------------------------------------------------------//
@@ -91,6 +91,14 @@ public:
   SparseFieldIO() 
    : FieldIO()
   { }
+
+  //! Dtor
+  virtual ~SparseFieldIO() 
+  { /* Empty */ }
+
+
+  static FieldIO::Ptr create()
+  { return Ptr(new SparseFieldIO); }
 
   // From FieldIO --------------------------------------------------------------
 
@@ -175,7 +183,7 @@ bool SparseFieldIO::writeInternal(hid_t layerGroup,
     { ext.min.x, ext.min.y, ext.min.z, ext.max.x, ext.max.y, ext.max.z };
 
   if (!writeAttribute(layerGroup, k_extentsStr, 6, extents[0])) {
-    Log::print(Log::SevWarning, "Error adding size attribute.");
+    Msg::print(Msg::SevWarning, "Error adding size attribute.");
     return false;
   }
 
@@ -185,14 +193,14 @@ bool SparseFieldIO::writeInternal(hid_t layerGroup,
     { dw.min.x, dw.min.y, dw.min.z, dw.max.x, dw.max.y, dw.max.z };
 
   if (!writeAttribute(layerGroup, k_dataWindowStr, 6, dataWindow[0])) {
-    Log::print(Log::SevWarning, "Error adding size attribute.");
+    Msg::print(Msg::SevWarning, "Error adding size attribute.");
     return false;
   }
 
   // Add components attribute ---
 
   if (!writeAttribute(layerGroup, k_componentsStr, 1, components)) {
-    Log::print(Log::SevWarning, "Error adding components attribute.");
+    Msg::print(Msg::SevWarning, "Error adding components attribute.");
     return false;
   }
 
@@ -201,7 +209,7 @@ bool SparseFieldIO::writeInternal(hid_t layerGroup,
   int blockOrder = field->m_blockOrder;
 
   if (!writeAttribute(layerGroup, k_blockOrderStr, 1, blockOrder)) {
-    Log::print(Log::SevWarning, "Error adding block order attribute.");
+    Msg::print(Msg::SevWarning, "Error adding block order attribute.");
     return false;
   }
 
@@ -211,14 +219,14 @@ bool SparseFieldIO::writeInternal(hid_t layerGroup,
   int numBlocks = blockRes.x * blockRes.y * blockRes.z;
 
   if (!writeAttribute(layerGroup, k_numBlocksStr, 1, numBlocks)) {
-    Log::print(Log::SevWarning, "Error adding number of blocks attribute.");
+    Msg::print(Msg::SevWarning, "Error adding number of blocks attribute.");
     return false;
   }
 
   // Add block resolution in each dimension ---
 
   if (!writeAttribute(layerGroup, k_blockResStr, 3, blockRes.x)) {
-    Log::print(Log::SevWarning, "Error adding block res attribute.");
+    Msg::print(Msg::SevWarning, "Error adding block res attribute.");
     return false;
   }
 
@@ -226,7 +234,7 @@ bool SparseFieldIO::writeInternal(hid_t layerGroup,
 
   int bits = BitsForType<Data_T>::bits();
   if (!writeAttribute(layerGroup, k_bitsPerComponentStr, 1, bits)) {
-    Log::print(Log::SevWarning, "Error adding bits per component attribute.");
+    Msg::print(Msg::SevWarning, "Error adding bits per component attribute.");
     return false;    
   }
 
@@ -324,16 +332,18 @@ bool SparseFieldIO::writeInternal(hid_t layerGroup,
         status = H5Sselect_hyperslab(fileDataSpace.id(), H5S_SELECT_SET, 
                                      offset, NULL, count, NULL);
         if (status < 0) {
-          throw WriteHyperSlabException("Couldn't select slab " + 
-                                        str(nextBlockIdx));
+          throw WriteHyperSlabException(
+            "Couldn't select slab " + 
+            boost::lexical_cast<std::string>(nextBlockIdx));
         }
         Data_T *data = &b->data[0];
         status = H5Dwrite(dataSet.id(), TypeToH5Type<Data_T>::type(), 
                           memDataSpace.id(), 
                           fileDataSpace.id(), H5P_DEFAULT, data);
         if (status < 0) {
-          throw WriteHyperSlabException("Couldn't write slab " + 
-                                        str(nextBlockIdx));
+          throw WriteHyperSlabException(
+            "Couldn't write slab " + 
+            boost::lexical_cast<std::string>(nextBlockIdx));
         }
         // Increment nextBlockIdx
         nextBlockIdx++;

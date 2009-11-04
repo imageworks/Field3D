@@ -58,14 +58,19 @@ FIELD3D_NAMESPACE_OPEN
 
 typedef SPI::OpenEXR::half                            half;
 typedef SPI::OpenEXR::Imath::V2i                      V2i;
+typedef SPI::OpenEXR::Imath::V2f                      V2f;
 typedef SPI::OpenEXR::Imath::V2d                      V2d;
 typedef SPI::OpenEXR::Imath::C3f                      C3f;
+typedef SPI::OpenEXR::Imath::C4f                      C4f;
 typedef SPI::OpenEXR::Imath::V3i                      V3i;
 typedef SPI::OpenEXR::Imath::Vec3<SPI::OpenEXR::half> V3h;
 typedef SPI::OpenEXR::Imath::V3f                      V3f;
 typedef SPI::OpenEXR::Imath::V3d                      V3d;
+typedef SPI::OpenEXR::Imath::Box2f                    Box2f;
 typedef SPI::OpenEXR::Imath::Box3i                    Box3i;
+typedef SPI::OpenEXR::Imath::Box3f                    Box3f;
 typedef SPI::OpenEXR::Imath::Box3d                    Box3d;
+typedef SPI::OpenEXR::Imath::M44f                     M44f;
 typedef SPI::OpenEXR::Imath::M44d                     M44d;
 
 #define FIELD3D_VEC3_T       SPI::OpenEXR::Imath::Vec3

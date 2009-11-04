@@ -51,33 +51,10 @@ FIELD3D_NAMESPACE_OPEN
 // FieldBase
 //----------------------------------------------------------------------------//
 
-FieldBase::FieldBase() 
+FieldBase::FieldBase()
+  :RefBase()
 { 
-  m_counter = 0; 
-}
-
-//----------------------------------------------------------------------------//
-
-FieldBase::FieldBase(const FieldBase &src) 
-{
-  *this = src;
-  m_counter = 0;
-}
-
-//----------------------------------------------------------------------------//
-
-FieldBase& FieldBase::operator = (const FieldBase &src) 
-{
-  if (this != &src) {
-    name = src.name;
-    attribute = src.attribute;
-    m_vecFloatMetadata = src.m_vecFloatMetadata;
-    m_floatMetadata = src.m_floatMetadata;
-    m_vecIntMetadata = src.m_vecIntMetadata;
-    m_intMetadata = src.m_intMetadata;
-    m_strMetadata = src.m_strMetadata;
-  }
-  return *this;
+  // Empty
 }
 
 //----------------------------------------------------------------------------//

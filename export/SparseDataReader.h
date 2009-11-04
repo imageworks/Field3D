@@ -159,7 +159,8 @@ void SparseDataReader<Data_T>::readBlock(int idx, Data_T &result)
   status = H5Sselect_hyperslab(m_fileDataSpace.id(), H5S_SELECT_SET, 
                                offset, NULL, count, NULL);
   if (status < 0) {
-    throw ReadHyperSlabException("Couldn't select slab " + str(idx));
+    throw ReadHyperSlabException("Couldn't select slab " + 
+                                 boost::lexical_cast<std::string>(idx));
   }
 
   status = H5Dread(m_dataSet.id(), TypeToH5Type<Data_T>::type(), 

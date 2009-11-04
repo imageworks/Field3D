@@ -91,7 +91,7 @@ SparseFieldIO::read(hid_t layerGroup, const std::string &filename,
   V3i blockRes;
   
   if (layerGroup == -1) {
-    Log::print(Log::SevWarning, "Bad layerGroup.");
+    Msg::print(Msg::SevWarning, "Bad layerGroup.");
     return FieldBase::Ptr();
   }
 
@@ -102,7 +102,7 @@ SparseFieldIO::read(hid_t layerGroup, const std::string &filename,
 
   if (version != k_versionNumber) 
     throw UnsupportedVersionException("SparseField version not supported: " +
-                                      str(version));
+                                      lexical_cast<std::string>(version));
 
   if (!readAttribute(layerGroup, k_extentsStr, 6, extents.min.x)) 
     throw MissingAttributeException("Couldn't find attribute: " +
@@ -222,14 +222,14 @@ bool
 SparseFieldIO::write(hid_t layerGroup, FieldBase::Ptr field)
 {
   if (layerGroup == -1) {
-    Log::print(Log::SevWarning, "Bad layerGroup.");
+    Msg::print(Msg::SevWarning, "Bad layerGroup.");
     return false;
   }
 
   // Add version attribute
-  if (!writeAttribute(layerGroup, FieldIO::versionAttrName, 
+  if (!writeAttribute(layerGroup, k_versionAttrName, 
                     1, k_versionNumber)) {
-    Log::print(Log::SevWarning, "Error adding version attribute.");
+    Msg::print(Msg::SevWarning, "Error adding version attribute.");
     return false;
   }
 

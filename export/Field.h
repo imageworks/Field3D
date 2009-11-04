@@ -56,6 +56,7 @@
 #include "Exception.h"
 #include "FieldMapping.h"
 #include "Log.h"
+#include "RefCount.h"
 #include "Types.h"
 
 //----------------------------------------------------------------------------//
@@ -127,7 +128,7 @@ class FieldTraits
   for the metadata map
 */
 
-class FieldBase
+class FieldBase : public RefBase
 {
 public:
 
@@ -149,12 +150,6 @@ public:
 
   //! Constructor
   FieldBase();
-
-  //! Copy constructor
-  FieldBase(const FieldBase &src);
-
-  //! Assignment op
-  FieldBase & operator = (const FieldBase &src);
 
   //! Destructor
   virtual ~FieldBase();
@@ -197,31 +192,6 @@ public:
   //! This needs to be implemented in -all- subclasses, even abstract ones.
   bool matchRTTI(const std::string &typenameStr)
   { return typenameStr == typeid(*this).name(); }
-
-  //! \}
-
-  // Reference counting --------------------------------------------------------
-
-  //! \name Reference counting
-  //! \{
-
-  //! Used by boost::intrusive_pointer
-  size_t refcnt() 
-  { return m_counter; }
-
-  //! Used by boost::intrusive_pointer
-  void ref() 
-  {         
-    boost::mutex::scoped_lock lock(m_refMutex);
-    m_counter++; 
-  }
-
-  //! Used by boost::intrusive_pointer
-  void unref() 
-  { 
-    boost::mutex::scoped_lock lock(m_refMutex);
-    m_counter--; 
-  }
 
   //! \}
 
@@ -288,7 +258,7 @@ public:
 
   //! This function should implemented by concrete classes to  
   //! get the callback when metadata changes
-  virtual void metadataHasChanged(const std::string &name) 
+  virtual void metadataHasChanged(const std::string &/* name */) 
   { /* Empty */ }
 
   //! Copies the metadata from a second field
@@ -318,33 +288,7 @@ public:
   //! String metadata
   StrMetadata m_strMetadata;
 
-  //! For boost intrusive pointer
-  mutable int m_counter;
-  //! Mutex for ref counting
-  mutable boost::mutex m_refMutex;     
- 
 };
-
-//----------------------------------------------------------------------------//
-// Intrusive Pointer reference counting 
-//----------------------------------------------------------------------------//
-
-inline void 
-intrusive_ptr_add_ref(FieldBase* r)
-{
-  r->ref();
-}
-
-//----------------------------------------------------------------------------//
-
-inline void
-intrusive_ptr_release(FieldBase* r)
-{
-  r->unref();
-
-  if (r->refcnt() == 0)
-    delete r;
-}
 
 //----------------------------------------------------------------------------//
 // FieldRes
@@ -489,7 +433,7 @@ inline void FieldRes::setMapping(FieldMapping::Ptr mapping)
     m_mapping = mapping->clone(); 
     m_mapping->setExtents(m_extents); 
   } else {
-    Log::print(Log::SevWarning, 
+    Msg::print(Msg::SevWarning, 
                "Tried to call FieldRes::setMapping with null pointer");
   }
 }

@@ -68,12 +68,12 @@ class ProceduralFieldLookup;
 //----------------------------------------------------------------------------//
 
 #define REGISTER_FIELD_TYPES(FIELDCLASS) \
-  factory.registerFieldClass(FIELDCLASS<half>::create); \
-  factory.registerFieldClass(FIELDCLASS<float>::create); \
-  factory.registerFieldClass(FIELDCLASS<double>::create); \
-  factory.registerFieldClass(FIELDCLASS<V3h>::create); \
-  factory.registerFieldClass(FIELDCLASS<V3f>::create); \
-  factory.registerFieldClass(FIELDCLASS<V3d>::create)
+  factory.registerField(FIELDCLASS<half>::create); \
+  factory.registerField(FIELDCLASS<float>::create); \
+  factory.registerField(FIELDCLASS<double>::create); \
+  factory.registerField(FIELDCLASS<V3h>::create); \
+  factory.registerField(FIELDCLASS<V3f>::create); \
+  factory.registerField(FIELDCLASS<V3d>::create)
 
 #define INSTANTIATE_FIELD_TYPES(FIELDCLASS) \
   template class FIELDCLASS<half>; \
@@ -171,6 +171,17 @@ public:
   typedef Field<Data_T> base;
 
 };
+
+//----------------------------------------------------------------------------//
+// Typedefs
+//----------------------------------------------------------------------------//
+
+typedef ProceduralField<half>   ProceduralFieldh;
+typedef ProceduralField<float>  ProceduralFieldf;
+typedef ProceduralField<double> ProceduralFieldd;
+typedef ProceduralField<V3h>    ProceduralField3h;
+typedef ProceduralField<V3f>    ProceduralField3f;
+typedef ProceduralField<V3d>    ProceduralField3d;
 
 //----------------------------------------------------------------------------//
 // Template specializations

@@ -49,9 +49,7 @@
 #include <vector>
 #include <algorithm>
 
-#include <boost/intrusive_ptr.hpp>
-#include <boost/thread/mutex.hpp>
-
+#include "RefCount.h"
 #include "Types.h"
 
 //----------------------------------------------------------------------------//
@@ -81,7 +79,7 @@ FIELD3D_NAMESPACE_OPEN
 
 //----------------------------------------------------------------------------//
 
-class FieldMapping
+class FieldMapping : public RefBase
 {
  public:
 
@@ -98,10 +96,6 @@ class FieldMapping
   FieldMapping();
   //! Construct with known extents
   FieldMapping(const Box3i &extents);
-  //! Copy constructor
-  FieldMapping(const FieldMapping& src);
-  //! Assignment operator
-  FieldMapping& operator = (const FieldMapping &src);
   //! Destructor
   virtual ~FieldMapping();
 
@@ -123,28 +117,6 @@ class FieldMapping
   const V3d& resolution() const
   { return m_res; }
 
-  // Reference counting --------------------------------------------------------
-
-  //! Used by boost::intrusive_pointer
-  size_t refcnt(void) 
-  { 
-    boost::mutex::scoped_lock lock(m_refMutex);
-    return m_counter; 
-  }
-
-  //! Used by boost::intrusive_pointer
-  void ref(void) 
-  {         
-    boost::mutex::scoped_lock lock(m_refMutex);
-    m_counter++; 
-  }
-
-  //! Used by boost::intrusive_pointer
-  void unref(void) 
-  { 
-    boost::mutex::scoped_lock lock(m_refMutex);
-    m_counter--; 
-  }
   
   // To be implemented by subclasses -------------------------------------------
 
@@ -158,27 +130,27 @@ class FieldMapping
   //! Transform from world space position into voxel space
   virtual void worldToVoxel(const V3d &wsP, V3d &vsP) const = 0;
   virtual void worldToVoxel(const V3d &wsP, V3d &vsP, float time) const = 0;
-  //! Transforms multiple positions at once. Mainly used to avoid the
-  //! overhad of virtual calls when transforming large quantities of points
-  //! \note This would ideally be templated on the storage container, but since
-  //! we can't have templated virtual calls, we only support std::vector for now
-  virtual void worldToVoxel(std::vector<V3d>::const_iterator wsP, 
-                            std::vector<V3d>::const_iterator end, 
-                            std::vector<V3d>::iterator vsP) const = 0;
   //! Transform from voxel space position into world space
   virtual void voxelToWorld(const V3d &vsP, V3d &wsP) const = 0;
   //! Transform from world space position into local space
   virtual void worldToLocal(const V3d &wsP, V3d &lsP) const = 0;
   virtual void worldToLocal(const V3d &wsP, V3d &lsP, float time) const = 0;
+  //! Transform from local space position into world space
+  virtual void localToWorld(const V3d &lsP, V3d &wsP) const = 0;
+
   //! Transforms multiple positions at once. Mainly used to avoid the
-  //! overhad of virtual calls when transforming large quantities of points
+  //! overhead of virtual calls when transforming large quantities of points
   //! \note This would ideally be templated on the storage container, but since
   //! we can't have templated virtual calls, we only support std::vector for now
+  virtual void voxelToWorld(std::vector<V3d>::const_iterator vsP, 
+                            std::vector<V3d>::const_iterator end, 
+                            std::vector<V3d>::iterator wsP) const = 0;
+  virtual void worldToVoxel(std::vector<V3d>::const_iterator wsP, 
+                            std::vector<V3d>::const_iterator end, 
+                            std::vector<V3d>::iterator vsP) const = 0;
   virtual void worldToLocal(std::vector<V3d>::const_iterator wsP, 
                             std::vector<V3d>::const_iterator end, 
                             std::vector<V3d>::iterator lsP) const = 0;
-  //! Transform from local space position into world space
-  virtual void localToWorld(const V3d &lsP, V3d &wsP) const = 0;
 
   //! Returns world-space size of a voxel at the specified coordinate
   virtual V3d wsVoxelSize(int i, int j, int k) const = 0;
@@ -189,7 +161,7 @@ class FieldMapping
   { /* Empty */ }
   
   //! Returns the FieldMapping type name. Used when writing/reading from disk
-  virtual std::string typeName() const = 0;
+  virtual std::string className() const = 0;
   //! Whether the mapping is identical to another mapping
   virtual bool isIdentical(FieldMapping::Ptr other, 
                            double tolerance = 0.0) const = 0;
@@ -222,30 +194,8 @@ class FieldMapping
   //! Is equal to field.extents.max - field.extents.min + 1
   V3d m_res;
 
-  //! Reference counter
-  mutable int m_counter;
-  //! mutex for ref counting
-  mutable boost::mutex m_refMutex;     
 };
 
-//----------------------------------------------------------------------------//
-// Intrusive Pointer reference counting 
-//----------------------------------------------------------------------------//
-
-inline void
-intrusive_ptr_add_ref(FieldMapping* r)
-{
-  r->ref();
-}
-
-inline void
-intrusive_ptr_release(FieldMapping* r)
-{
-  r->unref();
-
-  if (r->refcnt() == 0)
-    delete r;
-}
 
 //----------------------------------------------------------------------------//
 // NullFieldMapping
@@ -300,6 +250,15 @@ public:
   { localToVoxel(wsP, end, vsP); }
   virtual void voxelToWorld(const V3d &vsP, V3d &wsP) const 
   { voxelToLocal(vsP, wsP); }
+
+  virtual void voxelToWorld(std::vector<V3d>::const_iterator vsP, 
+                            std::vector<V3d>::const_iterator end, 
+                            std::vector<V3d>::iterator wsP) const 
+  { 
+    for (; vsP != end; ++vsP, ++wsP) 
+      voxelToLocal(*vsP, *wsP);
+  }
+
   virtual void worldToLocal(const V3d &wsP, V3d &lsP) const 
   { lsP = wsP; }
   virtual void worldToLocal(const V3d &wsP, V3d &lsP,
@@ -311,7 +270,7 @@ public:
   { std::copy(wsP, end, lsP); }
   virtual void localToWorld(const V3d &lsP, V3d &wsP) const 
   { wsP = lsP; }
-  virtual std::string typeName() const;
+  virtual std::string className() const;
   virtual bool isIdentical(FieldMapping::Ptr other, 
                            double tolerance = 0.0) const;
   virtual V3d wsVoxelSize(int /*i*/, int /*j*/, int /*k*/) const
@@ -400,6 +359,14 @@ public:
   virtual void voxelToWorld(const V3d &vsP, V3d &wsP) const 
   { m_vsToWs.multVecMatrix(vsP, wsP); }
 
+  virtual void voxelToWorld(std::vector<V3d>::const_iterator vsP, 
+                            std::vector<V3d>::const_iterator end, 
+                            std::vector<V3d>::iterator wsP) const 
+  { 
+    for (; vsP != end; ++vsP, ++wsP) 
+      m_vsToWs.multVecMatrix(*vsP, *wsP);
+  }
+
   virtual void worldToLocal(const V3d &wsP, V3d &lsP) const 
   { m_wsToLs.multVecMatrix(wsP, lsP); }
 
@@ -433,7 +400,7 @@ public:
 
   virtual void extentsChanged();
 
-  virtual std::string typeName() const;
+  virtual std::string className() const;
   virtual bool isIdentical(FieldMapping::Ptr other, 
                            double tolerance = 0.0) const;
 

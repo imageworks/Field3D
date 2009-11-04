@@ -56,13 +56,13 @@
 FIELD3D_NAMESPACE_OPEN
 
 //----------------------------------------------------------------------------//
-// Log namespace
+// Msg namespace
 //----------------------------------------------------------------------------//
 
 //! Contains logging-related functions.
-namespace Log {
+namespace Msg {
 
-  //! Used by the Log::print() call
+  //! Used by the Msg::print() call
   enum Severity {
     SevMessage, 
     SevWarning
@@ -76,25 +76,8 @@ namespace Log {
   inline void print(const std::string &message)
   { print(SevMessage, message); }
 
-} // namespace Log
+} // namespace Msg
 
-//----------------------------------------------------------------------------//
-// Logging-related functions
-//----------------------------------------------------------------------------//
-
-//! Converts any class with operator<< to a string using boost::lexical_cast
-template <class T>
-std::string str(const T& t);
-
-//----------------------------------------------------------------------------//
-// Implementations of templated functions
-//----------------------------------------------------------------------------//
-
-template <class T>
-std::string str(const T& t)
-{
-  return boost::lexical_cast<std::string>(t);
-}
 
 //----------------------------------------------------------------------------//
 

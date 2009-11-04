@@ -257,12 +257,12 @@ writeAttribute(hid_t location, const string& attrName, const string &value)
   }
 
   if (attr == -1) {
-    Log::print(Log::SevWarning, "Error creating attribute: " + attrName);
+    Msg::print(Msg::SevWarning, "Error creating attribute: " + attrName);
     success = false;
   }
 
   if (success && H5Awrite(attr, attrType, value.c_str()) == -1) {
-    Log::print(Log::SevWarning, "Error writing attribute: " + attrName);
+    Msg::print(Msg::SevWarning, "Error writing attribute: " + attrName);
     success = false;
   }
 
@@ -296,14 +296,14 @@ writeAttribute(hid_t location, const string &attrName,
   attr = H5Acreate(location, attrName.c_str(), H5T_NATIVE_INT, 
                    attrSpace, H5P_DEFAULT, H5P_DEFAULT);
   if (attr < 0) {
-    Log::print(Log::SevWarning, "Error creating attribute: " + attrName);
+    Msg::print(Msg::SevWarning, "Error creating attribute: " + attrName);
     H5Aclose(attr);
     H5Sclose(attrSpace);
     return false;
   }
 
   if (H5Awrite(attr, H5T_NATIVE_INT, &value) < 0) {
-    Log::print(Log::SevWarning, "Error writing attribute: " + attrName);
+    Msg::print(Msg::SevWarning, "Error writing attribute: " + attrName);
     H5Aclose(attr);
     H5Sclose(attrSpace);
     return false;
@@ -337,14 +337,14 @@ writeAttribute(hid_t location, const string& attrName,
   attr = H5Acreate(location, attrName.c_str(), H5T_NATIVE_FLOAT, 
                    attrSpace, H5P_DEFAULT, H5P_DEFAULT);
   if (attr < 0) {
-    Log::print(Log::SevWarning, "Error creating attribute: " + attrName);
+    Msg::print(Msg::SevWarning, "Error creating attribute: " + attrName);
     H5Aclose(attr);
     H5Sclose(attrSpace);
     return false;
   }
 
   if (H5Awrite(attr, H5T_NATIVE_FLOAT, &value) < 0) {
-    Log::print(Log::SevWarning, "Error writing attribute: " + attrName);
+    Msg::print(Msg::SevWarning, "Error writing attribute: " + attrName);
     H5Aclose(attr);
     H5Sclose(attrSpace);
     return false;
@@ -378,14 +378,14 @@ writeAttribute(hid_t location, const string& attrName,
   attr = H5Acreate(location, attrName.c_str(), H5T_NATIVE_DOUBLE, 
                    attrSpace, H5P_DEFAULT, H5P_DEFAULT);
   if (attr < 0) {
-    Log::print(Log::SevWarning, "Error creating attribute: " + attrName);
+    Msg::print(Msg::SevWarning, "Error creating attribute: " + attrName);
     H5Aclose(attr);
     H5Sclose(attrSpace);
     return false;
   }
 
   if (H5Awrite(attr, H5T_NATIVE_DOUBLE, &value) < 0) {
-    Log::print(Log::SevWarning, "Error writing attribute: " + attrName);
+    Msg::print(Msg::SevWarning, "Error writing attribute: " + attrName);
     H5Aclose(attr);
     H5Sclose(attrSpace);
     return false;

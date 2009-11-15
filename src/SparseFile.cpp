@@ -162,7 +162,7 @@ void SparseFileManager::deallocateBlocks(int bytesNeeded)
 
     switch(cb.blockType) {
     case DataTypeHalf:
-      bytesFreed = deallocateBlock<SPI::OpenEXR::half>(cb);
+      bytesFreed = deallocateBlock<half>(cb);
       if (bytesFreed > 0) {
         continue;
       }
@@ -180,19 +180,19 @@ void SparseFileManager::deallocateBlocks(int bytesNeeded)
       }
       break;
     case DataTypeVecHalf:
-      bytesFreed = deallocateBlock<SPI::OpenEXR::Imath::Vec3<SPI::OpenEXR::half> >(cb);
+      bytesFreed = deallocateBlock<V3h>(cb);
       if (bytesFreed > 0) {
         continue;
       }
       break;
     case DataTypeVecFloat:
-      bytesFreed = deallocateBlock<SPI::OpenEXR::Imath::V3f>(cb);
+      bytesFreed = deallocateBlock<V3f>(cb);
       if (bytesFreed > 0) {
         continue;
       }
       break;
     case DataTypeVecDouble:
-      bytesFreed = deallocateBlock<SPI::OpenEXR::Imath::V3d>(cb);
+      bytesFreed = deallocateBlock<V3d>(cb);
       if (bytesFreed > 0) {
         continue;
       }
@@ -217,7 +217,7 @@ void SparseFileManager::flushCache()
 
     switch(cb.blockType) {
     case DataTypeHalf:
-      deallocateBlock<SPI::OpenEXR::half>(it);
+      deallocateBlock<half>(it);
       break;
     case DataTypeFloat:
       deallocateBlock<float>(it);
@@ -226,13 +226,13 @@ void SparseFileManager::flushCache()
       deallocateBlock<double>(it);
       break;
     case DataTypeVecHalf:
-      deallocateBlock<SPI::OpenEXR::Imath::Vec3<SPI::OpenEXR::half> >(it);
+      deallocateBlock<V3h>(it);
       break;
     case DataTypeVecFloat:
-      deallocateBlock<SPI::OpenEXR::Imath::V3f>(it);
+      deallocateBlock<V3f>(it);
       break;
     case DataTypeVecDouble:
-      deallocateBlock<SPI::OpenEXR::Imath::V3d>(it);
+      deallocateBlock<V3d>(it);
       break;
     case DataTypeUnknown:
     default:
@@ -278,8 +278,8 @@ long long SparseFileManager::totalLoads()
 
   long long int numLoads = 0;
 
-  for (int i=0; i<m_fileData.numRefs<SPI::OpenEXR::half>(); i++) {
-    numLoads += m_fileData.ref<SPI::OpenEXR::half>(i).totalLoads();
+  for (int i=0; i<m_fileData.numRefs<half>(); i++) {
+    numLoads += m_fileData.ref<half>(i).totalLoads();
   }
 
   for (int i=0; i<m_fileData.numRefs<V3h>(); i++) {
@@ -290,16 +290,16 @@ long long SparseFileManager::totalLoads()
     numLoads += m_fileData.ref<float>(i).totalLoads();
   }
 
-  for (int i=0; i<m_fileData.numRefs<SPI::OpenEXR::Imath::V3f>(); i++) {
-    numLoads += m_fileData.ref<SPI::OpenEXR::Imath::V3f>(i).totalLoads();
+  for (int i=0; i<m_fileData.numRefs<V3f>(); i++) {
+    numLoads += m_fileData.ref<V3f>(i).totalLoads();
   }
 
   for (int i=0; i<m_fileData.numRefs<double>(); i++) {
     numLoads += m_fileData.ref<double>(i).totalLoads();
   }
 
-  for (int i=0; i<m_fileData.numRefs<SPI::OpenEXR::Imath::V3d>(); i++) {
-    numLoads += m_fileData.ref<SPI::OpenEXR::Imath::V3d>(i).totalLoads();
+  for (int i=0; i<m_fileData.numRefs<V3d>(); i++) {
+    numLoads += m_fileData.ref<V3d>(i).totalLoads();
   }
   return numLoads;
 }
@@ -311,8 +311,8 @@ long long SparseFileManager::numLoadedBlocks()
 
   long long int numBlocks = 0;
 
-  for (int i=0; i<m_fileData.numRefs<SPI::OpenEXR::half>(); i++) {
-    numBlocks += m_fileData.ref<SPI::OpenEXR::half>(i).numLoadedBlocks();
+  for (int i=0; i<m_fileData.numRefs<half>(); i++) {
+    numBlocks += m_fileData.ref<half>(i).numLoadedBlocks();
   }
 
   for (int i=0; i<m_fileData.numRefs<V3h>(); i++) {
@@ -323,16 +323,16 @@ long long SparseFileManager::numLoadedBlocks()
     numBlocks += m_fileData.ref<float>(i).numLoadedBlocks();
   }
 
-  for (int i=0; i<m_fileData.numRefs<SPI::OpenEXR::Imath::V3f>(); i++) {
-    numBlocks += m_fileData.ref<SPI::OpenEXR::Imath::V3f>(i).numLoadedBlocks();
+  for (int i=0; i<m_fileData.numRefs<V3f>(); i++) {
+    numBlocks += m_fileData.ref<V3f>(i).numLoadedBlocks();
   }
 
   for (int i=0; i<m_fileData.numRefs<double>(); i++) {
     numBlocks += m_fileData.ref<double>(i).numLoadedBlocks();
   }
 
-  for (int i=0; i<m_fileData.numRefs<SPI::OpenEXR::Imath::V3d>(); i++) {
-    numBlocks += m_fileData.ref<SPI::OpenEXR::Imath::V3d>(i).numLoadedBlocks();
+  for (int i=0; i<m_fileData.numRefs<V3d>(); i++) {
+    numBlocks += m_fileData.ref<V3d>(i).numLoadedBlocks();
   }
   return numBlocks;
 }
@@ -344,8 +344,8 @@ long long SparseFileManager::totalLoadedBlocks()
 
   long long int numBlocks = 0;
 
-  for (int i=0; i<m_fileData.numRefs<SPI::OpenEXR::half>(); i++) {
-    numBlocks += m_fileData.ref<SPI::OpenEXR::half>(i).totalLoadedBlocks();
+  for (int i=0; i<m_fileData.numRefs<half>(); i++) {
+    numBlocks += m_fileData.ref<half>(i).totalLoadedBlocks();
   }
 
   for (int i=0; i<m_fileData.numRefs<V3h>(); i++) {
@@ -356,16 +356,16 @@ long long SparseFileManager::totalLoadedBlocks()
     numBlocks += m_fileData.ref<float>(i).totalLoadedBlocks();
   }
 
-  for (int i=0; i<m_fileData.numRefs<SPI::OpenEXR::Imath::V3f>(); i++) {
-    numBlocks += m_fileData.ref<SPI::OpenEXR::Imath::V3f>(i).totalLoadedBlocks();
+  for (int i=0; i<m_fileData.numRefs<V3f>(); i++) {
+    numBlocks += m_fileData.ref<V3f>(i).totalLoadedBlocks();
   }
 
   for (int i=0; i<m_fileData.numRefs<double>(); i++) {
     numBlocks += m_fileData.ref<double>(i).totalLoadedBlocks();
   }
 
-  for (int i=0; i<m_fileData.numRefs<SPI::OpenEXR::Imath::V3d>(); i++) {
-    numBlocks += m_fileData.ref<SPI::OpenEXR::Imath::V3d>(i).totalLoadedBlocks();
+  for (int i=0; i<m_fileData.numRefs<V3d>(); i++) {
+    numBlocks += m_fileData.ref<V3d>(i).totalLoadedBlocks();
   }
   return numBlocks;
 }
@@ -396,8 +396,8 @@ float SparseFileManager::cacheEfficiency()
 void SparseFileManager::resetCacheStatistics()
 {
 
-  for (int i=0; i<m_fileData.numRefs<SPI::OpenEXR::half>(); i++) {
-    m_fileData.ref<SPI::OpenEXR::half>(i).resetCacheStatistics();
+  for (int i=0; i<m_fileData.numRefs<half>(); i++) {
+    m_fileData.ref<half>(i).resetCacheStatistics();
   }
 
   for (int i=0; i<m_fileData.numRefs<V3h>(); i++) {
@@ -408,16 +408,16 @@ void SparseFileManager::resetCacheStatistics()
     m_fileData.ref<float>(i).resetCacheStatistics();
   }
 
-  for (int i=0; i<m_fileData.numRefs<SPI::OpenEXR::Imath::V3f>(); i++) {
-    m_fileData.ref<SPI::OpenEXR::Imath::V3f>(i).resetCacheStatistics();
+  for (int i=0; i<m_fileData.numRefs<V3f>(); i++) {
+    m_fileData.ref<V3f>(i).resetCacheStatistics();
   }
 
   for (int i=0; i<m_fileData.numRefs<double>(); i++) {
     m_fileData.ref<double>(i).resetCacheStatistics();
   }
 
-  for (int i=0; i<m_fileData.numRefs<SPI::OpenEXR::Imath::V3d>(); i++) {
-    m_fileData.ref<SPI::OpenEXR::Imath::V3d>(i).resetCacheStatistics();
+  for (int i=0; i<m_fileData.numRefs<V3d>(); i++) {
+    m_fileData.ref<V3d>(i).resetCacheStatistics();
   }
 }
 

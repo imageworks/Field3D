@@ -139,7 +139,7 @@ inline DataTypeEnum dataTypeToEnum() { return DataTypeUnknown; }
 // template specializations
 
 template<>
-inline DataTypeEnum dataTypeToEnum<SPI::OpenEXR::half>()
+inline DataTypeEnum dataTypeToEnum<half>()
 {
   return DataTypeHalf;
 }
@@ -157,20 +157,19 @@ inline DataTypeEnum dataTypeToEnum<double>()
 }
 
 template<>
-inline DataTypeEnum
-dataTypeToEnum<SPI::OpenEXR::Imath::Vec3<SPI::OpenEXR::half> >()
+inline DataTypeEnum dataTypeToEnum<V3h>()
 {
   return DataTypeVecHalf;
 }
 
 template<>
-inline DataTypeEnum dataTypeToEnum<SPI::OpenEXR::Imath::V3f>()
+inline DataTypeEnum dataTypeToEnum<V3f>()
 {
   return DataTypeVecFloat;
 }
 
 template<>
-inline DataTypeEnum dataTypeToEnum<SPI::OpenEXR::Imath::V3d>()
+inline DataTypeEnum dataTypeToEnum<V3d>()
 {
   return DataTypeVecDouble;
 }

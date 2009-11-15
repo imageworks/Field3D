@@ -107,7 +107,7 @@ std::string NullFieldMappingIO::className() const
 FieldMapping::Ptr
 MatrixFieldMappingIO::read(hid_t mappingGroup)
 {
-  SPI::OpenEXR::Imath::M44d mtx;
+  M44d mtx;
 
   if (!readAttribute(mappingGroup, k_matrixMappingDataName, 16,
                      mtx.x[0][0])) {

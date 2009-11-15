@@ -240,9 +240,9 @@ public:
   DataTypeEnum blockType;
   int refIdx;
   int blockIdx;
-  CacheBlock::CacheBlock(DataTypeEnum blockTypeIn,
-                         int refIdxIn,  int blockIdxIn) :
-    blockType(blockTypeIn), refIdx(refIdxIn), blockIdx(blockIdxIn) { }
+  CacheBlock(DataTypeEnum blockTypeIn, int refIdxIn,  int blockIdxIn) :
+    blockType(blockTypeIn), refIdx(refIdxIn), blockIdx(blockIdxIn) 
+  { }
 };
 
 //----------------------------------------------------------------------------//
@@ -769,7 +769,7 @@ inline int FileReferences::append(const Reference<V3d>& ref)
 //----------------------------------------------------------------------------//
 
 template <>
-inline int FileReferences::numRefs<SPI::OpenEXR::half>() const
+inline int FileReferences::numRefs<half>() const
 {
   return m_hRefs.size();
 }
@@ -793,7 +793,7 @@ inline int FileReferences::numRefs<float>() const
 //----------------------------------------------------------------------------//
 
 template <>
-inline int FileReferences::numRefs<SPI::OpenEXR::Imath::V3f>() const
+inline int FileReferences::numRefs<V3f>() const
 {
   return m_vfRefs.size();
 }
@@ -809,7 +809,7 @@ inline int FileReferences::numRefs<double>() const
 //----------------------------------------------------------------------------//
 
 template <>
-inline int FileReferences::numRefs<SPI::OpenEXR::Imath::V3d>() const
+inline int FileReferences::numRefs<V3d>() const
 {
   return m_vdRefs.size();
 }

@@ -255,8 +255,57 @@ public:
 
 /*! \class SparseFileManager
   \ingroup file
+
   Handles specifics about reading sparse fields from disk. Its primary use
   is to control sparse fields read using memory limiting (dynamic loading).
+
+  To enable the dynamic cache for a file, call setLimitMemUse(true)
+  before opening the file.  If you want other files to be fully loaded, call
+  setLimitMemUse(false).
+
+  Example of how to use the cache manager to automatically unload
+  sparse blocks from a f3d file:
+
+  <pre>
+  SparseFileManager &sparseManager = SparseFileManager::singleton();
+  sparseManager.setLimitMemUse(true);  // enables cache for files to be opened 
+  sparseManager.setMaxMemUse(1000.0);  // sets cache to 1 GB
+  Field3DInputFile cacheManagedFile;
+  if (!cacheManagedFile.open(filename)) {
+    Msg::print( "Couldn't open file: " + filename);
+    return 1;
+  }
+  sparseManager.setLimitMemUse(false);  // disables cache for other files
+
+  ... // You can use the file normally, loading layers and then accessing
+  ... // with const_iterator, value(), or empty block functions like
+  ... // getBlockEmptyValue().
+  ... // Layers loaded from cacheManagedFile will be managed by the cache,
+  ... // but other files you open will be fully loaded when opened because of
+  ... // the setLimitMemUse(false) call.
+
+  Msg::print("blocks in cache: " +
+    boost::lexical_cast<std::string>(sparseManager.numLoadedBlocks()));
+  Msg::print("cache blocks ever loaded: " +
+    boost::lexical_cast<std::string>(sparseManager.totalLoadedBlocks()));
+  Msg::print("cache loads: " +
+    boost::lexical_cast<std::string>(sparseManager.totalLoads()));
+  Msg::print("cache fraction loaded: " +
+    boost::lexical_cast<std::string>(sparseManager.cacheFractionLoaded()));
+  Msg::print("cache loads per block: " +
+    boost::lexical_cast<std::string>(sparseManager.cacheLoadsPerBlock()));
+  Msg::print("cache efficiency: " +
+    boost::lexical_cast<std::string>(sparseManager.cacheEfficiency()));
+  </pre>
+
+  If you want to flush the cache manually instead of waiting for the
+  process to end and clean up its memory:
+
+  <pre>
+  sparseManager.flushCache();
+  sparseManager.resetCacheStatistics();
+  </pre>
+
 */
 
 //----------------------------------------------------------------------------//
@@ -265,6 +314,8 @@ class SparseFileManager
 {
 
 public:
+
+  friend class SparseFieldIO;
 
   // typedefs ------------------------------------------------------------------
 
@@ -283,42 +334,12 @@ public:
   //! fields.
   bool doLimitMemUse() const;
 
-  //! Sets the maximum memory usage by dynamically loaded sparse fields.
-  //! \note This is not yet implemented.
+  //! Sets the maximum memory usage, in MB, by dynamically loaded sparse fields.
   void setMaxMemUse(float maxMemUse);
-
-  //! Reclaims the specified number of bytes by deallocating unneeded blocks
-  void deallocateBlocks(int bytesNeeded);
 
   //! Flushes the entire block cache for all files, should probably
   //! only be used for debugging
   void flushCache();
-
-  //! Adds the newly loaded block to the cache, managed by the paging algorithm
-  void addBlockToCache(DataTypeEnum blockType, int fileId, int blockIdx);
-
-  //! Returns the id of the next cache item. This is stored in the SparseField
-  //! in order to reference its fields at a later time
-  template <class Data_T>
-  int getNextId(const std::string filename, const std::string layerPath);
-
-  //! Returns a reference to the Reference object with the given index
-  template <class Data_T>
-  SparseFile::Reference<Data_T> &reference(int index);
-
-  //! Called by SparseField when it's about to read from a block
-  template <class Data_T>
-  void activateBlock(int fileId, int blockIdx);
-
-  //! Increments the usage reference count on the specified block,
-  //! to prevent it from getting unloaded while it's still in use
-  template <class Data_T>
-  void incBlockRef(int fileId, int blockIdx);
-
-  //! Decrements the usage reference count on the specified block,
-  //! after its value is no longer being used
-  template <class Data_T>
-  void decBlockRef(int fileId, int blockIdx);
 
   //! Returns the total number of block loads in the cache
   long long totalLoads();
@@ -343,6 +364,40 @@ public:
   //! Resets block load
   void resetCacheStatistics();
 
+  //--------------------------------------------------------------------------//
+  // Utility functions
+
+  //! Increments the usage reference count on the specified block,
+  //! to prevent it from getting unloaded while it's still in use.
+  //! This should not be called by the user, and may be removed from the
+  //! public interface later.
+  template <class Data_T>
+  void incBlockRef(int fileId, int blockIdx);
+
+  //! Decrements the usage reference count on the specified block,
+  //! after its value is no longer being used
+  //! This should not be called by the user, and may be removed from the
+  //! public interface later.
+  template <class Data_T>
+  void decBlockRef(int fileId, int blockIdx);
+
+  //! Called by SparseField when it's about to read from a block.
+  //! This should not be called by the user, and may be removed from the
+  //! public interface later.
+  template <class Data_T>
+  void activateBlock(int fileId, int blockIdx);
+
+protected:
+
+  //! Returns a reference to the Reference object with the given index
+  template <class Data_T>
+  SparseFile::Reference<Data_T> &reference(int index);
+
+  //! Returns the id of the next cache item. This is stored in the SparseField
+  //! in order to reference its fields at a later time
+  template <class Data_T>
+  int getNextId(const std::string filename, const std::string layerPath);
+
 private:
 
   //! Private to prevent instantiation
@@ -350,6 +405,13 @@ private:
 
   //! Pointer to singleton
   static SparseFileManager *ms_singleton;
+
+  //! Adds the newly loaded block to the cache, managed by the paging algorithm
+  void addBlockToCache(DataTypeEnum blockType, int fileId, int blockIdx);
+
+  //! Utility function to reclaim the specified number of bytes by
+  //! deallocating unneeded blocks
+  void deallocateBlocks(int bytesNeeded);
 
   //! Utility function to attempt to deallocate a single block and
   //! advance the "hand"

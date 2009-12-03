@@ -211,6 +211,27 @@ public:
   template <typename Functor_T>
   int releaseBlocks(Functor_T func);
 
+  //! Calculates the block number based on a block i,j,k index
+  int blockId(int blockI, int blockJ, int blockK) const;
+
+  //! Calculates the block coordinates that a given set of voxel coords are in
+  //! \note The i,j,k coordinates are strictly positive, and refer to the
+  //! coordinates of a voxel -after- the data window offset has been applied.
+  void getBlockCoord(int i, int j, int k, int &bi, int &bj, int &bk) const;
+  
+  //! Calculates the coordinates in a block for the given voxel index
+  //! \note The i,j,k coordinates are strictly positive, and refer to the
+  //! coordinates of a voxel -after- the data window offset has been applied.
+  void getVoxelInBlock(int i, int j, int k, int &vi, int &vj, int &vk) const;
+
+  //! Applies data window offset
+  void applyDataWindowOffset(int &i, int &j, int &k) const
+  {
+    i -= base::m_dataWindow.min.x;
+    j -= base::m_dataWindow.min.y;
+    k -= base::m_dataWindow.min.z;
+  }
+  
   // From Field base class -----------------------------------------------------
 
   //! \name From Field
@@ -320,30 +341,9 @@ public:
   //! Initializes the block structure. Will clear any existing data
   void setupBlocks();
 
-  //! Calculates the block number based on a block i,j,k index
-  int blockId(int blockI, int blockJ, int blockK) const;
-
-  //! Calculates the block coordinates that a given set of voxel coords are in
-  //! \note The i,j,k coordinates are strictly positive, and refer to the
-  //! coordinates of a voxel -after- the data window offset has been applied.
-  void getBlockCoord(int i, int j, int k, int &bi, int &bj, int &bk) const;
-  
-  //! Calculates the coordinates in a block for the given voxel index
-  //! \note The i,j,k coordinates are strictly positive, and refer to the
-  //! coordinates of a voxel -after- the data window offset has been applied.
-  void getVoxelInBlock(int i, int j, int k, int &vi, int &vj, int &vk) const;
-
   //! Deallocated the data of the given block and sets its empty value
   void deallocBlock(Block &block, const Data_T &emptyValue);
 
-  //! Applies data window offset
-  void applyDataWindowOffset(int &i, int &j, int &k) const
-  {
-    i -= base::m_dataWindow.min.x;
-    j -= base::m_dataWindow.min.y;
-    k -= base::m_dataWindow.min.z;
-  }
-  
   //! \}
 
   // Data members --------------------------------------------------------------

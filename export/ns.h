@@ -1,7 +1,7 @@
 //----------------------------------------------------------------------------//
 
 /*
- * Copyright (c) 2009 Sony Pictures Imageworks
+ * Copyright (c) 2009 Sony Pictures Imageworks Inc
  *
  * All rights reserved.
  *

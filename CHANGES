@@ -1,4 +1,15 @@
+Apr 21, 2010
+  * Added CMake build system. (Contributed by Nicholas Yue)
+
+Nov 3, 2009 
+  * Added dynamic loading of sparse fields.
+  * Merged all the various class factory into single ClassFactory.
+  * Created base class for reference counted objects, before each 
+    class implemented the same ref count functions.
+  * Fixed bug in sparse block iterators
+  * Main branch is now at version 1.1
+
 Aug 21 2009
-  First "release" into the wild. The official v1.0.0 release branch 
-  will be created once any initial kinks have been worked out.
+  * First "release" into the wild. The official v1.0.0 release branch 
+    will be created once any initial kinks have been worked out.
 

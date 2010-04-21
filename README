@@ -103,6 +103,25 @@ is wrapped in an "SPI" namespace - the ExampleSite.py and SpiMathLib.h
 files shows an example of how to configure it.
 
 ------------------------------------------------------------------------
+  AUTHORS
+------------------------------------------------------------------------
+
+Original development at Sony Pictures Imageworks:
+
+  Magnus Wrenninge
+  Chris Allen
+  Sosh Mirsepassi
+  Stephen Marshall
+  Chris Burdorf
+  Henrik Falt
+  Scot Shinderman
+  Doug Bloom
+
+Contributors:
+
+  Nicholas Yue, <Affiliation> (CMake setup)
+
+------------------------------------------------------------------------
   QUESTIONS AND COMMENTS
 ------------------------------------------------------------------------
 

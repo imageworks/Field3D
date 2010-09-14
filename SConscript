@@ -67,9 +67,8 @@ stLibInstall = libEnv.Install(join(installPath, "lib"), [stLib])
 dylibInstall = None
 if sys.platform == "darwin":
     dylibName = os.path.basename(str(dyLib[0]))
-    print str(dyLib), dylibName
     dylibInstallPath = os.path.abspath(join(installPath, "lib", dylibName))
-    # Creat the builder
+    # Create the builder
     dylibEnv = env.Clone()
     dylibBuilder = Builder(action = setDylibInternalPath,
                            suffix = ".dylib", src_suffix = ".dylib")

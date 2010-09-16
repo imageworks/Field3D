@@ -48,10 +48,9 @@
 #include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
 
-#include <boost/timer.hpp>
-
-#include <Field3D/gpu/DenseFieldCuda.h>
+#include "Field3D/gpu/DenseFieldCuda.h"
 #include "Field3D/gpu/FieldInterpCuda.h"
+#include "Field3D/gpu/Timer.h"
 
 //----------------------------------------------------------------------------//
 
@@ -86,7 +85,7 @@ namespace gcc
 
 		Field3D::LinearFieldInterp< typename FIELD::value_type > interp;
 
-		boost::timer t;
+		Field3D::Gpu::CpuTimer t;
 
 		_Pragma( "omp parallel for" )
 		for( int i = 0; i < sample_count; ++i ){
@@ -112,7 +111,7 @@ namespace gcc
 		thrust::host_vector< typename INTERP::sample_type > host_result( sample_count, 0.0f );
 		SampleFunctor< INTERP, Field3D::Gpu::GlobalMemAccessor< typename INTERP::value_type > > f( ac, interp, &host_p[0], &host_result[0] );
 
-		boost::timer t;
+		Field3D::Gpu::CpuTimer t;
 
 		_Pragma( "omp parallel for" )
 		for( int i = 0; i < sample_count; ++i ){
@@ -170,7 +169,7 @@ void testField()
 
 	std::cout << "  profiling run...\n";
 
-	sample_count = 1000000;
+	sample_count = 8000000;
 	host_p.resize( sample_count );
 	randomLocations( res, host_p );
 

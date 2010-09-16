@@ -42,10 +42,10 @@
 #include <thrust/device_vector.h>
 
 #include <boost/shared_ptr.hpp>
-#include <boost/timer.hpp>
 
 #include "Field3D/gpu/FieldInterpCuda.h"
 #include "Field3D/gpu/Traits.h"
+#include "Field3D/gpu/Timer.h"
 
 using namespace Field3D::Gpu;
 
@@ -147,11 +147,19 @@ namespace nvcc {
 		thrust::host_vector< typename INTERP::sample_type > host_result( sample_count, 0.0f );
 		SampleFunctor< INTERP, GlobalMemAccessor< typename INTERP::value_type > > f( ac, interp, &host_p[0], &host_result[0] );
 
-		boost::timer t;
+		CpuTimer t;
 
 		thrust::counting_iterator< int, thrust::host_space_tag > first( 0 );
 		thrust::counting_iterator< int, thrust::host_space_tag > last( sample_count );
+
+#ifdef _OPENMP
+		_Pragma( "omp parallel for" )
+		for( int i = 0; i < sample_count; ++i ){
+			f(i);
+		}
+#else
 		thrust::for_each( first, last, f );
+#endif
 
 		float et = t.elapsed();
 
@@ -175,7 +183,7 @@ namespace nvcc {
 		thrust::device_vector< typename INTERP::sample_type > device_result( sample_count, 0.0f );
 		SampleFunctor< INTERP, GlobalMemAccessor< typename INTERP::value_type > > f( ac, interp, thrust::raw_pointer_cast( &device_p[ 0 ] ), thrust::raw_pointer_cast( &device_result[ 0 ] ) );
 
-		boost::timer t;
+		GpuTimer t;
 
 		thrust::counting_iterator< int, thrust::device_space_tag > first( 0 );
 		thrust::counting_iterator< int, thrust::device_space_tag > last( sample_count );
@@ -207,7 +215,7 @@ namespace nvcc {
 		thrust::device_vector< typename INTERP::sample_type > device_result( sample_count, 0.0f );
 		SampleFunctor< INTERP, TexAccessor< typename INTERP::value_type > > f( ac, interp, thrust::raw_pointer_cast( &device_p[ 0 ] ), thrust::raw_pointer_cast( &device_result[ 0 ] ) );
 
-		boost::timer t;
+		GpuTimer t;
 
 		thrust::counting_iterator< int, thrust::device_space_tag > first( 0 );
 		thrust::counting_iterator< int, thrust::device_space_tag > last( sample_count );

@@ -35,63 +35,33 @@
 
 //----------------------------------------------------------------------------//
 
-#ifndef _INCLUDED_Field3D_gpu_Traits_H_
-#define _INCLUDED_Field3D_gpu_Traits_H_
+#ifndef _INCLUDED_Field3D_gpu_ns_H_
+#define _INCLUDED_Field3D_gpu_ns_H_
 
-#include "Field3D/gpu/ns.h"
-#include "Field3D/Types.h"
-
-FIELD3D_GPU_NAMESPACE_OPEN
+#include "Field3D/ns.h"
 
 //----------------------------------------------------------------------------//
-//! Traits class that defines gpu storage and access types
-template< typename T >
-struct GpuFieldTraits
-{
-};
+
+#define FIELD3D_GPU_NAMESPACE_OPEN \
+  FIELD3D_NAMESPACE_OPEN \
+    namespace Gpu {
+
+#define FIELD3D_GPU_NAMESPACE_HEADER_CLOSE \
+    } \
+  FIELD3D_NAMESPACE_HEADER_CLOSE
+
 
 //----------------------------------------------------------------------------//
-//! specialization for double precision float scalar field
-template< >
-struct GpuFieldTraits< double >
-{
-	typedef double value_type;
-	typedef double interpolation_type;
-	typedef double cuda_value_type;
-#ifdef NVCC
-	typedef int2 cuda_tex_value_type;
-	typedef texture< cuda_tex_value_type, 1, cudaReadModeElementType > cuda_tex_type;
+
+// an assert that can be used in a cuda kernel
+#ifdef __CUDA_ARCH__
+// when compiling device code, ignore
+#define kernel_assert( v )
+#else
+// when compiling host code, include the assert
+#define kernel_assert( v ) assert( v )
 #endif
-};
 
 //----------------------------------------------------------------------------//
-//! specialization for single precision float scalar field
-template< >
-struct GpuFieldTraits< float >
-{
-	typedef float value_type;
-	typedef float interpolation_type;
-	typedef float cuda_value_type;
-#ifdef NVCC
-	typedef float cuda_tex_value_type;
-	typedef texture< cuda_tex_value_type, 1, cudaReadModeElementType > cuda_tex_type;
-#endif
-};
-
-//----------------------------------------------------------------------------//
-//! specialization for half precision float scalar field
-template< >
-struct GpuFieldTraits< Field3D::half >
-{
-	typedef Field3D::half value_type;
-	typedef float interpolation_type;
-	typedef short cuda_value_type;
-#ifdef NVCC
-	typedef short cuda_tex_value_type;
-	typedef texture< cuda_tex_value_type, 1, cudaReadModeElementType > cuda_tex_type;
-#endif
-};
-
-FIELD3D_GPU_NAMESPACE_HEADER_CLOSE
 
 #endif // Include guard

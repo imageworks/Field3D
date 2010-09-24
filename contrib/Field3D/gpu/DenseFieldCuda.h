@@ -35,42 +35,28 @@
 
 //----------------------------------------------------------------------------//
 
-#ifndef DENSE_FIELD_CUDA_H_
-#define DENSE_FIELD_CUDA_H_
+#ifndef _INCLUDED_Field3D_gpu_DenseFieldCuda_H_
+#define _INCLUDED_Field3D_gpu_DenseFieldCuda_H_
 
 #ifdef NVCC
-#error This file is intended for GCC and isn't compatible with NVCC compiler
+#error This file is intended for GCC and isn't compatible with NVCC compiler due to Field3D includes
 #endif
 
-#include <Field3D/DenseField.h>
-#include <Field3D/ns.h>
-#include <Field3D/gpu/FieldInterpCuda.h>
-#include <Field3D/gpu/Traits.h>
-#include <Field3D/Types.h>
+#include "Field3D/DenseField.h"
+#include "Field3D/Types.h"
+#include "Field3D/gpu/ns.h"
+#include "Field3D/gpu/FieldInterpCuda.h"
 
 #include <thrust/device_vector.h>
 
-FIELD3D_NAMESPACE_OPEN
+FIELD3D_GPU_NAMESPACE_OPEN
 
-namespace Gpu {
-
-//----------------------------------------------------------------------------//
-template< typename T, typename OT >
-void hostToDevice( const std::vector<T>& src, thrust::device_vector<OT>& dst )
-{
-	dst = src;
-}
+// forward declarations
+template< typename A, typename B > struct DenseFieldSampler;
+template< typename A > struct LinearFieldInterp;
 
 //----------------------------------------------------------------------------//
-template<>
-void hostToDevice( const std::vector<Field3D::half>& src, thrust::device_vector<short>& dst )
-{
-	dst.resize( src.size() );
-	cudaMemcpy( thrust::raw_pointer_cast(&dst[0]), &src[0], src.size() * sizeof(short), cudaMemcpyHostToDevice );
-}
-
-
-//----------------------------------------------------------------------------//
+//! Cuda layer for DenseFields
 template< typename Data_T >
 struct DenseFieldCuda : public DenseField< Data_T >
 {
@@ -79,9 +65,9 @@ struct DenseFieldCuda : public DenseField< Data_T >
 	typedef typename GpuFieldTraits< Data_T >::interpolation_type interpolation_type;
 	typedef DenseFieldSampler< value_type, interpolation_type > sampler_type;
 	typedef LinearFieldInterp< sampler_type > linear_interp_type;
+	typedef DenseField< Data_T > base;
 
-	mutable thrust::device_vector< cuda_value_type > m_deviceData;
-
+	//----------------------------------------------------------------------------//
 	//! manufacture an interpolator for device
 	boost::shared_ptr< linear_interp_type > getLinearInterpolatorDevice() const
 	{
@@ -89,20 +75,39 @@ struct DenseFieldCuda : public DenseField< Data_T >
 		hostToDevice( DenseField< Data_T >::m_data, m_deviceData );
 
 		V3i res = DenseField< Data_T >::dataResolution();
-		return boost::shared_ptr< linear_interp_type >( new linear_interp_type( sampler_type( res.x, res.y, res.z, (cuda_value_type*)thrust::raw_pointer_cast(&m_deviceData[0]))));
+		return boost::shared_ptr< linear_interp_type >( new linear_interp_type( sampler_type( base::dataResolution(), base::dataWindow(),
+				(cuda_value_type*) thrust::raw_pointer_cast( &m_deviceData[ 0 ] ) ) ) );
 	}
 
+	//----------------------------------------------------------------------------//
 	//! manufacture an interpolator for host
 	boost::shared_ptr< linear_interp_type > getLinearInterpolatorHost() const
 	{
 		V3i res = DenseField< Data_T >::dataResolution();
-		return boost::shared_ptr< linear_interp_type >( new linear_interp_type( sampler_type( res.x, res.y, res.z, (cuda_value_type*)&DenseField< Data_T >::m_data[0])));
+		return boost::shared_ptr< linear_interp_type >( new linear_interp_type( sampler_type( base::dataResolution(), base::dataWindow(),
+				(cuda_value_type*) &DenseField< Data_T >::m_data[ 0 ] ) ) );
 	}
 
+	//----------------------------------------------------------------------------//
+	//! general host to device transfer
+	template< typename T, typename OT >
+	void hostToDevice( const std::vector<T>& src, thrust::device_vector<OT>& dst ) const
+	{
+		dst = src;
+	}
+
+	//----------------------------------------------------------------------------//
+	//! specialization of host to device transfer for half float
+	void hostToDevice( const std::vector<Field3D::half>& src, thrust::device_vector<short>& dst ) const
+	{
+		dst.resize( src.size() );
+		cudaMemcpy( thrust::raw_pointer_cast(&dst[0]), &src[0], src.size() * sizeof(short), cudaMemcpyHostToDevice );
+	}
+
+private:
+	mutable thrust::device_vector< cuda_value_type > m_deviceData;
 };
 
-} // Cuda
-
-FIELD3D_NAMESPACE_HEADER_CLOSE
+FIELD3D_GPU_NAMESPACE_HEADER_CLOSE
 
 #endif // Include guard

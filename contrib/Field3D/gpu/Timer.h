@@ -38,75 +38,75 @@
 #ifndef _INCLUDED_Field3D_gpu_Timer_H_
 #define _INCLUDED_Field3D_gpu_Timer_H_
 
-#include "Field3D/ns.h"
+#include <boost/date_time/posix_time/posix_time_types.hpp>
+#include <cuda_runtime_api.h>
 
-#include "boost/date_time/posix_time/posix_time_types.hpp"
+#include "Field3D/gpu/ns.h"
 
-FIELD3D_NAMESPACE_OPEN
+FIELD3D_GPU_NAMESPACE_OPEN
 
-namespace Gpu
+//----------------------------------------------------------------------------//
+//! Wall clock timer for profiling CPU code
+struct CpuTimer
 {
+	CpuTimer() :
+		m_start( boost::posix_time::microsec_clock::local_time() )
+	{}
 
-	//! Wall clock timer for profiling CPU code
-	struct CpuTimer
+	//! elapsed time in seconds
+	float elapsed() const
 	{
-		CpuTimer() :
-			m_start( boost::posix_time::microsec_clock::local_time() )
-		{ /* Empty */
-		}
+		boost::posix_time::ptime now = boost::posix_time::microsec_clock::local_time();
+		boost::posix_time::time_duration diff = now - m_start;
+		return diff.total_milliseconds() / 1000.0f;
+	}
 
-		float elapsed() const
-		{
-			boost::posix_time::ptime now = boost::posix_time::microsec_clock::local_time();
-			boost::posix_time::time_duration diff = now - m_start;
-			return diff.total_milliseconds() / 1000.0f;
-		}
+private:
+	boost::posix_time::ptime m_start;
+};
 
-	private:
-		boost::posix_time::ptime m_start;
-	};
-
-	//! Wall clock timer for profiling GPU code
-	struct GpuTimer
+//----------------------------------------------------------------------------//
+//! Wall clock timer for profiling GPU code
+struct GpuTimer
+{
+	GpuTimer()
 	{
-		GpuTimer()
-		{
-			m_start = new cudaEvent_t;
-			m_stop = new cudaEvent_t;
+		m_start = new cudaEvent_t;
+		m_stop = new cudaEvent_t;
 
-			cudaEventCreate( (cudaEvent_t *) m_start );
-			cudaEventCreate( (cudaEvent_t *) m_stop );
+		cudaEventCreate( (cudaEvent_t *) m_start );
+		cudaEventCreate( (cudaEvent_t *) m_stop );
 
-			// start the timer
-			cudaEventRecord( *( (cudaEvent_t *) m_start ), 0 );
-		}
+		// start the timer
+		cudaEventRecord( *( (cudaEvent_t *) m_start ), 0 );
+	}
 
-		~GpuTimer()
-		{
-			cudaEventDestroy( *( (cudaEvent_t *) m_start ) );
-			cudaEventDestroy( *( (cudaEvent_t *) m_stop ) );
+	~GpuTimer()
+	{
+		cudaEventDestroy( *( (cudaEvent_t *) m_start ) );
+		cudaEventDestroy( *( (cudaEvent_t *) m_stop ) );
 
-			delete (cudaEvent_t *) m_start;
-			delete (cudaEvent_t *) m_stop;
-		}
+		delete (cudaEvent_t *) m_start;
+		delete (cudaEvent_t *) m_stop;
+	}
 
-		float elapsed()
-		{
-			// stop the timer
-			cudaEventRecord( *( (cudaEvent_t *) m_stop ), 0 );
+	//! elapsed time in seconds
+	float elapsed()
+	{
+		// stop the timer
+		cudaEventRecord( *( (cudaEvent_t *) m_stop ), 0 );
 
-			cudaEventSynchronize( *( (cudaEvent_t *) m_stop ) );
-			float ms;
-			cudaEventElapsedTime( &ms, *( (cudaEvent_t *) m_start ), *( (cudaEvent_t *) m_stop ) );
-			return ms / 1000.0f;
-		}
+		cudaEventSynchronize( *( (cudaEvent_t *) m_stop ) );
+		float ms;
+		cudaEventElapsedTime( &ms, *( (cudaEvent_t *) m_start ), *( (cudaEvent_t *) m_stop ) );
+		return ms / 1000.0f;
+	}
 
-	private:
-		void *m_start;
-		void *m_stop;
-	};
-}
+private:
+	void *m_start;
+	void *m_stop;
+};
 
-FIELD3D_NAMESPACE_HEADER_CLOSE
+FIELD3D_GPU_NAMESPACE_HEADER_CLOSE
 
 #endif // Include guard

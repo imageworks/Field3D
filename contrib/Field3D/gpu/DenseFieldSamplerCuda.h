@@ -35,63 +35,94 @@
 
 //----------------------------------------------------------------------------//
 
-#ifndef _INCLUDED_Field3D_gpu_Traits_H_
-#define _INCLUDED_Field3D_gpu_Traits_H_
+#ifndef _INCLUDED_Field3D_gpu_DenseFieldSamplerCuda_H_
+#define _INCLUDED_Field3D_gpu_DenseFieldSamplerCuda_H_
 
 #include "Field3D/gpu/ns.h"
-#include "Field3D/Types.h"
+#include "Field3D/gpu/Traits.h"
+#include "Field3D/gpu/FieldSamplerCuda.h"
 
 FIELD3D_GPU_NAMESPACE_OPEN
 
 //----------------------------------------------------------------------------//
-//! Traits class that defines gpu storage and access types
-template< typename T >
-struct GpuFieldTraits
+//! discrete sampling from a dense voxel grid
+template< typename VALUE_TYPE, typename SAMPLE_TYPE >
+struct DenseFieldSampler
+: public FieldSampler
 {
-};
+	typedef VALUE_TYPE value_type;
+	typedef typename GpuFieldTraits< VALUE_TYPE >::cuda_value_type cuda_value_type;
+	typedef SAMPLE_TYPE sample_type;
+	typedef FieldSampler base;
 
-//----------------------------------------------------------------------------//
-//! specialization for double precision float scalar field
-template< >
-struct GpuFieldTraits< double >
-{
-	typedef double value_type;
-	typedef double interpolation_type;
-	typedef double cuda_value_type;
-#ifdef NVCC
-	typedef int2 cuda_tex_value_type;
-	typedef texture< cuda_tex_value_type, 1, cudaReadModeElementType > cuda_tex_type;
-#endif
-};
+	DenseFieldSampler( 	const Field3D::V3i& _dataResolution,
+						const Field3D::Box3i& _dataWindow,
+						cuda_value_type* _phi )
+	: base( _dataResolution, _dataWindow )
+	, phi( _phi )
+	{}
 
-//----------------------------------------------------------------------------//
-//! specialization for single precision float scalar field
-template< >
-struct GpuFieldTraits< float >
-{
-	typedef float value_type;
-	typedef float interpolation_type;
-	typedef float cuda_value_type;
-#ifdef NVCC
-	typedef float cuda_tex_value_type;
-	typedef texture< cuda_tex_value_type, 1, cudaReadModeElementType > cuda_tex_type;
-#endif
-};
+	//! 3d to 1d index mapping
+	inline __host__  __device__
+	int getIndex( 	int i,
+					int j,
+					int k ) const
+	{
+		kernel_assert( i >= dataWindowMin.x );
+		kernel_assert( i <= dataWindowMax.x );
+		kernel_assert( j >= dataWindowMin.y );
+		kernel_assert( j <= dataWindowMax.y );
+		kernel_assert( k >= dataWindowMin.z );
+		kernel_assert( k <= dataWindowMax.z );
 
-//----------------------------------------------------------------------------//
-//! specialization for half precision float scalar field
-template< >
-struct GpuFieldTraits< Field3D::half >
-{
-	typedef Field3D::half value_type;
-	typedef float interpolation_type;
-	typedef short cuda_value_type;
-#ifdef NVCC
-	typedef short cuda_tex_value_type;
-	typedef texture< cuda_tex_value_type, 1, cudaReadModeElementType > cuda_tex_type;
-#endif
+		// Add crop window offset
+		applyDataWindowOffset( i, j, k );
+
+		return k * zstride + j * ystride + i;
+	}
+
+	int allocatedVoxelCount() const
+	{
+		return dataWindowVoxelCount();
+	}
+
+	//! get value using 1d index
+	template< typename ACCESSOR >
+	inline __host__  __device__
+	SAMPLE_TYPE getValue( 	ACCESSOR& ac,
+							int idx ) const
+	{
+		return ac( idx, phi );
+	}
+
+	//! get value using 3d index
+	template< typename ACCESSOR >
+	inline __host__  __device__
+	SAMPLE_TYPE getValue( 	ACCESSOR& ac,
+							int x,
+							int y,
+							int z ) const
+	{
+		return getValue( ac, getIndex( x, y, z ) );
+	}
+
+	//! expose data pointer for texture binding
+	cuda_value_type* dataPtr() const
+	{
+		return phi;
+	}
+
+	//! expose data size for texture binding
+	size_t texMemSize() const
+	{
+		return nxnynz * sizeof(VALUE_TYPE);
+	}
+
+	//! data ptr
+	cuda_value_type* phi;
 };
 
 FIELD3D_GPU_NAMESPACE_HEADER_CLOSE
 
 #endif // Include guard
+

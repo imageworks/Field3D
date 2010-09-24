@@ -1,7 +1,7 @@
 //----------------------------------------------------------------------------//
 
 /*
- * Copyright (c) 2009 Sony Pictures Imageworks Inc
+ * Copyright (c) 2009 Sony Pictures Imageworks
  *
  * All rights reserved.
  *
@@ -35,63 +35,52 @@
 
 //----------------------------------------------------------------------------//
 
-#ifndef _INCLUDED_Field3D_gpu_Traits_H_
-#define _INCLUDED_Field3D_gpu_Traits_H_
+#include "gpu_field_test.h"
 
-#include "Field3D/gpu/ns.h"
-#include "Field3D/Types.h"
+#include "Field3D/gpu/DenseFieldCuda.h"
+#include "Field3D/gpu/DenseFieldSamplerCuda.h"
 
-FIELD3D_GPU_NAMESPACE_OPEN
-
-//----------------------------------------------------------------------------//
-//! Traits class that defines gpu storage and access types
-template< typename T >
-struct GpuFieldTraits
-{
-};
+#include "Field3D/gpu/SparseFieldCuda.h"
+#include "Field3D/gpu/SparseFieldSamplerCuda.h"
 
 //----------------------------------------------------------------------------//
-//! specialization for double precision float scalar field
-template< >
-struct GpuFieldTraits< double >
+namespace nvcc
 {
-	typedef double value_type;
-	typedef double interpolation_type;
-	typedef double cuda_value_type;
-#ifdef NVCC
-	typedef int2 cuda_tex_value_type;
-	typedef texture< cuda_tex_value_type, 1, cudaReadModeElementType > cuda_tex_type;
-#endif
-};
+	template< typename Interp >
+	void testDevice( const Field3D::Box3i& dataWindow, Interp& interp );
+}
 
 //----------------------------------------------------------------------------//
-//! specialization for single precision float scalar field
-template< >
-struct GpuFieldTraits< float >
+//! run a test on a field
+template< typename FieldType >
+void testField()
 {
-	typedef float value_type;
-	typedef float interpolation_type;
-	typedef float cuda_value_type;
-#ifdef NVCC
-	typedef float cuda_tex_value_type;
-	typedef texture< cuda_tex_value_type, 1, cudaReadModeElementType > cuda_tex_type;
-#endif
-};
+	std::cout << "testing a field of type " << nameOf< FieldType > () << std::endl;
+
+	// create a test field
+	boost::intrusive_ptr< FieldType > field( new FieldType );
+	field->name = "hello";
+	field->attribute = "world";
+	field->setSize( Field3D::V3i( TEST_RESOLUTION, TEST_RESOLUTION, TEST_RESOLUTION ) );
+
+	// fill with random values
+	randomValues( -10.0f, 10.0f, *field );
+	field->setStrMetadata( "my_attribute", "my_value" );
+
+	//! get a GPU interpolator for the field
+	boost::shared_ptr< typename FieldType::linear_interp_type > interp = field->getLinearInterpolatorDevice();
+	nvcc::testDevice( field->dataWindow(), *interp );
+
+	std::cout << std::endl;
+}
 
 //----------------------------------------------------------------------------//
-//! specialization for half precision float scalar field
-template< >
-struct GpuFieldTraits< Field3D::half >
+//! entry point
+int main( 	int argc,
+			char **argv )
 {
-	typedef Field3D::half value_type;
-	typedef float interpolation_type;
-	typedef short cuda_value_type;
-#ifdef NVCC
-	typedef short cuda_tex_value_type;
-	typedef texture< cuda_tex_value_type, 1, cudaReadModeElementType > cuda_tex_type;
-#endif
-};
+	testField< Field3D::Gpu::DenseFieldCuda< float > > ();
+	testField< Field3D::Gpu::SparseFieldCuda< float > > ();
 
-FIELD3D_GPU_NAMESPACE_HEADER_CLOSE
-
-#endif // Include guard
+	return 0;
+}

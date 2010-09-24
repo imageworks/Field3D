@@ -35,61 +35,56 @@
 
 //----------------------------------------------------------------------------//
 
-#ifndef _INCLUDED_Field3D_gpu_Traits_H_
-#define _INCLUDED_Field3D_gpu_Traits_H_
+#ifndef _INCLUDED_Field3D_gpu_DataAccessorCuda_H_
+#define _INCLUDED_Field3D_gpu_DataAccessorCuda_H_
 
+// field3d includes
 #include "Field3D/gpu/ns.h"
 #include "Field3D/Types.h"
+
+// cuda includes
+#include <host_defines.h>
 
 FIELD3D_GPU_NAMESPACE_OPEN
 
 //----------------------------------------------------------------------------//
-//! Traits class that defines gpu storage and access types
+//! 1d access to data
+struct DataAccessor
+{
+};
+
+//----------------------------------------------------------------------------//
+//! access data directly from cuda global memory, or host memory
 template< typename T >
-struct GpuFieldTraits
+struct GlobalMemAccessor: public DataAccessor
 {
+	inline __host__  __device__
+	T operator()( 	int i, T* phi )
+	{
+		return phi[ i ];
+	}
 };
 
 //----------------------------------------------------------------------------//
-//! specialization for double precision float scalar field
+//! specialization of GlobalMemAccessor for half float
 template< >
-struct GpuFieldTraits< double >
+struct GlobalMemAccessor< Field3D::half >
 {
-	typedef double value_type;
-	typedef double interpolation_type;
-	typedef double cuda_value_type;
-#ifdef NVCC
-	typedef int2 cuda_tex_value_type;
-	typedef texture< cuda_tex_value_type, 1, cudaReadModeElementType > cuda_tex_type;
+	inline __host__  __device__
+	float operator()( 	int i,
+						short* phi )
+	{
+#ifdef __CUDA_ARCH__
+#if CUDART_VERSION < 3010
+#error requires cuda version >= 3.1 for half float intrinsics
 #endif
-};
-
-//----------------------------------------------------------------------------//
-//! specialization for single precision float scalar field
-template< >
-struct GpuFieldTraits< float >
-{
-	typedef float value_type;
-	typedef float interpolation_type;
-	typedef float cuda_value_type;
-#ifdef NVCC
-	typedef float cuda_tex_value_type;
-	typedef texture< cuda_tex_value_type, 1, cudaReadModeElementType > cuda_tex_type;
+		// half to float intrinsic is only available in device code
+		return __half2float( phi[i] );
+#else
+		// ILM's half to float conversion is only available in host code
+		return *reinterpret_cast< half* > ( &phi[ i ] );
 #endif
-};
-
-//----------------------------------------------------------------------------//
-//! specialization for half precision float scalar field
-template< >
-struct GpuFieldTraits< Field3D::half >
-{
-	typedef Field3D::half value_type;
-	typedef float interpolation_type;
-	typedef short cuda_value_type;
-#ifdef NVCC
-	typedef short cuda_tex_value_type;
-	typedef texture< cuda_tex_value_type, 1, cudaReadModeElementType > cuda_tex_type;
-#endif
+	}
 };
 
 FIELD3D_GPU_NAMESPACE_HEADER_CLOSE

@@ -120,10 +120,10 @@ struct LinearFieldInterp
 	void bindTex( TEX_ACCESSOR& tex ) const
 	{
 		cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc< typename TEX_ACCESSOR::cuda_tex_value_type >();
-		tex.tex().filterMode = cudaFilterModePoint;
-		tex.tex().normalized = false;
-		tex.tex().channelDesc = channelDesc;
-		if (cudaBindTexture( NULL, &tex.tex(), sampler.dataPtr(), &channelDesc, sampler.texMemSize() ) != (unsigned int) CUDA_SUCCESS) {
+		tex.getTex().filterMode = cudaFilterModePoint;
+		tex.getTex().normalized = false;
+		tex.getTex().channelDesc = channelDesc;
+		if (cudaBindTexture( NULL, &tex.getTex(), sampler.dataPtr(), &channelDesc, sampler.texMemSize() ) != (unsigned int) CUDA_SUCCESS) {
 			throw std::runtime_error( "failed to bind texture" );
 		}
 	}
@@ -131,7 +131,7 @@ struct LinearFieldInterp
 	template< typename TEX_ACCESSOR >
 	void unbindTex( TEX_ACCESSOR& tex ) const
 	{
-		cudaUnbindTexture( &tex.tex() );
+		cudaUnbindTexture( &tex.getTex() );
 	}
 #endif
 

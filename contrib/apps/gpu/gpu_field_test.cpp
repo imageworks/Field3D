@@ -51,6 +51,7 @@
 #include "Field3D/gpu/FieldInterpCuda.h"
 #include "Field3D/gpu/DataAccessorCuda.h"
 #include "Field3D/gpu/Timer.h"
+#include "Field3D/gpu/NameOf.h"
 
 // std includes
 #include <iostream>
@@ -146,7 +147,7 @@ void testField()
 {
 	int res = TEST_RESOLUTION;
 
-	std::cout << "\ntesting " << nameOf< FieldType >() << " at " << res << "x" << res << "x" << res << std::endl;
+	std::cout << "\ntesting " << Field3D::Gpu::nameOf< FieldType >() << " at " << res << "x" << res << "x" << res << std::endl;
 
 	// create a field of the desired ytpe
 	boost::intrusive_ptr<FieldType> field( new FieldType );

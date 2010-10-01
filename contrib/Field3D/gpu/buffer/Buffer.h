@@ -1,7 +1,7 @@
 //----------------------------------------------------------------------------//
 
 /*
- * Copyright (c) 2009 Sony Pictures Imageworks
+ * Copyright (c) 2009 Sony Pictures Imageworks Inc
  *
  * All rights reserved.
  *
@@ -35,54 +35,32 @@
 
 //----------------------------------------------------------------------------//
 
-#include "gpu_field_test.h"
+#ifndef _INCLUDED_Field3D_gpu_Buffer_H_
+#define _INCLUDED_Field3D_gpu_Buffer_H_
 
-#include "Field3D/gpu/DenseFieldCuda.h"
-#include "Field3D/gpu/DenseFieldSamplerCuda.h"
+#define __CL_ENABLE_EXCEPTIONS
 
-#include "Field3D/gpu/SparseFieldCuda.h"
-#include "Field3D/gpu/SparseFieldSamplerCuda.h"
+#include "Field3D/gpu/ns.h"
 
-#include "Field3D/gpu/NameOf.h"
-
-//----------------------------------------------------------------------------//
-namespace nvcc
-{
-	template< typename Interp >
-	void testDevice( const Field3D::Box3i& dataWindow, Interp& interp );
-}
+FIELD3D_GPU_NAMESPACE_OPEN
 
 //----------------------------------------------------------------------------//
-//! run a test on a field
-template< typename FieldType >
-void testField()
-{
-	std::cout << "testing a field of type " << Field3D::Gpu::nameOf< FieldType > () << std::endl;
-
-	// create a test field
-	boost::intrusive_ptr< FieldType > field( new FieldType );
-	field->name = "hello";
-	field->attribute = "world";
-	field->setSize( Field3D::V3i( TEST_RESOLUTION, TEST_RESOLUTION, TEST_RESOLUTION ) );
-
-	// fill with random values
-	randomValues( -10.0f, 10.0f, *field );
-	field->setStrMetadata( "my_attribute", "my_value" );
-
-	//! get a GPU interpolator for the field
-	boost::shared_ptr< typename FieldType::linear_interp_type > interp = field->getLinearInterpolatorDevice();
-	nvcc::testDevice( field->dataWindow(), *interp );
-
-	std::cout << std::endl;
-}
+//! A Buffer is similar conceptually to std::vector
+template< typename T >
+struct Buffer
+{ /* empty */
+};
 
 //----------------------------------------------------------------------------//
-//! entry point
-int main( 	int argc,
-			char **argv )
-{
-	testField< Field3D::Gpu::DenseFieldCuda< float > > ();
-	testField< Field3D::Gpu::SparseFieldCuda< float > > ();
+//! A Cuda buffer
+template< typename T >
+struct BufferCuda;
 
-	return 0;
-}
+//----------------------------------------------------------------------------//
+// An OpenCL buffer
+template< typename T >
+struct BufferCL;
+
+FIELD3D_GPU_NAMESPACE_HEADER_CLOSE
+
+#endif // Include guard

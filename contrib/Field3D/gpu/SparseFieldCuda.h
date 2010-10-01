@@ -39,7 +39,7 @@
 #define _INCLUDED_Field3D_gpu_SparseFieldCuda_H_
 
 #ifdef NVCC
-#error This file is intended for GCC and isn't compatible with NVCC compiler due to Field3D includes
+#error "This file is intended for GCC and isn't compatible with NVCC compiler due to Field3D includes"
 #endif
 
 #include "Field3D/SparseField.h"
@@ -96,8 +96,8 @@ struct SparseFieldCuda : public SparseField< Data_T >
 	 *  \note There is an index table and data buffer, with the data buffer
 	 *        containing both empty values and block data
 	 */
-	template< typename BlockFunctor >
-	void hostToDevice( BlockFunctor& bf ) const
+	template< typename IntBuffer, typename Buffer, typename BlockFunctor >
+	void hostToDevice( IntBuffer& blockTable, Buffer& buffer, BlockFunctor& bf ) const
 	{
 		int required_block_count = requiredBlockCount( bf );
 		int gpu_cache_element_count = deviceElementsRequired( required_block_count );
@@ -108,7 +108,7 @@ struct SparseFieldCuda : public SparseField< Data_T >
 		const V3i br = base::blockRes();
 		const int block_count = br.x * br.y * br.z; // total block count
 
-		m_deviceData.resize( gpu_cache_element_count, 0 );
+		buffer.resize( gpu_cache_element_count );
 
 		std::vector< Data_T > host_empty_values( block_count );
 		std::vector< int > host_block_table( block_count, -1 ); // initialize to empty value
@@ -134,8 +134,7 @@ struct SparseFieldCuda : public SparseField< Data_T >
 			if( block.isAllocated && bf( *this, bi.x, bi.y, bi.z ) ){
 				host_block_table[ i ] = write_index;
 				assert( block.data.size() == block_element_count );
-				cudaMemcpy( thrust::raw_pointer_cast( &m_deviceData[ write_index ] ), &block.data[ 0 ], block.data.size() * sizeof(Data_T),
-						cudaMemcpyHostToDevice );
+				Field3D::Gpu::copy( block.data.begin(), block.data.end(), buffer.begin() + write_index );
 				write_index += block_element_count;
 
 #if 0
@@ -150,15 +149,21 @@ struct SparseFieldCuda : public SparseField< Data_T >
 		assert( i == block_count );
 
 		// host -> device for empty values
-		cudaMemcpy( thrust::raw_pointer_cast( &m_deviceData[ 0 ] ), &host_empty_values[ 0 ], host_empty_values.size() * sizeof(Data_T),
-				cudaMemcpyHostToDevice );
+		Field3D::Gpu::copy( host_empty_values.begin(), host_empty_values.end(), buffer.begin() );
+
 		// host->device for block table;
-		m_blockTable = host_block_table;
-		thrust::host_vector< Data_T > temp = m_deviceData;
+		blockTable.resize( host_block_table.size() );
+		Field3D::Gpu::copy( host_block_table.begin(), host_block_table.end(), blockTable.begin() );
 
 		m_texMemSize = gpu_cache_element_count * sizeof( Data_T );
 		m_blockCount = required_block_count;
+	}
 
+	template< typename IntBuffer, typename Buffer >
+	void hostToDevice( IntBuffer& blockTable, Buffer& buffer ) const
+	{
+		EveryBlockFunctor f;
+		return hostToDevice( blockTable, buffer, f );
 	}
 
 	//----------------------------------------------------------------------------//
@@ -166,11 +171,11 @@ struct SparseFieldCuda : public SparseField< Data_T >
 	template< typename BlockFunctor >
 	boost::shared_ptr< linear_interp_type > getLinearInterpolatorDevice( BlockFunctor& bf ) const
 	{
-		hostToDevice( bf );
+		hostToDevice( m_blockTableCuda, m_bufferCuda, bf );
 
 		return boost::shared_ptr< linear_interp_type >( new linear_interp_type( sampler_type( base::dataResolution(), base::dataWindow(),
-				m_blockCount, base::blockOrder(), base::blockRes(), thrust::raw_pointer_cast( &m_blockTable[ 0 ] ),
-				(cuda_value_type*) thrust::raw_pointer_cast( &m_deviceData[ 0 ] ), m_texMemSize ) ) );
+				m_blockCount, base::blockOrder(), base::blockRes(), thrust::raw_pointer_cast( &m_blockTableCuda[ 0 ] ),
+				(cuda_value_type*) thrust::raw_pointer_cast( &m_bufferCuda[ 0 ] ), m_texMemSize ) ) );
 	}
 
 	//----------------------------------------------------------------------------//
@@ -224,8 +229,8 @@ struct SparseFieldCuda : public SparseField< Data_T >
 	}
 
 private:
-	mutable thrust::device_vector< int > m_blockTable;
-	mutable thrust::device_vector< cuda_value_type > m_deviceData;
+	mutable BufferCuda< int > m_blockTableCuda;
+	mutable BufferCuda< Data_T > m_bufferCuda;
 	mutable int m_blockCount;
 	mutable int m_texMemSize;
 };

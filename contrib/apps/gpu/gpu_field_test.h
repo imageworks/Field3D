@@ -70,22 +70,6 @@ typedef float3 Vec3f;
 #define Make_Vec3f make_float3
 
 //----------------------------------------------------------------------------//
-// just some pretty formatting of type names
-template< typename T > inline std::string nameOf()
-{
-#ifdef __GNUC__
-	// demangle names for gcc
-	int status;
-	char* demangled = abi::__cxa_demangle(typeid(T).name(), 0, 0, &status);
-	std::string result( demangled );
-	free( demangled );
-	return result;
-#else
-	return typeid(T).name();
-#endif
-}
-
-//----------------------------------------------------------------------------//
 //! random sampling across entire field
 template< typename INTERPOLATOR, typename ACCESSOR >
 struct RandomSampleFunctor

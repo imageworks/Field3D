@@ -58,6 +58,7 @@ struct GpuFieldTraits< double >
 	typedef double value_type;
 	typedef double interpolation_type;
 	typedef double cuda_value_type;
+	typedef double cl_value_type;
 #ifdef NVCC
 	typedef int2 cuda_tex_value_type;
 	typedef texture< cuda_tex_value_type, 1, cudaReadModeElementType > cuda_tex_type;
@@ -72,6 +73,7 @@ struct GpuFieldTraits< float >
 	typedef float value_type;
 	typedef float interpolation_type;
 	typedef float cuda_value_type;
+	typedef float cl_value_type;
 #ifdef NVCC
 	typedef float cuda_tex_value_type;
 	typedef texture< cuda_tex_value_type, 1, cudaReadModeElementType > cuda_tex_type;
@@ -86,10 +88,21 @@ struct GpuFieldTraits< Field3D::half >
 	typedef Field3D::half value_type;
 	typedef float interpolation_type;
 	typedef short cuda_value_type;
+	typedef Field3D::half cl_value_type;
 #ifdef NVCC
 	typedef short cuda_tex_value_type;
 	typedef texture< cuda_tex_value_type, 1, cudaReadModeElementType > cuda_tex_type;
 #endif
+};
+
+//----------------------------------------------------------------------------//
+//! specialization for ints
+template< >
+struct GpuFieldTraits< int >
+{
+	typedef int value_type;
+	typedef int cuda_value_type;
+	typedef int cl_value_type;
 };
 
 FIELD3D_GPU_NAMESPACE_HEADER_CLOSE

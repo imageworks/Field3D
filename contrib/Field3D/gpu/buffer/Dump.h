@@ -1,7 +1,7 @@
 //----------------------------------------------------------------------------//
 
 /*
- * Copyright (c) 2009 Sony Pictures Imageworks
+ * Copyright (c) 2009 Sony Pictures Imageworks Inc
  *
  * All rights reserved.
  *
@@ -35,54 +35,49 @@
 
 //----------------------------------------------------------------------------//
 
-#include "gpu_field_test.h"
+#ifndef _INCLUDED_Field3D_gpu_BufferDump_H_
+#define _INCLUDED_Field3D_gpu_BufferDump_H_
 
-#include "Field3D/gpu/DenseFieldCuda.h"
-#include "Field3D/gpu/DenseFieldSamplerCuda.h"
-
-#include "Field3D/gpu/SparseFieldCuda.h"
-#include "Field3D/gpu/SparseFieldSamplerCuda.h"
-
+#include "Field3D/gpu/Traits.h"
 #include "Field3D/gpu/NameOf.h"
 
-//----------------------------------------------------------------------------//
-namespace nvcc
-{
-	template< typename Interp >
-	void testDevice( const Field3D::Box3i& dataWindow, Interp& interp );
-}
+#include "Field3D/gpu/ns.h"
+
+FIELD3D_GPU_NAMESPACE_OPEN
 
 //----------------------------------------------------------------------------//
-//! run a test on a field
-template< typename FieldType >
-void testField()
+// forward declaration
+template< typename InputIterator, typename OutputIterator >
+OutputIterator copy(	InputIterator first,
+                    	InputIterator last,
+						OutputIterator result );
+
+//----------------------------------------------------------------------------//
+//! dump a host buffer
+template< typename T >
+void dumpBuffer( const std::vector<T>& b )
 {
-	std::cout << "testing a field of type " << Field3D::Gpu::nameOf< FieldType > () << std::endl;
-
-	// create a test field
-	boost::intrusive_ptr< FieldType > field( new FieldType );
-	field->name = "hello";
-	field->attribute = "world";
-	field->setSize( Field3D::V3i( TEST_RESOLUTION, TEST_RESOLUTION, TEST_RESOLUTION ) );
-
-	// fill with random values
-	randomValues( -10.0f, 10.0f, *field );
-	field->setStrMetadata( "my_attribute", "my_value" );
-
-	//! get a GPU interpolator for the field
-	boost::shared_ptr< typename FieldType::linear_interp_type > interp = field->getLinearInterpolatorDevice();
-	nvcc::testDevice( field->dataWindow(), *interp );
-
+	std::cout << "type: " << nameOf<T>() << "\n";
+	typename std::vector< T >::const_iterator i( b.begin() ), e( b.end() );
+	for( ; i != e; ++i ){
+		std::cout << *i << " ";
+	}
 	std::cout << std::endl;
 }
 
 //----------------------------------------------------------------------------//
-//! entry point
-int main( 	int argc,
-			char **argv )
+//! dump a device buffer
+template< typename Buffer >
+void dumpBuffer( const Buffer& device_buffer )
 {
-	testField< Field3D::Gpu::DenseFieldCuda< float > > ();
-	testField< Field3D::Gpu::SparseFieldCuda< float > > ();
+	std::vector< typename Buffer::value_type > host_buffer( device_buffer.size() );
 
-	return 0;
+	// device->host
+	Field3D::Gpu::copy( device_buffer.begin(), device_buffer.end(), host_buffer.begin() );
+
+	dumpBuffer( host_buffer );
 }
+
+FIELD3D_GPU_NAMESPACE_HEADER_CLOSE
+
+#endif // Include guard

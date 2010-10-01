@@ -82,7 +82,7 @@ struct TexAccessor< double >
 #endif
 	}
 
-	GpuFieldTraits< double >::cuda_tex_type& tex()
+	GpuFieldTraits< double >::cuda_tex_type& getTex()
 	{
 		return tex_double;
 	}
@@ -106,7 +106,7 @@ struct TexAccessor< float >
 #endif
 	}
 
-	GpuFieldTraits< float >::cuda_tex_type& tex()
+	GpuFieldTraits< float >::cuda_tex_type& getTex()
 	{
 		return tex_float;
 	}
@@ -131,7 +131,7 @@ struct TexAccessor< Field3D::half >
 #endif
 	}
 
-	GpuFieldTraits< Field3D::half >::cuda_tex_type& tex()
+	GpuFieldTraits< Field3D::half >::cuda_tex_type& getTex()
 	{
 		return tex_half;
 	}

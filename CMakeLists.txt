@@ -47,14 +47,19 @@ FILE ( COPY export/ DESTINATION ${CMAKE_HOME_DIRECTORY}/Field3D)
 INCLUDE_DIRECTORIES ( . )
 INCLUDE_DIRECTORIES ( src )
 INCLUDE_DIRECTORIES ( export )
-INCLUDE_DIRECTORIES ( /usr/include/OpenEXR )
+INCLUDE_DIRECTORIES ( $ENV{ILMBASE_ROOT}/include )
+INCLUDE_DIRECTORIES ( $ENV{ILMBASE_ROOT}/include/OpenEXR )
+INCLUDE_DIRECTORIES ( ${HDF5_INCLUDE_DIRS} )
 INCLUDE_DIRECTORIES ( ${Boost_INCLUDE_DIR} )
 
 # link directories
 LINK_DIRECTORIES ( ${Boost_LIBRARY_DIRS} )
+LINK_DIRECTORIES ( ${HDF5_LIBRARY_DIRS} )
+LINK_DIRECTORIES ( $ENV{ILMBASE_ROOT}/lib )
 
-
-ADD_DEFINITIONS ( -fPIC -m64 -DLINUX -DREQUIRE_IOSTREAM -Wno-invalid-offsetof )
+IF ( LINUX )
+  ADD_DEFINITIONS ( -fPIC -m64 -DLINUX -DREQUIRE_IOSTREAM -Wno-invalid-offsetof )
+ENDIF ( LINUX )
 
 ADD_LIBRARY ( field3d 
   src/ClassFactory.cpp
@@ -80,8 +85,7 @@ ADD_EXECUTABLE ( unitTest
 
 TARGET_LINK_LIBRARIES ( unitTest
   field3d
-  ${HDF5HL_LIBRARY}
-  ${HDF5_LIBRARY}
+  ${HDF5_LIBRARIES}
   z
   Iex
   Half
@@ -98,8 +102,7 @@ ADD_EXECUTABLE ( access_speed
 
 TARGET_LINK_LIBRARIES ( access_speed
   field3d
-  ${HDF5HL_LIBRARY}
-  ${HDF5_LIBRARY}
+  ${HDF5_LIBRARIES}
   z
   Iex
   Half
@@ -116,8 +119,7 @@ ADD_EXECUTABLE ( sparse_field_io
 
 TARGET_LINK_LIBRARIES ( sparse_field_io
   field3d
-  ${HDF5HL_LIBRARY}
-  ${HDF5_LIBRARY}
+  ${HDF5_LIBRARIES}
   z
   Iex
   Half
@@ -134,8 +136,7 @@ ADD_EXECUTABLE ( read
 
 TARGET_LINK_LIBRARIES ( read
   field3d
-  ${HDF5HL_LIBRARY}
-  ${HDF5_LIBRARY}
+  ${HDF5_LIBRARIES}
   z
   Iex
   Half
@@ -152,8 +153,7 @@ ADD_EXECUTABLE ( mixed_types
 
 TARGET_LINK_LIBRARIES ( mixed_types
   field3d
-  ${HDF5HL_LIBRARY}
-  ${HDF5_LIBRARY}
+  ${HDF5_LIBRARIES}
   z
   Iex
   Half
@@ -170,8 +170,7 @@ ADD_EXECUTABLE ( create_and_write
 
 TARGET_LINK_LIBRARIES ( create_and_write
   field3d
-  ${HDF5HL_LIBRARY}
-  ${HDF5_LIBRARY}
+  ${HDF5_LIBRARIES}
   z
   Iex
   Half

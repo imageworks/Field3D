@@ -228,10 +228,10 @@ def setupEnv(env, pathToRoot = "."):
 # ------------------------------------------------------------------------------
 
 def addField3DInstall(env, pathToRoot):
-    env.Append(CPPPATH = [join(pathToRoot, installDir(), "include")])
-    env.Append(LIBS = [field3DName])
-    env.Append(LIBPATH = [join(pathToRoot, installDir(), "lib")])
-    env.Append(RPATH = [join(pathToRoot, installDir(), "lib")])
+    env.Prepend(CPPPATH = [join(pathToRoot, installDir(), "include")])
+    env.Prepend(LIBS = [field3DName])
+    env.Prepend(LIBPATH = [join(pathToRoot, installDir(), "lib")])
+    env.Prepend(RPATH = [join(pathToRoot, installDir(), "lib")])
 
 # ------------------------------------------------------------------------------
 

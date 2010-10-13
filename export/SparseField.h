@@ -354,10 +354,6 @@ public:
   V3i m_blockRes;
   //! Block array res.x * res.y
   int m_blockXYSize;
-  //! Lookup table to find block index for a given int coord
-  std::vector<int> m_bi, m_bj, m_bk;
-  //! Lookup table to find voxel index for a given int coord
-  std::vector<int> m_vi, m_vj, m_vk;
   //! Information for all blocks in the field
   std::vector<Block> m_blocks;
 

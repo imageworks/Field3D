@@ -151,7 +151,7 @@ bool checkEqual(const V3dVec &wsP, const V3dVec &vsP)
   
   for (; wsI != wsEnd; ++wsI, ++vsI) {
     if (*wsI != *vsI) {
-      Log::print("  Comparing " + lexical_cast<string>(*wsI) + " " +
+      Msg::print("  Comparing " + lexical_cast<string>(*wsI) + " " +
                  lexical_cast<string>(*vsI));
       return false;
     }
@@ -174,7 +174,7 @@ int main(int argc, char **argv)
       numThreads = lexical_cast<size_t>(argv[1]);
     } 
     catch (boost::bad_lexical_cast &e) {
-      Log::print("Couldn't parse num_threads. Aborting");
+      Msg::print("Couldn't parse num_threads. Aborting");
       exit(1);
     }
   }
@@ -184,16 +184,16 @@ int main(int argc, char **argv)
       numPoints = lexical_cast<size_t>(argv[2]);
     }
     catch (boost::bad_lexical_cast &e) {
-      Log::print("Couldn't parse arguments. Aborting");
+      Msg::print("Couldn't parse arguments. Aborting");
       exit(1);
     }
   } else {
-    Log::print("Usage: " + lexical_cast<string>(argv[0]) + 
+    Msg::print("Usage: " + lexical_cast<string>(argv[0]) + 
                " <num_threads> [num_transforms]");
-    Log::print("Got no arguments. Using defaults.");
+    Msg::print("Got no arguments. Using defaults.");
   }
 
-  Log::print("Using " + 
+  Msg::print("Using " + 
              lexical_cast<string>(numThreads) + " threads, " + 
              lexical_cast<string>(numPoints) + " points");
 
@@ -220,7 +220,7 @@ int main(int argc, char **argv)
   
   // Test single threaded ---
 
-  Log::print("Testing naive single threaded version");
+  Msg::print("Testing naive single threaded version");
   
   {
     WallClockTimer t;
@@ -233,17 +233,17 @@ int main(int argc, char **argv)
       field->mapping()->worldToLocal(*wsI, *vsI);
     }
 
-    Log::print("  " + lexical_cast<string>(t.elapsed())); 
+    Msg::print("  " + lexical_cast<string>(t.elapsed())); 
   }
 
   if (!checkEqual(wsP, vsP)) {
-    Log::print("  FAILED!");
+    Msg::print("  FAILED!");
   }
   std::fill(vsP.begin(), vsP.end(), V3d(0.0));
 
   // Test iterator transform single threaded ---
 
-  Log::print("Testing iterator-based single threaded version");
+  Msg::print("Testing iterator-based single threaded version");
   
   {
     WallClockTimer t;
@@ -254,11 +254,11 @@ int main(int argc, char **argv)
       
     field->mapping()->worldToLocal(wsP.begin(), wsP.end(), vsP.begin());
 
-    Log::print("  " + lexical_cast<string>(t.elapsed())); 
+    Msg::print("  " + lexical_cast<string>(t.elapsed())); 
   }
 
   if (!checkEqual(wsP, vsP)) {
-    Log::print("  FAILED!");
+    Msg::print("  FAILED!");
   }
   std::fill(vsP.begin(), vsP.end(), V3d(0.0));
 
@@ -268,7 +268,7 @@ int main(int argc, char **argv)
 
   // Test naive multithreaded ---
 
-  Log::print("Testing naive multithreaded version");
+  Msg::print("Testing naive multithreaded version");
 
   {
     WallClockTimer t;
@@ -285,17 +285,17 @@ int main(int argc, char **argv)
     }      
     
     threads.join_all();
-    Log::print("  " + lexical_cast<string>(t.elapsed())); 
+    Msg::print("  " + lexical_cast<string>(t.elapsed())); 
   }
 
   if (!checkEqual(wsP, vsP)) {
-    Log::print("  FAILED!");
+    Msg::print("  FAILED!");
   }
   std::fill(vsP.begin(), vsP.end(), V3d(0.0));
 
   // Test multithreaded with optimized transform ---
 
-  Log::print("Testing iterator multithreaded version");
+  Msg::print("Testing iterator multithreaded version");
 
   {
     WallClockTimer t;
@@ -312,11 +312,11 @@ int main(int argc, char **argv)
     }      
     
     threads.join_all();
-    Log::print("  " + lexical_cast<string>(t.elapsed())); 
+    Msg::print("  " + lexical_cast<string>(t.elapsed())); 
   }
 
   if (!checkEqual(wsP, vsP)) {
-    Log::print("  FAILED!");
+    Msg::print("  FAILED!");
   }
   std::fill(vsP.begin(), vsP.end(), V3d(0.0));
 

@@ -5,7 +5,7 @@ import sys
 
 # ------------------------------------------------------------------------------
 
-pathToRoot = "../.."
+pathToRoot = "../../.."
 
 sys.path.append(pathToRoot)
 

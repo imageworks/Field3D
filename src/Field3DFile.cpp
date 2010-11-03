@@ -983,7 +983,8 @@ herr_t parsePartitions(hid_t loc_id, const char *itemName,
     }
 
     // check that this group is not "groupMembership"
-    if (string(itemName) != "field3d_group_membership")
+    if (string(itemName) != "field3d_group_membership" &&
+        string(itemName) != "field3d_global_metadata")
     { 
 
       // Get a pointer to the file data structure

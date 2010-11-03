@@ -35,7 +35,7 @@
 
 //----------------------------------------------------------------------------//
 
-#include "gpu_field_test.h"
+#include "cuda_field_test.h"
 
 #include <iostream>
 
@@ -74,8 +74,14 @@ struct TexAccessor< double >
 	double operator()( 	int i, double* phi )
 	{
 #ifdef __CUDA_ARCH__
+#if __CUDA_ARCH__ >= 130
+		// double support only for compute capability >= 1.3
 		int2 v = tex1Dfetch( tex_double, i );
 		return __hiloint2double(v.y, v.x);
+#else
+		// otherwise return 0
+		return 0;
+#endif
 #else
 		assert(0);
 		return 0;
@@ -139,6 +145,16 @@ struct TexAccessor< Field3D::half >
 
 
 namespace nvcc {
+
+	//! does the hardware support double precision?
+	bool hardware_double_support()
+	{
+#if __CUDA_ARCH__ >= 130
+		return true;
+#else
+		return false;
+#endif
+	}
 
 	//----------------------------------------------------------------------------//
 	template< typename INTERP >

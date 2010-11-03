@@ -40,7 +40,6 @@
 
 #include "Field3D/Types.h"
 #include <cutil_math.h>
-#include <OpenEXR/ImathRandom.h>
 #include <iostream>
 #include <vector>
 #include <cassert>
@@ -48,21 +47,9 @@
 #include <thrust/for_each.h>
 #include <omp.h>
 
-#ifdef __GNUC__
-#include <cxxabi.h>
-#endif
-
 #include "Field3D/gpu/Timer.h"
 
-#ifdef NDEBUG
-#define TEST_RESOLUTION 200
-#define PROFILE_SAMPLE_COUNT 16000000
-#define SUPER_SAMPLE_COUNT 3
-#else
-#define TEST_RESOLUTION 73
-#define PROFILE_SAMPLE_COUNT 1600000
-#define SUPER_SAMPLE_COUNT 3
-#endif
+#include "gpu_common.h"
 
 //----------------------------------------------------------------------------//
 // to be replaced by imath once it's cuda compatible
@@ -139,7 +126,7 @@ struct SuperSampleFunctor
 #endif
 #endif
 		// make sure 1d->3d mapping matches 3d->1d mapping
-		kernel_assert( i == fn.getSampler().getIndex( voxelId.x, voxelId.y, voxelId.z ) );
+		//kernel_assert( i == fn.getSampler().getIndex( voxelId.x, voxelId.y, voxelId.z ) );
 
 		typename INTERPOLATOR::sample_type tally(0);
 
@@ -179,47 +166,6 @@ struct SuperSampleFunctor
 	typename INTERPOLATOR::sample_type* r;
 };
 
-typedef Imath::Rand48 Rand;
-
-//----------------------------------------------------------------------------//
-//! dump a vec to std::cout
-template< typename VEC >
-void dump( const VEC& v )
-{
-	typename VEC::const_iterator i( v.begin() ), e( v.end() );
-	for ( ; i != e ; ++i )
-		std::cout << *i << ", ";
-	std::cout << std::endl;
-}
-
-#define LOGLINE { std::cerr << __FILE__ << ": " << __LINE__ << std::endl; }
-
-//----------------------------------------------------------------------------//
-//! generate some random locations based on an input resolution
-template< typename VEC >
-void randomLocations( const Field3D::Box3i& bounds, VEC& dst )
-{
-	Rand rng(1877);
-
-	// random sampling over entire field
-	typename VEC::iterator i( dst.begin() ), e( dst.end() );
-	for ( ; i != e ; ++i )
-		*i = Make_Vec3f(	rng.nextf( bounds.min.x, bounds.max.x ),
-							rng.nextf( bounds.min.y, bounds.max.y ),
-							rng.nextf( bounds.min.z, bounds.max.z ) );
-};
-
-//----------------------------------------------------------------------------//
-//! generate some random values
-template< typename VEC >
-void randomValues( float minv, float maxv, VEC& dst )
-{
-	Rand rng(5171);
-	typename VEC::iterator i( dst.begin() ), e( dst.end() );
-	for ( ; i != e ; ++i )
-		*i = rng.nextf( minv, maxv );
-}
-
 //----------------------------------------------------------------------------//
 //! profile a run on device
 template< typename FUNCTOR >
@@ -236,16 +182,21 @@ inline float RunFunctor( FUNCTOR& f, int count, thrust::device_space_tag )
 //----------------------------------------------------------------------------//
 //! profile a run on the host
 template< typename FUNCTOR >
-inline float RunFunctor( FUNCTOR& f, int sample_count, thrust::host_space_tag )
+inline float RunFunctor( FUNCTOR& f, int sample_count, thrust::host_space_tag, bool use_openmp = true )
 {
 	thrust::counting_iterator< int, thrust::host_space_tag > first( 0 );
 	thrust::counting_iterator< int, thrust::host_space_tag > last( sample_count );
 
 	Field3D::Gpu::CpuTimer t;
-
-	_Pragma( "omp parallel for" )
-	for( int i = 0; i < sample_count; ++i ){
-		f(i);
+	if( use_openmp ){
+		_Pragma( "omp parallel for" )
+		for( int i = 0; i < sample_count; ++i ){
+			f(i);
+		}
+	} else {
+		for( int i = 0; i < sample_count; ++i ){
+			f(i);
+		}
 	}
 
 	return t.elapsed();

@@ -60,6 +60,13 @@ struct GpuFieldTraits< double >
 	typedef double cuda_value_type;
 	typedef double cl_value_type;
 #ifdef NVCC
+
+#ifdef __CUDA_ARCH__
+#if __CUDA_ARCH__ < 130
+#warning "compute capability 1.3 required for double support
+#endif
+#endif
+
 	typedef int2 cuda_tex_value_type;
 	typedef texture< cuda_tex_value_type, 1, cudaReadModeElementType > cuda_tex_type;
 #endif

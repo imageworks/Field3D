@@ -60,6 +60,7 @@ struct SparseFieldSampler : public FieldSampler
 	                    int _blockOrder,
 						Field3D::V3i _blockRes,
 						int* _blockTable,
+						int _emptyValueOffset,
 						cuda_value_type* _phi,
 						int texMemSize )
 	: base( dataResolution, dataWindow )
@@ -69,6 +70,7 @@ struct SparseFieldSampler : public FieldSampler
 	, m_blockXYSize( m_blockRes.x * m_blockRes.y )
 	, m_blockXYZSize( m_blockRes.x * m_blockRes.y * m_blockRes.z )
 	, blockTable( _blockTable )
+	, m_emptyValueOffset( _emptyValueOffset )
 	, phi( _phi )
 	, m_texMemSize( texMemSize )
 	{}
@@ -131,6 +133,12 @@ struct SparseFieldSampler : public FieldSampler
 					int bj,
 					int bk ) const
 	{
+		kernel_assert( bi >= 0 );
+		kernel_assert( bi < m_blockRes.x );
+		kernel_assert( bj >= 0 );
+		kernel_assert( bj < m_blockRes.y );
+		kernel_assert( bk >= 0 );
+		kernel_assert( bk < m_blockRes.z );
 		return bk * m_blockXYSize + bj * m_blockRes.x + bi;
 	}
 
@@ -166,12 +174,14 @@ struct SparseFieldSampler : public FieldSampler
 		getVoxelInBlock( i, j, k, vi, vj, vk );
 		// Get the actual block
 		int block_id = blockId( bi, bj, bk );
+		kernel_assert( block_id >= 0 );
+		kernel_assert( block_id < m_blockRes.x * m_blockRes.y * m_blockRes.z );
 		int bt = blockTable[ block_id ];
 		// Check if block data is allocated
 		if ( bt > 0 )
 			return bt + getIndexInBlock( vi, vj, vk );
 		else
-			return block_id; // return index of empty value
+			return block_id + m_emptyValueOffset; // return index of empty value
 	}
 
 	int allocatedVoxelCount() const
@@ -199,6 +209,7 @@ struct SparseFieldSampler : public FieldSampler
 
 	//! data ptr
 	int* blockTable;
+	int m_emptyValueOffset;
 	cuda_value_type* phi;
 	int m_texMemSize;
 };

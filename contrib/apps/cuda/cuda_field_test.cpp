@@ -35,7 +35,7 @@
 
 //----------------------------------------------------------------------------//
 
-#include "gpu_field_test.h"
+#include "cuda_field_test.h"
 
 // field3d includes
 #include "Field3D/DenseField.h"
@@ -44,14 +44,18 @@
 #include "Field3D/FieldInterp.h"
 
 // field3d gpu includes
-#include "Field3D/gpu/DenseFieldCuda.h"
+#include "Field3D/gpu/DenseFieldGPU.h"
 #include "Field3D/gpu/DenseFieldSamplerCuda.h"
-#include "Field3D/gpu/SparseFieldCuda.h"
+#include "Field3D/gpu/SparseFieldGPU.h"
 #include "Field3D/gpu/SparseFieldSamplerCuda.h"
+
 #include "Field3D/gpu/FieldInterpCuda.h"
 #include "Field3D/gpu/DataAccessorCuda.h"
 #include "Field3D/gpu/Timer.h"
 #include "Field3D/gpu/NameOf.h"
+
+// thrust
+#include <thrust/host_vector.h>
 
 // std includes
 #include <iostream>
@@ -72,6 +76,8 @@ namespace nvcc
 
 	template< typename INTERP >
 	void testTexDevice( thrust::host_vector<Vec3f>& host_p, thrust::host_vector<float>& host_urn, INTERP& interp, bool dump_result );
+
+	bool hardware_double_support();
 }
 
 //----------------------------------------------------------------------------//
@@ -81,7 +87,7 @@ namespace gcc
 
 	//----------------------------------------------------------------------------//
 	template< typename FIELD >
-	void testField3D( thrust::host_vector<Vec3f>& host_p, const FIELD& f, bool dump_result )
+	float testField3D( thrust::host_vector<Vec3f>& host_p, const FIELD& f, bool dump_result )
 	{
 		int sample_count = host_p.size();
 		std::vector<typename FIELD::value_type> host_result( sample_count );
@@ -105,25 +111,31 @@ namespace gcc
 		} else {
 			std::cout << "    FieldInterp:\trandom sample: " << et << std::endl;
 		}
+		return et;
 	}
 
 	//----------------------------------------------------------------------------//
 	template< typename INTERP >
-	void testHost( thrust::host_vector<Vec3f>& host_p, thrust::host_vector<float>& host_urn, INTERP& interp, bool dump_result )
+	float testHost( thrust::host_vector<Vec3f>& host_p, thrust::host_vector<float>& host_urn, INTERP& interp, bool dump_result, bool use_openmp = true )
 	{
+		float et = 0;
 		{
 			Field3D::Gpu::GlobalMemAccessor< typename INTERP::value_type > ac;
 			int sample_count = host_p.size();
 			thrust::host_vector< typename INTERP::sample_type > host_result( sample_count, 0.0f );
 			RandomSampleFunctor< INTERP, Field3D::Gpu::GlobalMemAccessor< typename INTERP::value_type > > f( ac, interp, &host_p[0], &host_result[0] );
 
-			float et = RunFunctor( f, sample_count, thrust::host_space_tag() );
+			et = RunFunctor( f, sample_count, thrust::host_space_tag(), use_openmp );
 
 			if( dump_result ){
 				std::cout << "    gcc host result         : ";
 				dump( host_result );
 			} else {
-				std::cout << "    gcc host:\t\trandom sample: " << et << "\t" << std::flush;
+				if( use_openmp ){
+					std::cout << "    gcc host:\t\trandom sample: " << et << "\t" << std::flush;
+				} else {
+					std::cout << "    gcc host (1 thrd):\trandom sample: " << et << "\t" << std::flush;
+				}
 			}
 		}
 		if( !dump_result )
@@ -133,10 +145,11 @@ namespace gcc
 			thrust::host_vector< typename INTERP::sample_type > host_result( sample_count, 0.0f );
 			SuperSampleFunctor< INTERP, Field3D::Gpu::GlobalMemAccessor< typename INTERP::value_type > > f( ac, interp, &host_urn[0], host_urn.size(), &host_result[0] );
 
-			float et = RunFunctor( f, sample_count, thrust::host_space_tag() );
+			et = RunFunctor( f, sample_count, thrust::host_space_tag(), use_openmp );
 
 			std::cout << "super sample: " << et << std::endl;
 		}
+		return et;
 	}
 }
 
@@ -167,6 +180,10 @@ void testField()
 	thrust::host_vector<float> host_urn( 9999991 );
 	randomValues( 0, 1, host_urn );
 
+	//----------------------------------------------------------------------------//
+	// verbose run
+	//----------------------------------------------------------------------------//
+
 	int sample_count = 8;
 	bool dump_result = true;
 	thrust::host_vector<Vec3f> host_p( sample_count );
@@ -189,6 +206,10 @@ void testField()
 		}
 	}
 
+	//----------------------------------------------------------------------------//
+	// profiling run
+	//----------------------------------------------------------------------------//
+
 	sample_count = PROFILE_SAMPLE_COUNT;
 	std::cout << "  profiling run (" << sample_count / 1000000 << "M samples, wall clock seconds)...\n";
 
@@ -203,6 +224,7 @@ void testField()
 
 		boost::shared_ptr< typename FieldType::linear_interp_type > interp = field->getLinearInterpolatorHost();
 		if( interp != NULL ){
+			gcc::testHost( host_p, host_urn, *interp, dump_result, false );
 			gcc::testHost( host_p, host_urn, *interp, dump_result );
 			nvcc::testHost( host_p, host_urn, *interp, dump_result );
 		}
@@ -226,11 +248,17 @@ int main( 	int argc,
 	std::cout << "\ntesting using " << threadCount() << " threads" << std::endl;
 	std::cout << std::fixed << std::setprecision(6);
 
-	testField< Field3D::Gpu::DenseFieldCuda< double > >();
+	if( nvcc::hardware_double_support() )
+		testField< Field3D::Gpu::DenseFieldCuda< double > >();
+	else
+		std::cout << "skipping " << Field3D::Gpu::nameOf< Field3D::Gpu::DenseFieldCuda< double > >() << std::endl;
 	testField< Field3D::Gpu::DenseFieldCuda< float > >();
 	testField< Field3D::Gpu::DenseFieldCuda< Field3D::half > >();
 
-	testField< Field3D::Gpu::SparseFieldCuda< double > >();
+	if( nvcc::hardware_double_support() )
+		testField< Field3D::Gpu::SparseFieldCuda< double > >();
+	else
+		std::cout << "skipping " << Field3D::Gpu::nameOf< Field3D::Gpu::SparseFieldCuda< double > >() << std::endl;
 	testField< Field3D::Gpu::SparseFieldCuda< float > >();
 	testField< Field3D::Gpu::SparseFieldCuda< Field3D::half > >();
 	return 0;

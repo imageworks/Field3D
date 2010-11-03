@@ -45,7 +45,6 @@
 // cuda includes
 #include <cuda.h>
 #include <cutil_math.h>
-#include <device_functions.h>
 
 // std includes
 #include <stdexcept>

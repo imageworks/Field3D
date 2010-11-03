@@ -38,6 +38,8 @@
 #ifndef _INCLUDED_Field3D_gpu_IteratorTraits_H_
 #define _INCLUDED_Field3D_gpu_IteratorTraits_H_
 
+#include <vector>
+
 #include "Field3D/gpu/ns.h"
 
 FIELD3D_GPU_NAMESPACE_OPEN
@@ -56,6 +58,7 @@ struct cuda_tag {};
 //! A flag to identify OpenCL iterators etc.
 struct opencl_tag {};
 
+#ifdef INCLUDE_FIELD3D_CUDA
 //----------------------------------------------------------------------------//
 //! traits for a cuda iterator
 template< typename T >
@@ -63,7 +66,9 @@ struct IteratorTraits< thrust::detail::normal_iterator< thrust::device_ptr< T > 
 {
 	typedef cuda_tag type;
 };
+#endif
 
+#ifdef INCLUDE_FIELD3D_OPENCL
 //----------------------------------------------------------------------------//
 //! traits for an OpenCL iterator
 template< typename T >
@@ -71,6 +76,7 @@ struct IteratorTraits< IteratorCL<T> >
 {
 	typedef opencl_tag type;
 };
+#endif
 
 //----------------------------------------------------------------------------//
 //! traits for an std::vector const_iterator
@@ -87,6 +93,9 @@ struct IteratorTraits< __gnu_cxx::__normal_iterator<T*, std::vector<T, std::allo
 {
 	typedef host_tag type;
 };
+
+
+// TODO: add raw pointer traits (may need some guard to differentiate host/device)
 
 FIELD3D_GPU_NAMESPACE_HEADER_CLOSE
 

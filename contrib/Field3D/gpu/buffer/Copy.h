@@ -38,7 +38,9 @@
 #ifndef _INCLUDED_Field3D_gpu_Copy_H_
 #define _INCLUDED_Field3D_gpu_Copy_H_
 
+#ifdef INCLUDE_FIELD3D_CUDA
 #include <thrust/device_vector.h>
+#endif
 
 #include "Field3D/gpu/ns.h"
 #include "Field3D/gpu/buffer/IteratorTraits.h"
@@ -73,6 +75,7 @@ OutputIterator copy( 	InputIterator first,
 	return std::copy( first, last, result );
 }
 
+#ifdef INCLUDE_FIELD3D_CUDA
 //----------------------------------------------------------------------------//
 //! Copy from host to cuda buffer
 template< typename InputIterator, typename OutputIterator >
@@ -112,7 +115,9 @@ OutputIterator copy( 	InputIterator first,
 	cudaMemcpy( &( *result ), thrust::raw_pointer_cast( &( *first ) ), sizeof(typename OutputIterator::value_type) * n, cudaMemcpyDeviceToHost );
 	return result + n;
 }
+#endif
 
+#ifdef INCLUDE_FIELD3D_OPENCL
 //----------------------------------------------------------------------------//
 //! Copy from host to OpenCL buffer
 template< typename InputIterator, typename OutputIterator >
@@ -144,6 +149,7 @@ OutputIterator copy( 	InputIterator first,
 
 	first.vec()->getValue( first.index(), last.index(), result );
 }
+#endif
 
 FIELD3D_GPU_NAMESPACE_HEADER_CLOSE
 

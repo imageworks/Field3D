@@ -1,7 +1,7 @@
 //----------------------------------------------------------------------------//
 
 /*
- * Copyright (c) 2009 Sony Pictures Imageworks
+ * Copyright (c) 2009 Sony Pictures Imageworks Inc
  *
  * All rights reserved.
  *
@@ -35,54 +35,24 @@
 
 //----------------------------------------------------------------------------//
 
-#include "gpu_field_test.h"
+#ifndef _INCLUDED_Field3D_gpu_BufferHost_H_
+#define _INCLUDED_Field3D_gpu_BufferHost_H_
 
-#include "Field3D/gpu/DenseFieldCuda.h"
-#include "Field3D/gpu/DenseFieldSamplerCuda.h"
+#include "Field3D/gpu/buffer/Buffer.h"
+#include <vector>
 
-#include "Field3D/gpu/SparseFieldCuda.h"
-#include "Field3D/gpu/SparseFieldSamplerCuda.h"
+#include "Field3D/gpu/ns.h"
 
-#include "Field3D/gpu/NameOf.h"
-
-//----------------------------------------------------------------------------//
-namespace nvcc
-{
-	template< typename Interp >
-	void testDevice( const Field3D::Box3i& dataWindow, Interp& interp );
-}
+FIELD3D_GPU_NAMESPACE_OPEN
 
 //----------------------------------------------------------------------------//
-//! run a test on a field
-template< typename FieldType >
-void testField()
+//! A Host buffer (for now a std::vector)
+template< typename T >
+struct BufferHost: public Buffer<T>, public std::vector<T>
 {
-	std::cout << "testing a field of type " << Field3D::Gpu::nameOf< FieldType > () << std::endl;
+	typedef T value_type;
+};
 
-	// create a test field
-	boost::intrusive_ptr< FieldType > field( new FieldType );
-	field->name = "hello";
-	field->attribute = "world";
-	field->setSize( Field3D::V3i( TEST_RESOLUTION, TEST_RESOLUTION, TEST_RESOLUTION ) );
+FIELD3D_GPU_NAMESPACE_HEADER_CLOSE
 
-	// fill with random values
-	randomValues( -10.0f, 10.0f, *field );
-	field->setStrMetadata( "my_attribute", "my_value" );
-
-	//! get a GPU interpolator for the field
-	boost::shared_ptr< typename FieldType::linear_interp_type > interp = field->getLinearInterpolatorDevice();
-	nvcc::testDevice( field->dataWindow(), *interp );
-
-	std::cout << std::endl;
-}
-
-//----------------------------------------------------------------------------//
-//! entry point
-int main( 	int argc,
-			char **argv )
-{
-	testField< Field3D::Gpu::DenseFieldCuda< float > > ();
-	testField< Field3D::Gpu::SparseFieldCuda< float > > ();
-
-	return 0;
-}
+#endif // Include guard

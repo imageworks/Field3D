@@ -35,50 +35,54 @@
 
 //----------------------------------------------------------------------------//
 
-#include "gpu_field_test.h"
+#include "cuda_field_test.h"
 
-#include "Field3D/gpu/Traits.h"
-#include "Field3D/gpu/DataAccessorCuda.h"
-#include "Field3D/gpu/FieldInterpCuda.h"
+#include "Field3D/gpu/DenseFieldGPU.h"
 #include "Field3D/gpu/DenseFieldSamplerCuda.h"
+
+#include "Field3D/gpu/SparseFieldGPU.h"
 #include "Field3D/gpu/SparseFieldSamplerCuda.h"
 
-#include "Field3D/Types.h"
+#include "Field3D/gpu/NameOf.h"
 
-#include <thrust/device_vector.h>
-#include <thrust/host_vector.h>
-
-using namespace Field3D::Gpu;
-
+//----------------------------------------------------------------------------//
 namespace nvcc
 {
 	template< typename Interp >
-	void testDevice( const Field3D::Box3i& dataWindow, Interp& interp )
-	{
-		GlobalMemAccessor< typename Interp::value_type > ac;
+	void testDevice( const Field3D::Box3i& dataWindow, Interp& interp );
+}
 
-		int sample_count = 10;
-		// set up some random locations
-		thrust::host_vector< Vec3f > host_p( sample_count );
-		randomLocations( dataWindow, host_p );
-		// copy to device
-		thrust::device_vector< Vec3f > device_p = host_p;
-		// allocate result vector
-		thrust::device_vector< typename Interp::sample_type > device_result( sample_count, 0.0f );
+//----------------------------------------------------------------------------//
+//! run a test on a field
+template< typename FieldType >
+void testField()
+{
+	std::cout << "testing a field of type " << Field3D::Gpu::nameOf< FieldType > () << std::endl;
 
-		// make our user defined functor
-		RandomSampleFunctor< Interp, GlobalMemAccessor< typename Interp::value_type > > f( ac, interp, thrust::raw_pointer_cast( &device_p[ 0 ] ),
-				thrust::raw_pointer_cast( &device_result[ 0 ] ) );
-		// execute it
-		RunFunctor( f, sample_count, thrust::device_space_tag() );
+	// create a test field
+	boost::intrusive_ptr< FieldType > field( new FieldType );
+	field->name = "hello";
+	field->attribute = "world";
+	field->setSize( Field3D::V3i( TEST_RESOLUTION, TEST_RESOLUTION, TEST_RESOLUTION ) );
 
-		// copy the result back to host for logging
-		thrust::host_vector< typename Interp::sample_type > host_result = device_result;
-		std::cout << "gpu result: ";
-		dump( host_result );
-	}
+	// fill with random values
+	randomValues( -10.0f, 10.0f, *field );
+	field->setStrMetadata( "my_attribute", "my_value" );
 
-	// explicit instantiation for different field types
-	template void testDevice< LinearFieldInterp< DenseFieldSampler< float, float > > > ( const Field3D::Box3i& dataWindow, LinearFieldInterp< DenseFieldSampler< float, float > >& );
-	template void testDevice< LinearFieldInterp< SparseFieldSampler< float, float > > > ( const Field3D::Box3i& dataWindow, LinearFieldInterp< SparseFieldSampler< float, float > >& );
+	//! get a GPU interpolator for the field
+	boost::shared_ptr< typename FieldType::linear_interp_type > interp = field->getLinearInterpolatorDevice();
+	nvcc::testDevice( field->dataWindow(), *interp );
+
+	std::cout << std::endl;
+}
+
+//----------------------------------------------------------------------------//
+//! entry point
+int main( 	int argc,
+			char **argv )
+{
+	testField< Field3D::Gpu::DenseFieldCuda< float > > ();
+	testField< Field3D::Gpu::SparseFieldCuda< float > > ();
+
+	return 0;
 }

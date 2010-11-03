@@ -30,15 +30,25 @@ SET( pkgs_LIBRARIES ${pkgs_LIBRARIES} Imath Half )
 #------------------------------------------------------------------------------
 
 FIND_PACKAGE(CUDA)
+
+# Cuda SDK (for cutil)
 INCLUDE_DIRECTORIES ( $ENV{NVSDKCUDA_ROOT}/C/common/inc )
+
+# Thrust
 INCLUDE_DIRECTORIES ( $ENV{THRUST_ROOT} )
 
-# double support
-SET( CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} "-arch=sm_13" )
-# fermi build
-#SET( CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} "-arch=sm_20" )
+# target architecture
+IF( NOT DEFINED ENV{FIELD3D_CUDA_ARCH} )
+  MESSAGE( FATAL_ERROR "Environment variable FIELD3D_CUDA_ARCH needs to be set (eg sm_11, sm_13, sm_20 etc)" )
+ENDIF( NOT DEFINED ENV{FIELD3D_CUDA_ARCH} )
+MESSAGE( STATUS "FIELD3D_CUDA_ARCH: $ENV{FIELD3D_CUDA_ARCH}" )
+SET( CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} "-arch=$ENV{FIELD3D_CUDA_ARCH}" )
+
 # verbose
 #SET( CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} "--ptxas-options=-v" )
+
+#indicate that we want Cuda code
+ADD_DEFINITIONS( -DINCLUDE_FIELD3D_CUDA )
 
 #------------------------------------------------------------------------------
 # Boost
@@ -57,34 +67,26 @@ SET( CMAKE_CXX_FLAGS "-fopenmp")
 
 #------------------------------------------------------------------------------
 
-INCLUDE_DIRECTORIES ( . )
+INCLUDE_DIRECTORIES ( .. )
 INCLUDE_DIRECTORIES ( ../.. )
+INCLUDE_DIRECTORIES ( ../../.. )
 
 # ----------------------------------------------------------------------------
 
-CUDA_ADD_EXECUTABLE ( gpu_simple
-	gpu_simple.cu
-	gpu_simple.cpp
+CUDA_ADD_EXECUTABLE ( field3d_cuda_simple
+	../cuda_simple.cu
+	../cuda_simple.cpp
 )
-TARGET_LINK_LIBRARIES ( gpu_simple ${pkgs_LIBRARIES} )
-INSTALL ( TARGETS gpu_simple DESTINATION . )
+TARGET_LINK_LIBRARIES ( field3d_cuda_simple ${pkgs_LIBRARIES} )
+INSTALL ( TARGETS field3d_cuda_simple DESTINATION . )
 
 # ----------------------------------------------------------------------------
 
-CUDA_ADD_EXECUTABLE ( gpu_field_test
-	gpu_field_test.cu
-	gpu_field_test.cpp
+CUDA_ADD_EXECUTABLE ( field3d_cuda_test
+	../cuda_field_test.cu
+	../cuda_field_test.cpp
 )
-TARGET_LINK_LIBRARIES ( gpu_field_test ${pkgs_LIBRARIES} )
-INSTALL ( TARGETS gpu_field_test DESTINATION . )
-
-# ----------------------------------------------------------------------------
-
-#CUDA_ADD_EXECUTABLE ( cl_test
-#	cl_test.cu
-#	cl_test.cpp
-#)
-#TARGET_LINK_LIBRARIES ( cl_test ${pkgs_LIBRARIES} )
-#INSTALL ( TARGETS cl_test DESTINATION . )
+TARGET_LINK_LIBRARIES ( field3d_cuda_test ${pkgs_LIBRARIES} )
+INSTALL ( TARGETS field3d_cuda_test DESTINATION . )
 
 # ----------------------------------------------------------------------------

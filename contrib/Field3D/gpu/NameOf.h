@@ -38,6 +38,10 @@
 #ifndef _INCLUDED_Field3D_gpu_NameOf_H_
 #define _INCLUDED_Field3D_gpu_NameOf_H_
 
+#ifdef __GNUC__
+#include <cxxabi.h>
+#endif
+
 #include "Field3D/gpu/ns.h"
 
 FIELD3D_GPU_NAMESPACE_OPEN

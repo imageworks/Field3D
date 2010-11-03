@@ -38,6 +38,8 @@
 #ifndef _INCLUDED_Field3D_gpu_BufferCL_H_
 #define _INCLUDED_Field3D_gpu_BufferCL_H_
 
+#define __CL_ENABLE_EXCEPTIONS
+
 #include "Field3D/gpu/CL/cl.hpp"
 #include "Field3D/gpu/ns.h"
 

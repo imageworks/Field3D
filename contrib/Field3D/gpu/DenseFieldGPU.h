@@ -42,19 +42,18 @@
 #error "This file is intended for GCC and isn't compatible with NVCC compiler due to Field3D includes"
 #endif
 
+#include "Field3D/gpu/Traits.h"
 #include "Field3D/gpu/buffer/Copy.h"
 
-#include "Field3D/gpu/buffer/Dump.h"
+#ifdef INCLUDE_FIELD3D_CUDA
+#include "Field3D/gpu/FieldInterpCuda.h"
 #include "Field3D/gpu/buffer/BufferCuda.h"
-
+#endif
 
 #include "Field3D/DenseField.h"
 #include "Field3D/Types.h"
+
 #include "Field3D/gpu/ns.h"
-#include "Field3D/gpu/FieldInterpCuda.h"
-
-#include <thrust/device_vector.h>
-
 
 FIELD3D_GPU_NAMESPACE_OPEN
 
@@ -75,6 +74,7 @@ struct DenseFieldCuda : public DenseField< Data_T >
 	typedef LinearFieldInterp< sampler_type > linear_interp_type;
 	typedef DenseField< Data_T > base;
 
+#ifdef INCLUDE_FIELD3D_CUDA
 	//----------------------------------------------------------------------------//
 	//! Manufacture an interpolator for device
 	boost::shared_ptr< linear_interp_type > getLinearInterpolatorDevice() const
@@ -94,6 +94,7 @@ struct DenseFieldCuda : public DenseField< Data_T >
 		return boost::shared_ptr< linear_interp_type >( new linear_interp_type( sampler_type( base::dataResolution(), base::dataWindow(),
 				(cuda_value_type*) &DenseField< Data_T >::m_data[ 0 ] ) ) );
 	}
+#endif
 
 	//----------------------------------------------------------------------------//
 	//! Transfer data from host to device
@@ -105,7 +106,9 @@ struct DenseFieldCuda : public DenseField< Data_T >
 	}
 
 private:
+#ifdef INCLUDE_FIELD3D_CUDA
 	mutable BufferCuda< Data_T > m_bufferCuda;
+#endif
 };
 
 FIELD3D_GPU_NAMESPACE_HEADER_CLOSE

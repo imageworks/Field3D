@@ -1,7 +1,7 @@
 //----------------------------------------------------------------------------//
 
 /*
- * Copyright (c) 2009 Sony Pictures Imageworks Inc
+ * Copyright (c) 2009 Sony Pictures Imageworks
  *
  * All rights reserved.
  *
@@ -35,59 +35,77 @@
 
 //----------------------------------------------------------------------------//
 
-#ifndef _INCLUDED_Field3D_gpu_DataAccessorCuda_H_
-#define _INCLUDED_Field3D_gpu_DataAccessorCuda_H_
+#ifndef _INCLUDED_Field3D_gpu_common_H_
+#define _INCLUDED_Field3D_gpu_common_H_
 
-// field3d includes
-#include "Field3D/gpu/ns.h"
+#ifdef INCLUDE_FIELD3D_OPENCL
+#warning "Including Field3D OpenCL code"
+#endif
+
+#ifdef INCLUDE_FIELD3D_CUDA
+#warning "Including Field3D Cuda code"
+#endif
+
+#include <iostream>
 #include "Field3D/Types.h"
+#include <OpenEXR/ImathRandom.h>
+typedef Imath::Rand48 Rand;
 
-// cuda includes
-#include <host_defines.h>
-#include <device_functions.h>
-
-FIELD3D_GPU_NAMESPACE_OPEN
-
-//----------------------------------------------------------------------------//
-//! 1d access to data
-struct DataAccessor
-{
-};
-
-//----------------------------------------------------------------------------//
-//! access data directly from cuda global memory, or host memory
-template< typename T >
-struct GlobalMemAccessor: public DataAccessor
-{
-	inline __host__  __device__
-	T operator()( 	int i, T* phi )
-	{
-		return phi[ i ];
-	}
-};
-
-//----------------------------------------------------------------------------//
-//! specialization of GlobalMemAccessor for half float
-template< >
-struct GlobalMemAccessor< Field3D::half >
-{
-	inline __host__  __device__
-	float operator()( 	int i,
-						short* phi )
-	{
-#ifdef __CUDA_ARCH__
-#if CUDART_VERSION < 3010
-#error "requires cuda version >= 3.1 for half float intrinsics"
-#endif
-		// half to float intrinsic is only available in device code
-		return __half2float( phi[i] );
+#ifdef NDEBUG
+#define TEST_RESOLUTION 200
+#define PROFILE_SAMPLE_COUNT 8000000
+#define SUPER_SAMPLE_COUNT 3
 #else
-		// ILM's half to float conversion is only available in host code
-		return *reinterpret_cast< half* > ( &phi[ i ] );
+#define TEST_RESOLUTION 73
+#define PROFILE_SAMPLE_COUNT 800000
+#define SUPER_SAMPLE_COUNT 3
 #endif
+
+
+//----------------------------------------------------------------------------//
+//! just for debugging
+#define LOGLINE { std::cerr << __FILE__ << ": " << __LINE__ << std::endl; }
+
+//----------------------------------------------------------------------------//
+//! dump a vec to std::cout
+template< typename VEC >
+void dump( const VEC& v )
+{
+	typename VEC::const_iterator i( v.begin() ), e( v.end() );
+	for ( ; i != e ; ++i )
+		std::cout << *i << ", ";
+	std::cout << std::endl;
+}
+
+//----------------------------------------------------------------------------//
+//! generate some random values
+template< typename VEC >
+void randomValues( float minv, float maxv, VEC& dst )
+{
+	Rand rng(5171);
+	typename VEC::iterator i( dst.begin() ), e( dst.end() );
+	for ( ; i != e ; ++i )
+		*i = rng.nextf( minv, maxv );
+}
+
+//----------------------------------------------------------------------------//
+//! generate some random locations based on an input resolution
+template< typename VEC >
+void randomLocations(	const Field3D::Box3i& bounds,
+						VEC& dst )
+{
+	Rand rng( 1877 );
+	typename VEC::value_type v;
+
+	// random sampling over entire field
+	typename VEC::iterator i( dst.begin() ), e( dst.end() );
+	for ( ; i != e ; ++i )
+	{
+		v.x = rng.nextf( bounds.min.x, bounds.max.x );
+		v.y = rng.nextf( bounds.min.y, bounds.max.y );
+		v.z = rng.nextf( bounds.min.z, bounds.max.z );
+		*i = v;
 	}
-};
+}
 
-FIELD3D_GPU_NAMESPACE_HEADER_CLOSE
-
-#endif // Include guard
+#endif  // Include guard

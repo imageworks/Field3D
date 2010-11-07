@@ -35,9 +35,12 @@ CMAKE_MINIMUM_REQUIRED( VERSION 2.8 )
 
 PROJECT ( field3d )
 
+set( CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJECT_SOURCE_DIR}/cmake )
+
 FIND_PACKAGE (Doxygen)
 FIND_PACKAGE (HDF5)
-FIND_PACKAGE( Boost COMPONENTS thread )
+FIND_PACKAGE( Boost COMPONENTS thread program_options)
+FIND_PACKAGE (ILMBase)
 
 # Duplicate the export directory to Field3D
 FILE ( REMOVE_RECURSE ${CMAKE_HOME_DIRECTORY}/Field3D)
@@ -47,15 +50,14 @@ FILE ( COPY export/ DESTINATION ${CMAKE_HOME_DIRECTORY}/Field3D)
 INCLUDE_DIRECTORIES ( . )
 INCLUDE_DIRECTORIES ( src )
 INCLUDE_DIRECTORIES ( export )
-INCLUDE_DIRECTORIES ( $ENV{ILMBASE_ROOT}/include )
-INCLUDE_DIRECTORIES ( $ENV{ILMBASE_ROOT}/include/OpenEXR )
+INCLUDE_DIRECTORIES ( ${ILMBASE_INCLUDE_DIRS} )
 INCLUDE_DIRECTORIES ( ${HDF5_INCLUDE_DIRS} )
 INCLUDE_DIRECTORIES ( ${Boost_INCLUDE_DIR} )
 
 # link directories
 LINK_DIRECTORIES ( ${Boost_LIBRARY_DIRS} )
 LINK_DIRECTORIES ( ${HDF5_LIBRARY_DIRS} )
-LINK_DIRECTORIES ( $ENV{ILMBASE_ROOT}/lib )
+LINK_DIRECTORIES ( ${ILMBASE_LIBRARY_DIRS} )
 
 IF ( LINUX )
   ADD_DEFINITIONS ( -fPIC -m64 -DLINUX -DREQUIRE_IOSTREAM -Wno-invalid-offsetof )
@@ -95,12 +97,12 @@ TARGET_LINK_LIBRARIES ( unitTest
   ${BOOST_LIBRARIES}
   )
 
-# field3d - access_speed
-ADD_EXECUTABLE ( access_speed
-  apps/access_speed/main.cpp
+# field3d - f3dinfo
+ADD_EXECUTABLE ( f3dinfo
+  apps/f3dinfo/main.cpp
   )
 
-TARGET_LINK_LIBRARIES ( access_speed
+TARGET_LINK_LIBRARIES ( f3dinfo
   field3d
   ${HDF5_LIBRARIES}
   z
@@ -109,12 +111,12 @@ TARGET_LINK_LIBRARIES ( access_speed
   IlmThread
   Imath
   dl
-  ${BOOST_LIBRARIES}
+  ${Boost_LIBRARIES}
   )
 
 # field3d - sparse_field_io
 ADD_EXECUTABLE ( sparse_field_io
-  apps/sparse_field_io/main.cpp
+  apps/sample_code/sparse_field_io/main.cpp
   )
 
 TARGET_LINK_LIBRARIES ( sparse_field_io
@@ -126,7 +128,7 @@ TARGET_LINK_LIBRARIES ( sparse_field_io
   IlmThread
   Imath
   dl
-  ${BOOST_LIBRARIES}
+  ${Boost_LIBRARIES}
   )
 
 # field3d - read
@@ -143,7 +145,7 @@ TARGET_LINK_LIBRARIES ( read
   IlmThread
   Imath
   dl
-  ${BOOST_LIBRARIES}
+  ${Boost_LIBRARIES}
   )
 
 # field3d - mixed_types
@@ -160,7 +162,7 @@ TARGET_LINK_LIBRARIES ( mixed_types
   IlmThread
   Imath
   dl
-  ${BOOST_LIBRARIES}
+  ${Boost_LIBRARIES}
   )
 
 # field3d - create_and_write
@@ -177,7 +179,7 @@ TARGET_LINK_LIBRARIES ( create_and_write
   IlmThread
   Imath
   dl
-  ${BOOST_LIBRARIES}
+  ${Boost_LIBRARIES}
   )
 
 IF (DOXYGEN_FOUND)

@@ -86,7 +86,7 @@ ADD_EXECUTABLE ( unitTest
   )
 
 TARGET_LINK_LIBRARIES ( unitTest
-  field3d
+  Field3D
   ${HDF5_LIBRARIES}
   z
   Iex
@@ -103,7 +103,7 @@ ADD_EXECUTABLE ( f3dinfo
   )
 
 TARGET_LINK_LIBRARIES ( f3dinfo
-  field3d
+  Field3D
   ${HDF5_LIBRARIES}
   z
   Iex
@@ -120,7 +120,7 @@ ADD_EXECUTABLE ( sparse_field_io
   )
 
 TARGET_LINK_LIBRARIES ( sparse_field_io
-  field3d
+  Field3D
   ${HDF5_LIBRARIES}
   z
   Iex
@@ -137,7 +137,7 @@ ADD_EXECUTABLE ( read
   )
 
 TARGET_LINK_LIBRARIES ( read
-  field3d
+  Field3D
   ${HDF5_LIBRARIES}
   z
   Iex
@@ -154,7 +154,7 @@ ADD_EXECUTABLE ( mixed_types
   )
 
 TARGET_LINK_LIBRARIES ( mixed_types
-  field3d
+  Field3D
   ${HDF5_LIBRARIES}
   z
   Iex
@@ -171,7 +171,7 @@ ADD_EXECUTABLE ( create_and_write
   )
 
 TARGET_LINK_LIBRARIES ( create_and_write
-  field3d
+  Field3D
   ${HDF5_LIBRARIES}
   z
   Iex
@@ -191,7 +191,7 @@ IF (DOXYGEN_FOUND)
 ENDIF (DOXYGEN_FOUND)
 
 INSTALL ( TARGETS
-  field3d
+  Field3D
   DESTINATION lib
 )
 

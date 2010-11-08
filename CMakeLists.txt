@@ -63,7 +63,7 @@ IF ( LINUX )
   ADD_DEFINITIONS ( -fPIC -m64 -DLINUX -DREQUIRE_IOSTREAM -Wno-invalid-offsetof )
 ENDIF ( LINUX )
 
-ADD_LIBRARY ( field3d 
+ADD_LIBRARY ( Field3D 
   src/ClassFactory.cpp
   src/DenseFieldIO.cpp
   src/Field3DFile.cpp

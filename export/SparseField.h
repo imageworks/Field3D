@@ -200,6 +200,12 @@ public:
   //! Returns whether a block index is valid
   bool blockIndexIsValid(int bi, int bj, int bk) const;
 
+  //! access to block data
+  Data_T* blockData(int bi, int bj, int bk);
+
+  //! const access to block data
+  const Data_T* blockData(int bi, int bj, int bk) const;
+
   //! Returns the resolution of the block array
   V3i blockRes() const;
 
@@ -950,6 +956,22 @@ bool SparseField<Data_T>::blockIndexIsValid(int bi, int bj, int bk) const
 {
   return bi >= 0 && bj >= 0 && bk >= 0 && 
     bi < m_blockRes.x && bj < m_blockRes.y && bk < m_blockRes.z;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+Data_T* SparseField<Data_T>::blockData(int bi, int bj, int bk)
+{
+  return &m_blocks[blockId(bi, bj, bk)].dataRef();
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+const Data_T* SparseField<Data_T>::blockData(int bi, int bj, int bk) const
+{
+  return &m_blocks[blockId(bi, bj, bk)].dataRef();
 }
 
 //----------------------------------------------------------------------------//

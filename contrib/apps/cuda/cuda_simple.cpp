@@ -44,6 +44,7 @@
 #include "Field3D/gpu/SparseFieldSamplerCuda.h"
 
 #include "Field3D/gpu/NameOf.h"
+#include "Field3D/gpu/Traits.h"
 
 //----------------------------------------------------------------------------//
 namespace nvcc
@@ -57,10 +58,13 @@ namespace nvcc
 template< typename FieldType >
 void testField()
 {
-	std::cout << "testing a field of type " << Field3D::Gpu::nameOf< FieldType > () << std::endl;
+	// identify the corresponding GPU field type
+	typedef typename Field3D::Gpu::GpuFieldType< FieldType >::type FieldTypeGPU;
 
-	// create a test field
-	boost::intrusive_ptr< FieldType > field( new FieldType );
+	std::cout << "testing a field of type " << Field3D::Gpu::nameOf< FieldTypeGPU > () << std::endl;
+
+	// create a test Field3D field
+	typename FieldType::Ptr field( new FieldType );
 	field->name = "hello";
 	field->attribute = "world";
 	field->setSize( Field3D::V3i( TEST_RESOLUTION, TEST_RESOLUTION, TEST_RESOLUTION ) );
@@ -69,8 +73,12 @@ void testField()
 	randomValues( -10.0f, 10.0f, *field );
 	field->setStrMetadata( "my_attribute", "my_value" );
 
+	// create a GPU field and attach it to the field3d field
+	typename FieldTypeGPU::Ptr gpu_field( new FieldTypeGPU );
+	gpu_field->setField( field );
+
 	//! get a GPU interpolator for the field
-	boost::shared_ptr< typename FieldType::linear_interp_type > interp = field->getLinearInterpolatorDevice();
+	typename FieldTypeGPU::LinearInterpPtr interp = gpu_field->getLinearInterpolatorDevice();
 	nvcc::testDevice( field->dataWindow(), *interp );
 
 	std::cout << std::endl;
@@ -81,8 +89,8 @@ void testField()
 int main( 	int argc,
 			char **argv )
 {
-	testField< Field3D::Gpu::DenseFieldCuda< float > > ();
-	testField< Field3D::Gpu::SparseFieldCuda< float > > ();
+	testField< Field3D::DenseField<float> > ();
+	testField< Field3D::SparseField< float > > ();
 
 	return 0;
 }

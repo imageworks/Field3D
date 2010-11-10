@@ -35,8 +35,8 @@
 
 //----------------------------------------------------------------------------//
 
-#ifndef _INCLUDED_Field3D_gpu_SparseFieldCuda_H_
-#define _INCLUDED_Field3D_gpu_SparseFieldCuda_H_
+#ifndef _INCLUDED_Field3D_gpu_SparseFieldGPU_H_
+#define _INCLUDED_Field3D_gpu_SparseFieldGPU_H_
 
 #ifdef NVCC
 #error "This file is intended for GCC and isn't compatible with NVCC compiler due to Field3D includes"
@@ -89,14 +89,30 @@ struct EveryBlockFunctor : BlockFunctor
 //----------------------------------------------------------------------------//
 //! Cuda layer for SparseFields
 template< typename Data_T >
-struct SparseFieldCuda : public SparseField< Data_T >
+struct SparseFieldGPU : public RefBase
 {
+	typedef boost::intrusive_ptr< SparseFieldGPU > Ptr;
 	typedef typename GpuFieldTraits< Data_T >::value_type value_type;
 	typedef typename GpuFieldTraits< Data_T >::cuda_value_type cuda_value_type;
 	typedef typename GpuFieldTraits< Data_T >::interpolation_type interpolation_type;
 	typedef SparseFieldSampler< value_type, interpolation_type > sampler_type;
-	typedef LinearFieldInterp< sampler_type > linear_interp_type;
-	typedef SparseField< Data_T > base;
+	typedef LinearFieldInterp< sampler_type > LinearInterp;
+	typedef boost::shared_ptr< LinearInterp > LinearInterpPtr;
+
+	typedef SparseField< Data_T > field3d_type;
+	typedef typename field3d_type::Ptr field_ptr;
+
+	//! set the Field3D field
+	field_ptr getField()
+	{
+		return m_field;
+	}
+
+	//! access the Field3D field
+	void setField( field_ptr& ptr )
+	{
+		m_field = ptr;
+	}
 
 	/*! host to device transfer for blocks
 	 *  \note There is an index table and data buffer, with the data buffer
@@ -111,7 +127,7 @@ struct SparseFieldCuda : public SparseField< Data_T >
 		std::cout << "mem required: " << gpu_cache_element_count * sizeof(Data_T) / 1000000 << "Mb for " << gpu_cache_element_count << " elements "
 				<< std::endl;
 */
-		const V3i br = base::blockRes();
+		const V3i br = m_field->blockRes();
 		const int block_count = br.x * br.y * br.z; // total block count
 
 		buffer.resize( gpu_cache_element_count );
@@ -125,22 +141,24 @@ struct SparseFieldCuda : public SparseField< Data_T >
 		// allow room for empty values
 		//int write_index = block_count;
 		int write_index = 0;
-		int bs = base::blockSize();
+		int bs = m_field->blockSize();
 		int block_element_count = bs * bs * bs;
 
-		typename base::block_iterator bi( base::blockBegin() ), be( base::blockEnd() );
+		typename field3d_type::block_iterator bi( m_field->blockBegin() ), be( m_field->blockEnd() );
 		for ( ; bi != be ; ++bi, ++i )
 		{
-			const typename base::Block& block = base::m_blocks[ base::blockId( bi.x, bi.y, bi.z ) ];
-			host_empty_values[ i ] = block.emptyValue;
-			if( block.isAllocated && bf( *this, bi.x, bi.y, bi.z ) ){
+			host_empty_values[ i ] = m_field->getBlockEmptyValue( bi.x, bi.y, bi.z );
+			size_t block_element_count = m_field->blockSize() * m_field->blockSize() * m_field->blockSize();
+			if( m_field->blockIsAllocated( bi.x, bi.y, bi.z ) && bf( *this, bi.x, bi.y, bi.z ) ){
+				const Data_T* ptr = m_field->blockData( bi.x, bi.y, bi.z );
 				host_block_table[ i ] = write_index;
 				assert( block.data.size() == block_element_count );
 //				std::cout << "writing to index: " << write_index << " of " << gpu_cache_element_count << std::endl;
-				Field3D::Gpu::copy( block.data.begin(), block.data.end(), buffer.begin() + write_index );
+				Field3D::Gpu::copy( ptr, ptr + block_element_count, buffer.begin() + write_index );
 				write_index += block_element_count;
 			}
 		}
+
 		assert( i == block_count );
 
 		emptyValueOffset = write_index;
@@ -170,19 +188,19 @@ struct SparseFieldCuda : public SparseField< Data_T >
 	//----------------------------------------------------------------------------//
 	//! manufacture an interpolator for device using a BlockFunctor
 	template< typename BlockFunctor >
-	boost::shared_ptr< linear_interp_type > getLinearInterpolatorDevice( BlockFunctor& bf ) const
+	LinearInterpPtr getLinearInterpolatorDevice( BlockFunctor& bf ) const
 	{
 		int emptyValueOffset;
 		hostToDevice( m_blockTableCuda, m_bufferCuda, emptyValueOffset, bf );
 
-		return boost::shared_ptr< linear_interp_type >( new linear_interp_type( sampler_type( base::dataResolution(), base::dataWindow(),
-				m_blockCount, base::blockOrder(), base::blockRes(), thrust::raw_pointer_cast( &m_blockTableCuda[ 0 ] ), emptyValueOffset,
+		return LinearInterpPtr( new LinearInterp( sampler_type( m_field->dataResolution(), m_field->dataWindow(),
+				m_blockCount, m_field->blockOrder(), m_field->blockRes(), thrust::raw_pointer_cast( &m_blockTableCuda[ 0 ] ), emptyValueOffset,
 				(cuda_value_type*) thrust::raw_pointer_cast( &m_bufferCuda[ 0 ] ), m_texMemSize ) ) );
 	}
 
 	//----------------------------------------------------------------------------//
 	//! manufacture an interpolator for device
-	boost::shared_ptr< linear_interp_type > getLinearInterpolatorDevice() const
+	LinearInterpPtr getLinearInterpolatorDevice() const
 	{
 		EveryBlockFunctor f;
 		return getLinearInterpolatorDevice( f );
@@ -191,22 +209,22 @@ struct SparseFieldCuda : public SparseField< Data_T >
 	//----------------------------------------------------------------------------//
 	//! manufacture an interpolator for host using a BlockFunctor
 	template< typename BlockFunctor >
-	boost::shared_ptr< linear_interp_type > getLinearInterpolatorHost( BlockFunctor& bf ) const
+	LinearInterpPtr getLinearInterpolatorHost( BlockFunctor& bf ) const
 	{
 		int emptyValueOffset;
 		hostToDevice( m_blockTableHost, m_bufferHost, emptyValueOffset, bf );
 
-//		std::cout << "block res: " << base::blockRes() << std::endl;
+//		std::cout << "block res: " << m_field->blockRes() << std::endl;
 //		std::cout << "block table host size: " << m_blockTableHost.size() << std::endl;
 
-		return boost::shared_ptr< linear_interp_type >( new linear_interp_type( sampler_type( base::dataResolution(), base::dataWindow(),
-				m_blockCount, base::blockOrder(), base::blockRes(), &m_blockTableHost[ 0 ], emptyValueOffset,
+		return LinearInterpPtr( new LinearInterp( sampler_type( m_field->dataResolution(), m_field->dataWindow(),
+				m_blockCount, m_field->blockOrder(), m_field->blockRes(), &m_blockTableHost[ 0 ], emptyValueOffset,
 				(cuda_value_type*) &m_bufferHost[ 0 ], m_texMemSize ) ) );
 	}
 
 	//----------------------------------------------------------------------------//
 	//! manufacture an interpolator for host
-	boost::shared_ptr< linear_interp_type > getLinearInterpolatorHost() const
+	LinearInterpPtr getLinearInterpolatorHost() const
 	{
 		EveryBlockFunctor f;
 		return getLinearInterpolatorHost( f );
@@ -218,11 +236,11 @@ struct SparseFieldCuda : public SparseField< Data_T >
 	template< typename BlockFunctor >
 	int requiredBlockCount( const BlockFunctor& bf ) const
 	{
-		typename base::block_iterator bi( base::blockBegin() ), be( base::blockEnd() );
+		typename field3d_type::block_iterator bi( m_field->blockBegin() ), be( m_field->blockEnd() );
 		int result = 0;
 		for ( ; bi != be ; ++bi )
 		{
-			if( base::blockIsAllocated( bi.x, bi.y, bi.z )
+			if( m_field->blockIsAllocated( bi.x, bi.y, bi.z )
 					&& bf( *this, bi.x, bi.y, bi.z ) ){
 				++result;
 			}
@@ -233,7 +251,7 @@ struct SparseFieldCuda : public SparseField< Data_T >
 	int deviceElementsRequiredForBlocks( int required_block_count ) const
 	{
 		// block data
-		int bs = base::blockSize();
+		int bs = m_field->blockSize();
 		return required_block_count * bs * bs * bs;
 	}
 
@@ -246,13 +264,15 @@ struct SparseFieldCuda : public SparseField< Data_T >
 		result += deviceElementsRequiredForBlocks( required_block_count );
 
 		// sparse block emptyValues
-		V3i br = base::blockRes();
+		V3i br = m_field->blockRes();
 		result += br.x * br.y * br.z;
 
 		return result;
 	}
 
 private:
+	field_ptr m_field;
+
 #ifdef INCLUDE_FIELD3D_CUDA
 	mutable BufferCuda< int > m_blockTableCuda;
 	mutable BufferCuda< Data_T > m_bufferCuda;

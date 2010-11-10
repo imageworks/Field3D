@@ -35,11 +35,11 @@
 
 //----------------------------------------------------------------------------//
 
+
+#include "Field3D/gpu/DeviceInfo.h"
 #include "cuda_field_test.h"
 
 #include <iostream>
-
-#include <boost/shared_ptr.hpp>
 
 #include "Field3D/gpu/DenseFieldSamplerCuda.h"
 #include "Field3D/gpu/SparseFieldSamplerCuda.h"
@@ -145,16 +145,6 @@ struct TexAccessor< Field3D::half >
 
 
 namespace nvcc {
-
-	//! does the hardware support double precision?
-	bool hardware_double_support()
-	{
-#if __CUDA_ARCH__ >= 130
-		return true;
-#else
-		return false;
-#endif
-	}
 
 	//----------------------------------------------------------------------------//
 	template< typename INTERP >

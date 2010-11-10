@@ -92,7 +92,7 @@ OutputIterator copy( 	InputIterator first,
 	// avoid using thrust copy while half is stored as short
 	// return thrust::copy( first, last, result );
 	size_t n = std::distance( first, last );
-	cudaMemcpy( thrust::raw_pointer_cast( &( *result ) ), &( *first ), sizeof(typename InputIterator::value_type) * n, cudaMemcpyHostToDevice );
+	cudaMemcpy( thrust::raw_pointer_cast( &( *result ) ), &( *first ), sizeof( *first ) * n, cudaMemcpyHostToDevice );
 	return result + n;
 }
 

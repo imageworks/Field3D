@@ -58,6 +58,16 @@ struct cuda_tag {};
 //! A flag to identify OpenCL iterators etc.
 struct opencl_tag {};
 
+//----------------------------------------------------------------------------//
+/*! traits for a raw pointer (assumes pointing to host memory)
+ * \note: use thrust::device_ptr<T> when pointing to device memory
+ */
+template< typename T >
+struct IteratorTraits< const T* >
+{
+	typedef host_tag type;
+};
+
 #ifdef INCLUDE_FIELD3D_CUDA
 //----------------------------------------------------------------------------//
 //! traits for a cuda iterator
@@ -66,6 +76,15 @@ struct IteratorTraits< thrust::detail::normal_iterator< thrust::device_ptr< T > 
 {
 	typedef cuda_tag type;
 };
+
+//----------------------------------------------------------------------------//
+//! traits for a thrust device pointer
+template< typename T >
+struct IteratorTraits< thrust::device_ptr<T> >
+{
+	typedef cuda_tag type;
+};
+
 #endif
 
 #ifdef INCLUDE_FIELD3D_OPENCL

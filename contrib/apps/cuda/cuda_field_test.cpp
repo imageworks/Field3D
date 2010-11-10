@@ -44,6 +44,8 @@
 #include "Field3D/FieldInterp.h"
 
 // field3d gpu includes
+#include "Field3D/gpu/DeviceInfo.h"
+
 #include "Field3D/gpu/DenseFieldGPU.h"
 #include "Field3D/gpu/DenseFieldSamplerCuda.h"
 #include "Field3D/gpu/SparseFieldGPU.h"
@@ -76,8 +78,6 @@ namespace nvcc
 
 	template< typename INTERP >
 	void testTexDevice( thrust::host_vector<Vec3f>& host_p, thrust::host_vector<float>& host_urn, INTERP& interp, bool dump_result );
-
-	bool hardware_double_support();
 }
 
 //----------------------------------------------------------------------------//
@@ -158,6 +158,8 @@ namespace gcc
 template< typename FieldType >
 void testField()
 {
+	typedef typename Field3D::Gpu::GpuFieldType< FieldType >::type FieldTypeGPU;
+
 	int res = TEST_RESOLUTION;
 
 	std::cout << "\ntesting " << Field3D::Gpu::nameOf< FieldType >() << " at " << res << "x" << res << "x" << res << std::endl;
@@ -173,6 +175,10 @@ void testField()
 	field->clear( 1.0f );
 	randomValues( -10.0f, 10.0f, *field );
 	field->setStrMetadata( "my_attribute", "my_value" );
+
+	// create a GPU field and attach it to the Field3D field
+	typename FieldTypeGPU::Ptr gpu_field( new FieldTypeGPU );
+	gpu_field->setField( field );
 
 	std::cout << "  verbose run...\n";
 
@@ -192,14 +198,14 @@ void testField()
 	{
 		gcc::testField3D( host_p, *field, dump_result );
 
-		boost::shared_ptr< typename FieldType::linear_interp_type > interp = field->getLinearInterpolatorHost();
+		typename FieldTypeGPU::LinearInterpPtr interp = gpu_field->getLinearInterpolatorHost();
 		if( interp != NULL ){
 			gcc::testHost( host_p, host_urn, *interp, dump_result );
 			nvcc::testHost( host_p, host_urn, *interp, dump_result );
 		}
 	}
 	{
-		boost::shared_ptr< typename FieldType::linear_interp_type > interp = field->getLinearInterpolatorDevice();
+		typename FieldTypeGPU::LinearInterpPtr interp = gpu_field->getLinearInterpolatorDevice();
 		if( interp != NULL ){
 			nvcc::testDevice( host_p, host_urn, *interp, dump_result );
 			nvcc::testTexDevice( host_p, host_urn, *interp, dump_result );
@@ -222,7 +228,7 @@ void testField()
 	{
 		gcc::testField3D( host_p, *field, dump_result );
 
-		boost::shared_ptr< typename FieldType::linear_interp_type > interp = field->getLinearInterpolatorHost();
+		typename FieldTypeGPU::LinearInterpPtr interp = gpu_field->getLinearInterpolatorHost();
 		if( interp != NULL ){
 			gcc::testHost( host_p, host_urn, *interp, dump_result, false );
 			gcc::testHost( host_p, host_urn, *interp, dump_result );
@@ -230,7 +236,7 @@ void testField()
 		}
 	}
 	{
-		boost::shared_ptr< typename FieldType::linear_interp_type > interp = field->getLinearInterpolatorDevice();
+		typename FieldTypeGPU::LinearInterpPtr interp = gpu_field->getLinearInterpolatorDevice();
 		if( interp != NULL ){
 			nvcc::testDevice( host_p, host_urn, *interp, dump_result );
 			nvcc::testTexDevice( host_p, host_urn, *interp, dump_result );
@@ -242,25 +248,28 @@ void testField()
 int main( 	int argc,
 			char **argv )
 {
-	// Call initIO() to initialize standard I/O methods and load plugins
-	//Field3D::initIO();
-
 	std::cout << "\ntesting using " << threadCount() << " threads" << std::endl;
+	std::cout << "device compute capability: " << Field3D::Gpu::deviceComputeCapability() / 100.0f << std::endl;
 	std::cout << std::fixed << std::setprecision(6);
 
-	if( nvcc::hardware_double_support() )
-		testField< Field3D::Gpu::DenseFieldCuda< double > >();
-	else
-		std::cout << "skipping " << Field3D::Gpu::nameOf< Field3D::Gpu::DenseFieldCuda< double > >() << std::endl;
-	testField< Field3D::Gpu::DenseFieldCuda< float > >();
-	testField< Field3D::Gpu::DenseFieldCuda< Field3D::half > >();
+	// dense fields
 
-	if( nvcc::hardware_double_support() )
-		testField< Field3D::Gpu::SparseFieldCuda< double > >();
+	if( Field3D::Gpu::deviceSupportsDoublePrecision() )
+		testField< Field3D::DenseField< double > >();
 	else
-		std::cout << "skipping " << Field3D::Gpu::nameOf< Field3D::Gpu::SparseFieldCuda< double > >() << std::endl;
-	testField< Field3D::Gpu::SparseFieldCuda< float > >();
-	testField< Field3D::Gpu::SparseFieldCuda< Field3D::half > >();
+		std::cout << "\nskipping " << Field3D::Gpu::nameOf< Field3D::Gpu::DenseFieldGPU< double > >() << std::endl;
+	testField< Field3D::DenseField< float > >();
+	testField< Field3D::DenseField< Field3D::half > >();
+
+	// sparse fields
+
+	if( Field3D::Gpu::deviceSupportsDoublePrecision() )
+		testField< Field3D::SparseField< double > >();
+	else
+		std::cout << "\nskipping " << Field3D::Gpu::nameOf< Field3D::Gpu::SparseFieldGPU< double > >() << std::endl;
+	testField< Field3D::SparseField< float > >();
+	testField< Field3D::SparseField< Field3D::half > >();
+
 	return 0;
 }
 

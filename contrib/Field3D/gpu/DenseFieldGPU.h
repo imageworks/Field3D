@@ -35,8 +35,8 @@
 
 //----------------------------------------------------------------------------//
 
-#ifndef _INCLUDED_Field3D_gpu_DenseFieldCuda_H_
-#define _INCLUDED_Field3D_gpu_DenseFieldCuda_H_
+#ifndef _INCLUDED_Field3D_gpu_DenseFieldGPU_H_
+#define _INCLUDED_Field3D_gpu_DenseFieldGPU_H_
 
 #ifdef NVCC
 #error "This file is intended for GCC and isn't compatible with NVCC compiler due to Field3D includes"
@@ -64,35 +64,53 @@ template< typename A > struct LinearFieldInterp;
 //----------------------------------------------------------------------------//
 //! Cuda layer for DenseFields
 template< typename Data_T >
-struct DenseFieldCuda : public DenseField< Data_T >
+struct DenseFieldGPU : public RefBase
 {
+	typedef boost::intrusive_ptr< DenseFieldGPU > Ptr;
 	typedef typename GpuFieldTraits< Data_T >::value_type value_type;
 	typedef typename GpuFieldTraits< Data_T >::cuda_value_type cuda_value_type;
 	typedef typename GpuFieldTraits< Data_T >::cl_value_type cl_value_type;
 	typedef typename GpuFieldTraits< Data_T >::interpolation_type interpolation_type;
 	typedef DenseFieldSampler< value_type, interpolation_type > sampler_type;
-	typedef LinearFieldInterp< sampler_type > linear_interp_type;
-	typedef DenseField< Data_T > base;
+	typedef LinearFieldInterp< sampler_type > LinearInterp;
+	typedef typename boost::shared_ptr< LinearInterp > LinearInterpPtr;
+
+	typedef DenseField< Data_T > field3d_type;
+	typedef typename field3d_type::Ptr field_ptr;
+
+	//! set the Field3D field
+	field_ptr getField()
+	{
+		return m_field;
+	}
+
+	//! access the Field3D field
+	void setField( field_ptr& ptr )
+	{
+		m_field = ptr;
+	}
+
 
 #ifdef INCLUDE_FIELD3D_CUDA
 	//----------------------------------------------------------------------------//
 	//! Manufacture an interpolator for device
-	boost::shared_ptr< linear_interp_type > getLinearInterpolatorDevice() const
+	LinearInterpPtr getLinearInterpolatorDevice() const
 	{
 		hostToDevice( m_bufferCuda );
 
-		V3i res = DenseField< Data_T >::dataResolution();
-		return boost::shared_ptr< linear_interp_type >( new linear_interp_type( sampler_type( base::dataResolution(), base::dataWindow(),
+		return LinearInterpPtr( new LinearInterp( sampler_type( m_field->dataResolution(), m_field->dataWindow(),
 				(cuda_value_type*) thrust::raw_pointer_cast( &m_bufferCuda[ 0 ] ) ) ) );
 	}
 
 	//----------------------------------------------------------------------------//
 	//! Manufacture an interpolator for host
-	boost::shared_ptr< linear_interp_type > getLinearInterpolatorHost() const
+	LinearInterpPtr getLinearInterpolatorHost() const
 	{
-		V3i res = DenseField< Data_T >::dataResolution();
-		return boost::shared_ptr< linear_interp_type >( new linear_interp_type( sampler_type( base::dataResolution(), base::dataWindow(),
-				(cuda_value_type*) &DenseField< Data_T >::m_data[ 0 ] ) ) );
+		Field3D::Box3i dw = m_field->dataWindow();
+		const Data_T* ptr = &m_field->fastValue( dw.min.x, dw.min.y, dw.min.z );
+
+		return LinearInterpPtr( new LinearInterp( sampler_type( m_field->dataResolution(), m_field->dataWindow(),
+				(cuda_value_type*) ptr ) ) );
 	}
 #endif
 
@@ -101,11 +119,19 @@ struct DenseFieldCuda : public DenseField< Data_T >
 	template< typename Buffer >
 	void hostToDevice( Buffer& dst ) const
 	{
-		dst.resize( DenseField< Data_T >::m_data.size() );
-		Field3D::Gpu::copy( DenseField< Data_T >::m_data.begin(), DenseField< Data_T >::m_data.end(), dst.begin() );
+		Field3D::V3i mem_size = m_field->internalMemSize();
+		size_t element_count = mem_size.x * mem_size.y * mem_size.z;
+		Field3D::Box3i dw = m_field->dataWindow();
+		const Data_T* ptr = &m_field->fastValue( dw.min.x, dw.min.y, dw.min.z );
+
+		dst.resize( element_count );
+		Field3D::Gpu::copy( ptr, ptr + element_count, dst.begin() );
 	}
 
 private:
+	//! A pointer to the Field3D (non-GPU) field
+	field_ptr m_field;
+
 #ifdef INCLUDE_FIELD3D_CUDA
 	mutable BufferCuda< Data_T > m_bufferCuda;
 #endif

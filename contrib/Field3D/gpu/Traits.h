@@ -41,7 +41,58 @@
 #include "Field3D/gpu/ns.h"
 #include "Field3D/Types.h"
 
+FIELD3D_NAMESPACE_OPEN
+// forward declarations of Field3D types
+template <class Data_T> class DenseField;
+template <class Data_T> class SparseField;
+FIELD3D_NAMESPACE_SOURCE_CLOSE
+
 FIELD3D_GPU_NAMESPACE_OPEN
+// forward declarations of Field3D GPU types
+template <class Data_T> class DenseFieldGPU;
+template <class Data_T> class SparseFieldGPU;
+
+//----------------------------------------------------------------------------//
+//! Traits class that maps from Field3D field types to Field3D::GPU field types
+template< typename T >
+struct GpuFieldType;
+
+//----------------------------------------------------------------------------//
+//! specialization for dense fields
+template< typename Data_T >
+struct GpuFieldType< Field3D::DenseField< Data_T > >
+{
+	typedef Field3D::Gpu::DenseFieldGPU< Data_T > type;
+};
+
+//----------------------------------------------------------------------------//
+//! specialization for sparse fields
+template< typename Data_T >
+struct GpuFieldType< Field3D::SparseField< Data_T > >
+{
+	typedef Field3D::Gpu::SparseFieldGPU< Data_T > type;
+};
+
+//----------------------------------------------------------------------------//
+//! Traits class that maps from Field3D field types to Field3D::GPU field types
+template< typename T >
+struct Field3DFieldType;
+
+//----------------------------------------------------------------------------//
+//! specialization for dense fields
+template< typename Data_T >
+struct Field3DFieldType< Field3D::Gpu::DenseFieldGPU< Data_T > >
+{
+	typedef Field3D::DenseField< Data_T > type;
+};
+
+//----------------------------------------------------------------------------//
+//! specialization for sparse fields
+template< typename Data_T >
+struct Field3DFieldType< Field3D::Gpu::SparseFieldGPU< Data_T > >
+{
+	typedef Field3D::SparseField< Data_T > type;
+};
 
 //----------------------------------------------------------------------------//
 //! Traits class that defines gpu storage and access types

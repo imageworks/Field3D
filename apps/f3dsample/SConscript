@@ -1,0 +1,34 @@
+# ------------------------------------------------------------------------------
+
+import os
+import sys
+
+# ------------------------------------------------------------------------------
+
+pathToRoot = "../.."
+
+sys.path.append(pathToRoot)
+
+from BuildSupport import *
+
+appName = "f3dsample"
+buildPath = buildDir()
+binPath   = join(buildPath, appName)
+
+# ------------------------------------------------------------------------------
+
+Import("env")
+appEnv = env.Clone()
+
+setupEnv(appEnv, pathToRoot)
+addField3DInstall(appEnv, pathToRoot)
+
+appEnv.Append(LIBS = ["boost_program_options"])
+
+appEnv.VariantDir(buildPath, ".", duplicate = 0)
+files = Glob(join(buildPath, "*.cpp"))
+
+app = appEnv.Program(binPath, files)
+appEnv.Default(app)
+
+# ------------------------------------------------------------------------------

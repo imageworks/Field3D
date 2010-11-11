@@ -205,7 +205,7 @@ void createField(const Options &options)
       break;
     case 16:
     default:
-      createConcreteVectorField<half>(options);
+      createConcreteVectorField<Field3D::half>(options);
       break;
     }
   } else {
@@ -218,7 +218,7 @@ void createField(const Options &options)
       break;
     case 16:
     default:
-      createConcreteScalarField<half>(options);
+      createConcreteScalarField<Field3D::half>(options);
       break;
     }
   }

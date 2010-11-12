@@ -68,7 +68,7 @@ int main(int argc, char **argv)
   field->attribute = "world";
   field->setSize(V3i(50, 50, 50));
   field->clear(1.0f);
-  field->setStrMetadata("my_attribute", "my_value");
+  field->metadata().setStrMetadata("my_attribute", "my_value");
 
   Field3DOutputFile out;
   out.create("field3d_file.f3d");

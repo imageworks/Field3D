@@ -80,12 +80,7 @@ ADD_LIBRARY ( Field3D
   src/SparseFile.cpp
 )
 
-# field3d - unitTest
-ADD_EXECUTABLE ( unitTest
-  test/unit_tests/UnitTest.cpp
-  )
-
-TARGET_LINK_LIBRARIES ( unitTest
+SET ( Field3D_Target_Link_Libraries
   Field3D
   ${HDF5_LIBRARIES}
   z
@@ -94,93 +89,50 @@ TARGET_LINK_LIBRARIES ( unitTest
   IlmThread
   Imath
   dl
-  ${BOOST_LIBRARIES}
+  ${Boost_LIBRARIES}
   )
+
+# field3d - unitTest
+ADD_EXECUTABLE ( unitTest
+  test/unit_tests/UnitTest.cpp
+  )
+
+TARGET_LINK_LIBRARIES ( unitTest ${Field3D_Target_Link_Libraries} )
 
 # field3d - f3dinfo
 ADD_EXECUTABLE ( f3dinfo
   apps/f3dinfo/main.cpp
   )
 
-TARGET_LINK_LIBRARIES ( f3dinfo
-  Field3D
-  ${HDF5_LIBRARIES}
-  z
-  Iex
-  Half
-  IlmThread
-  Imath
-  dl
-  ${Boost_LIBRARIES}
-  )
+TARGET_LINK_LIBRARIES ( f3dinfo ${Field3D_Target_Link_Libraries} )
 
 # field3d - sparse_field_io
 ADD_EXECUTABLE ( sparse_field_io
   apps/sample_code/sparse_field_io/main.cpp
   )
 
-TARGET_LINK_LIBRARIES ( sparse_field_io
-  Field3D
-  ${HDF5_LIBRARIES}
-  z
-  Iex
-  Half
-  IlmThread
-  Imath
-  dl
-  ${Boost_LIBRARIES}
-  )
+TARGET_LINK_LIBRARIES ( sparse_field_io ${Field3D_Target_Link_Libraries} )
 
 # field3d - read
 ADD_EXECUTABLE ( read
   apps/sample_code/read/main.cpp
   )
 
-TARGET_LINK_LIBRARIES ( read
-  Field3D
-  ${HDF5_LIBRARIES}
-  z
-  Iex
-  Half
-  IlmThread
-  Imath
-  dl
-  ${Boost_LIBRARIES}
-  )
+TARGET_LINK_LIBRARIES ( read ${Field3D_Target_Link_Libraries} )
 
 # field3d - mixed_types
 ADD_EXECUTABLE ( mixed_types
   apps/sample_code/mixed_types/main.cpp
   )
 
-TARGET_LINK_LIBRARIES ( mixed_types
-  Field3D
-  ${HDF5_LIBRARIES}
-  z
-  Iex
-  Half
-  IlmThread
-  Imath
-  dl
-  ${Boost_LIBRARIES}
-  )
+TARGET_LINK_LIBRARIES ( mixed_types ${Field3D_Target_Link_Libraries} )
 
 # field3d - create_and_write
 ADD_EXECUTABLE ( create_and_write
   apps/sample_code/create_and_write/main.cpp
   )
 
-TARGET_LINK_LIBRARIES ( create_and_write
-  Field3D
-  ${HDF5_LIBRARIES}
-  z
-  Iex
-  Half
-  IlmThread
-  Imath
-  dl
-  ${Boost_LIBRARIES}
-  )
+TARGET_LINK_LIBRARIES ( create_and_write ${Field3D_Target_Link_Libraries} )
 
 IF (DOXYGEN_FOUND)
   ADD_CUSTOM_TARGET ( doc

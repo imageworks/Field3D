@@ -53,241 +53,395 @@ using namespace Field3D::Gpu;
 
 // actual texture declarations have to be at file scope
 GpuFieldTraits< double >::cuda_tex_type tex_double;
-GpuFieldTraits< float >::cuda_tex_type tex_float;
+GpuFieldTraits<float>::cuda_tex_type tex_float;
 GpuFieldTraits< Field3D::half >::cuda_tex_type tex_half;
 
 //----------------------------------------------------------------------------//
 //! access via a cuda texture
 template< typename T >
-struct TexAccessor : public DataAccessor
-{};
-
+struct TexAccessor: public DataAccessor
+{
+};
 
 //----------------------------------------------------------------------------//
 //! specialization for double
-template< >
-struct TexAccessor< double >
+template<>
+struct TexAccessor<double>
 {
-	typedef GpuFieldTraits< double >::cuda_tex_value_type cuda_tex_value_type;
+  typedef GpuFieldTraits<double>::cuda_tex_value_type cuda_tex_value_type;
 
-	__host__  __device__
-	double operator()( 	int i, double* phi )
-	{
+  __host__   __device__
+  double operator()(int i, double* phi)
+  {
 #ifdef __CUDA_ARCH__
 #if __CUDA_ARCH__ >= 130
-		// double support only for compute capability >= 1.3
-		int2 v = tex1Dfetch( tex_double, i );
-		return __hiloint2double(v.y, v.x);
+    // double support only for compute capability >= 1.3
+    int2 v = tex1Dfetch(tex_double, i);
+    return __hiloint2double(v.y, v.x);
 #else
-		// otherwise return 0
-		return 0;
+    // otherwise return 0
+    return 0;
 #endif
 #else
-		assert(0);
-		return 0;
+    assert( 0 );
+    return 0;
 #endif
-	}
+  }
 
-	GpuFieldTraits< double >::cuda_tex_type& getTex()
-	{
-		return tex_double;
-	}
+  GpuFieldTraits<double>::cuda_tex_type& getTex()
+  {
+    return tex_double;
+  }
 };
 
 //----------------------------------------------------------------------------//
 //! specialization for float
-template< >
-struct TexAccessor< float >
+template<>
+struct TexAccessor<float>
 {
-	typedef GpuFieldTraits< float >::cuda_tex_value_type cuda_tex_value_type;
+  typedef GpuFieldTraits<float>::cuda_tex_value_type cuda_tex_value_type;
 
-	__host__  __device__
-	float operator()( 	int i, float* phi )
-	{
+  __host__   __device__
+  float operator()(int i, float* phi)
+  {
 #ifdef __CUDA_ARCH__
-		return tex1Dfetch(tex_float, i);
+    return tex1Dfetch(tex_float, i);
 #else
-		assert(0);
-		return 0;
+    assert( 0 );
+    return 0;
 #endif
-	}
+  }
 
-	GpuFieldTraits< float >::cuda_tex_type& getTex()
-	{
-		return tex_float;
-	}
+  GpuFieldTraits<float>::cuda_tex_type& getTex()
+  {
+    return tex_float;
+  }
 };
 
 //----------------------------------------------------------------------------//
 //! specialization for half
 template<>
-struct TexAccessor< Field3D::half >
+struct TexAccessor<Field3D::half>
 {
-	typedef GpuFieldTraits< Field3D::half >::cuda_value_type cuda_value_type;
-	typedef GpuFieldTraits< Field3D::half >::cuda_tex_value_type cuda_tex_value_type;
+  typedef GpuFieldTraits<Field3D::half>::cuda_value_type cuda_value_type;
+  typedef GpuFieldTraits<Field3D::half>::cuda_tex_value_type
+      cuda_tex_value_type;
 
-	__host__ __device__
-	float operator()( int i, cuda_value_type* phi )
-	{
+  __host__  __device__
+  float operator()(int i, cuda_value_type* phi)
+  {
 #ifdef __CUDA_ARCH__
-		return __half2float( tex1Dfetch( tex_half, i ) );
+    return __half2float(tex1Dfetch(tex_half, i));
 #else
-		assert(0);
-		return 0;
+    assert( 0 );
+    return 0;
 #endif
-	}
+  }
 
-	GpuFieldTraits< Field3D::half >::cuda_tex_type& getTex()
-	{
-		return tex_half;
-	}
+  GpuFieldTraits<Field3D::half>::cuda_tex_type& getTex()
+  {
+    return tex_half;
+  }
 };
 
+namespace nvcc
+{
 
-namespace nvcc {
+  //--------------------------------------------------------------------------//
+  template<typename INTERP>
+  void testHost( thrust::host_vector<Vec3f>& host_p,
+                 thrust::host_vector<float>& host_urn,
+                 INTERP& interp,
+                 bool dump_result )
+  {
+    {
+      GlobalMemAccessor< typename INTERP::value_type > ac;
 
-	//----------------------------------------------------------------------------//
-	template< typename INTERP >
-	void testHost( thrust::host_vector<Vec3f>& host_p, thrust::host_vector<float>& host_urn, INTERP& interp, bool dump_result )
-	{
-		{
-			GlobalMemAccessor< typename INTERP::value_type > ac;
+      int sample_count = host_p.size();
 
-			int sample_count = host_p.size();
+      thrust::host_vector< typename INTERP::sample_type >
+        host_result( sample_count, 0.0f );
+      RandomSampleFunctor< INTERP,
+        GlobalMemAccessor< typename INTERP::value_type > >
+        f( ac, interp, &host_p[ 0 ], &host_result[ 0 ] );
 
-			thrust::host_vector< typename INTERP::sample_type > host_result( sample_count, 0.0f );
-			RandomSampleFunctor< INTERP, GlobalMemAccessor< typename INTERP::value_type > > f( ac, interp, &host_p[0], &host_result[0] );
+      float et = RunFunctor( f, sample_count, thrust::host_space_tag() );
 
-			float et = RunFunctor( f, sample_count, thrust::host_space_tag() );
+      if ( dump_result ) {
+        std::cout << "    nvcc host result        : ";
+        dump( host_result );
+      } else {
+        std::cout << "    nvcc host:\t\trandom sample: " << et << "\t"
+            << std::flush;
+      }
+    }
+    if ( !dump_result ) {
+      GlobalMemAccessor< typename INTERP::value_type > ac;
+      int sample_count = interp.getSampler().dataWindowVoxelCount();
+      thrust::host_vector< typename INTERP::sample_type >
+        host_result( sample_count, 0.0f );
+      SuperSampleFunctor< INTERP,
+        GlobalMemAccessor< typename INTERP::value_type > >
+        f( ac, interp, &host_urn[ 0 ], host_urn.size(), &host_result[ 0 ] );
 
-			if( dump_result ){
-				std::cout << "    nvcc host result        : ";
-				dump( host_result );
-			} else {
-				std::cout << "    nvcc host:\t\trandom sample: " << et << "\t" << std::flush;
-			}
-		}
-		if( !dump_result )
-		{
-			GlobalMemAccessor< typename INTERP::value_type > ac;
-			int sample_count = interp.getSampler().dataWindowVoxelCount();
-			thrust::host_vector< typename INTERP::sample_type > host_result( sample_count, 0.0f );
-			SuperSampleFunctor< INTERP, GlobalMemAccessor< typename INTERP::value_type > > f( ac, interp, &host_urn[ 0 ], host_urn.size(), &host_result[ 0 ] );
+      float et = RunFunctor( f, sample_count, thrust::host_space_tag() );
 
-			float et = RunFunctor( f, sample_count, thrust::host_space_tag() );
+      std::cout << "super sample: " << et << std::endl;
+    }
+  }
 
-			std::cout << "super sample: " << et << std::endl;
+  //--------------------------------------------------------------------------//
+  template< typename INTERP >
+  void testDevice( thrust::host_vector<Vec3f>& host_p,
+                   thrust::host_vector<float>& host_urn,
+                   INTERP& interp,
+                   bool dump_result )
+  {
+    {
+      GlobalMemAccessor<typename INTERP::value_type> ac;
 
-		}
-	}
+      int sample_count = host_p.size();
+      thrust::device_vector<Vec3f> device_p = host_p;
 
-	//----------------------------------------------------------------------------//
-	template< typename INTERP >
-	void testDevice( thrust::host_vector<Vec3f>& host_p, thrust::host_vector<float>& host_urn, INTERP& interp, bool dump_result )
-	{
-		{
-			GlobalMemAccessor< typename INTERP::value_type > ac;
+      thrust::device_vector<typename INTERP::sample_type>
+        device_result( sample_count, 0.0f );
+      RandomSampleFunctor< INTERP,
+        GlobalMemAccessor<typename INTERP::value_type> >
+        f( ac, interp, thrust::raw_pointer_cast( &device_p[ 0 ] ),
+            thrust::raw_pointer_cast( &device_result[ 0 ] ) );
 
-			int sample_count = host_p.size();
-			thrust::device_vector<Vec3f> device_p = host_p;
+      float et = RunFunctor(f, sample_count, thrust::device_space_tag());
 
-			thrust::device_vector< typename INTERP::sample_type > device_result( sample_count, 0.0f );
-			RandomSampleFunctor< INTERP, GlobalMemAccessor< typename INTERP::value_type > > f( ac, interp, thrust::raw_pointer_cast( &device_p[ 0 ] ), thrust::raw_pointer_cast( &device_result[ 0 ] ) );
+      if (dump_result) {
+        std::cout << "    nvcc device result      : ";
+        thrust::host_vector< typename INTERP::sample_type >
+          host_result = device_result;
+        dump( host_result );
+      } else {
+        std::cout << "    nvcc device:\trandom sample: " << et << "\t"
+            << std::flush;
+      }
+    }
+    if ( !dump_result )
+    {
+      GlobalMemAccessor< typename INTERP::value_type > ac;
+      int sample_count = interp.getSampler().dataWindowVoxelCount();
+      thrust::device_vector<float> device_urn = host_urn;
+      thrust::device_vector< typename INTERP::sample_type >
+        device_result( sample_count, 0.0f );
 
-			float et = RunFunctor( f, sample_count, thrust::device_space_tag() );
+      SuperSampleFunctor< INTERP,
+        GlobalMemAccessor< typename INTERP::value_type > >
+        f( ac,
+           interp,
+           thrust::raw_pointer_cast( &device_urn[ 0 ] ),
+           device_urn.size(),
+           thrust::raw_pointer_cast( &device_result[ 0 ] ) );
 
-			if( dump_result ){
-				std::cout << "    nvcc device result      : ";
-				thrust::host_vector< typename INTERP::sample_type > host_result = device_result;
-				dump( host_result );
-			} else {
-				std::cout << "    nvcc device:\trandom sample: " << et << "\t" << std::flush;
-			}
-		}
-		if( !dump_result )
-		{
-			GlobalMemAccessor< typename INTERP::value_type > ac;
-			int sample_count = interp.getSampler().dataWindowVoxelCount();
-			thrust::device_vector<float> device_urn = host_urn;
-			thrust::device_vector< typename INTERP::sample_type > device_result( sample_count, 0.0f );
-			SuperSampleFunctor< INTERP, GlobalMemAccessor< typename INTERP::value_type > > f( ac, interp, thrust::raw_pointer_cast( &device_urn[ 0 ] ), device_urn.size(), thrust::raw_pointer_cast( &device_result[ 0 ] ) );
+      float et = RunFunctor( f, sample_count, thrust::device_space_tag() );
 
-			float et = RunFunctor( f, sample_count, thrust::device_space_tag() );
+      std::cout << "super sample: " << et << std::endl;
+    }
+  }
 
-			std::cout << "super sample: " << et << std::endl;
-		}
-	}
+  //----------------------------------------------------------------------------//
+  template< typename INTERP >
+  void testTexDevice( thrust::host_vector<Vec3f>& host_p,
+                      thrust::host_vector<float>& host_urn,
+                      INTERP& interp,
+                      bool dump_result )
+  {
+    {
+      TexAccessor< typename INTERP::value_type > ac;
+      interp.bindTex( ac );
 
-	//----------------------------------------------------------------------------//
-	template< typename INTERP >
-	void testTexDevice( thrust::host_vector<Vec3f>& host_p, thrust::host_vector<float>& host_urn, INTERP& interp, bool dump_result )
-	{
-		{
-			TexAccessor< typename INTERP::value_type > ac;
-			interp.bindTex( ac );
+      int sample_count = host_p.size();
+      thrust::device_vector<Vec3f> device_p = host_p;
 
-			int sample_count = host_p.size();
-			thrust::device_vector<Vec3f> device_p = host_p;
+      thrust::device_vector< typename INTERP::sample_type >
+      device_result( sample_count, 0.0f );
 
-			thrust::device_vector< typename INTERP::sample_type > device_result( sample_count, 0.0f );
-			RandomSampleFunctor< INTERP, TexAccessor< typename INTERP::value_type > > f( ac, interp, thrust::raw_pointer_cast( &device_p[ 0 ] ), thrust::raw_pointer_cast( &device_result[ 0 ] ) );
+      RandomSampleFunctor< INTERP, TexAccessor< typename INTERP::value_type > >
+          f( ac,
+             interp,
+             thrust::raw_pointer_cast( &device_p[ 0 ] ),
+             thrust::raw_pointer_cast( &device_result[ 0 ] ) );
 
-			float et = RunFunctor( f, sample_count, thrust::device_space_tag() );
+      float et = RunFunctor( f, sample_count, thrust::device_space_tag() );
 
-			if( dump_result ){
-				std::cout << "    nvcc device (tex) result: ";
-				thrust::host_vector< typename INTERP::sample_type > host_result = device_result;
-				dump( host_result );
-			} else {
-				std::cout << "    nvcc device (tex):\trandom sample: " << et << "\t";
-			}
+      if ( dump_result ) {
+        std::cout << "    nvcc device (tex) result: ";
+        thrust::host_vector< typename INTERP::sample_type >
+          host_result = device_result;
+        dump( host_result );
+      } else {
+        std::cout << "    nvcc device (tex):\trandom sample: " << et << "\t";
+      }
 
-			interp.unbindTex( ac );
-		}
-		if( !dump_result )
-		{
-			TexAccessor< typename INTERP::value_type > ac;
-			interp.bindTex( ac );
+      interp.unbindTex( ac );
+    }
+    if ( !dump_result )
+    {
+      TexAccessor< typename INTERP::value_type > ac;
+      interp.bindTex( ac );
 
-			int sample_count = interp.getSampler().dataWindowVoxelCount();
-			thrust::device_vector<float> device_urn = host_urn;
-			thrust::device_vector< typename INTERP::sample_type > device_result( sample_count, 0.0f );
-			SuperSampleFunctor< INTERP, TexAccessor< typename INTERP::value_type > > f( ac, interp, thrust::raw_pointer_cast( &device_urn[ 0 ] ), device_urn.size(), thrust::raw_pointer_cast( &device_result[ 0 ] ) );
+      int sample_count = interp.getSampler().dataWindowVoxelCount();
+      thrust::device_vector<float> device_urn = host_urn;
+      thrust::device_vector< typename INTERP::sample_type >
+        device_result( sample_count, 0.0f );
 
-			float et = RunFunctor( f, sample_count, thrust::device_space_tag() );
+      SuperSampleFunctor< INTERP, TexAccessor< typename INTERP::value_type > >
+          f( ac,
+             interp,
+             thrust::raw_pointer_cast( &device_urn[ 0 ] ),
+             device_urn.size(),
+             thrust::raw_pointer_cast( &device_result[ 0 ] ) );
 
-			std::cout << "super sample: " << et << std::endl;
+      float et = RunFunctor( f, sample_count, thrust::device_space_tag() );
 
-			interp.unbindTex( ac );
-		}
-	}
+      std::cout << "super sample: " << et << std::endl;
 
-	// double instantiation
-	template void testHost< LinearFieldInterp< DenseFieldSampler< double, double > > > ( thrust::host_vector<Vec3f>&, thrust::host_vector<float>&, LinearFieldInterp< DenseFieldSampler< double, double > >&, bool );
-	template void testDevice< LinearFieldInterp< DenseFieldSampler< double, double > > > ( thrust::host_vector<Vec3f>&, thrust::host_vector<float>&, LinearFieldInterp< DenseFieldSampler< double, double > >&, bool );
-	template void testTexDevice< LinearFieldInterp< DenseFieldSampler< double, double > > > ( thrust::host_vector<Vec3f>&, thrust::host_vector<float>&, LinearFieldInterp< DenseFieldSampler< double, double > >&, bool );
+      interp.unbindTex( ac );
+    }
+  }
 
-	template void testHost< LinearFieldInterp< SparseFieldSampler< double, double > > > ( thrust::host_vector<Vec3f>&, thrust::host_vector<float>&, LinearFieldInterp< SparseFieldSampler< double, double > >&, bool );
-	template void testDevice< LinearFieldInterp< SparseFieldSampler< double, double > > > ( thrust::host_vector<Vec3f>&, thrust::host_vector<float>&, LinearFieldInterp< SparseFieldSampler< double, double > >&, bool );
-	template void testTexDevice< LinearFieldInterp< SparseFieldSampler< double, double > > > ( thrust::host_vector<Vec3f>&, thrust::host_vector<float>&, LinearFieldInterp< SparseFieldSampler< double, double > >&, bool );
+  //--------------------------------------------------------------------------//
+  // double instantiation
+  template
+  void testHost< LinearFieldInterp< DenseFieldSampler<double, double> > >
+  ( thrust::host_vector<Vec3f>&,
+    thrust::host_vector<float>&,
+    LinearFieldInterp<DenseFieldSampler<double, double > >&,
+    bool );
 
-	// float instantiation
-	template void testHost< LinearFieldInterp< DenseFieldSampler< float, float > > > ( thrust::host_vector<Vec3f>&, thrust::host_vector<float>&, LinearFieldInterp< DenseFieldSampler< float, float > >&, bool );
-	template void testDevice< LinearFieldInterp< DenseFieldSampler< float, float > > > ( thrust::host_vector<Vec3f>&, thrust::host_vector<float>&, LinearFieldInterp< DenseFieldSampler< float, float > >&, bool );
-	template void testTexDevice< LinearFieldInterp< DenseFieldSampler< float, float > > > ( thrust::host_vector<Vec3f>&, thrust::host_vector<float>&, LinearFieldInterp< DenseFieldSampler< float, float > >&, bool );
+  template
+  void testDevice< LinearFieldInterp< DenseFieldSampler<double, double> > >
+  ( thrust::host_vector<Vec3f>&,
+    thrust::host_vector<float>&,
+    LinearFieldInterp< DenseFieldSampler<double, double> >&,
+    bool );
 
-	template void testHost< LinearFieldInterp< SparseFieldSampler< float, float > > > ( thrust::host_vector<Vec3f>&, thrust::host_vector<float>&, LinearFieldInterp< SparseFieldSampler< float, float > >&, bool );
-	template void testDevice< LinearFieldInterp< SparseFieldSampler< float, float > > > ( thrust::host_vector<Vec3f>&, thrust::host_vector<float>&, LinearFieldInterp< SparseFieldSampler< float, float > >&, bool );
-	template void testTexDevice< LinearFieldInterp< SparseFieldSampler< float, float > > > ( thrust::host_vector<Vec3f>&, thrust::host_vector<float>&, LinearFieldInterp< SparseFieldSampler< float, float > >&, bool );
+  template
+  void testTexDevice< LinearFieldInterp< DenseFieldSampler<double,double> > >
+  ( thrust::host_vector<Vec3f>&,
+    thrust::host_vector<float>&,
+    LinearFieldInterp< DenseFieldSampler<double, double> >&,
+    bool );
 
-	// half instantiation
-	template void testHost< LinearFieldInterp< DenseFieldSampler< Field3D::half, float > > > ( thrust::host_vector<Vec3f>&, thrust::host_vector<float>&, LinearFieldInterp< DenseFieldSampler< Field3D::half, float > >&, bool );
-	template void testDevice< LinearFieldInterp< DenseFieldSampler< Field3D::half, float > > > ( thrust::host_vector<Vec3f>&, thrust::host_vector<float>&, LinearFieldInterp< DenseFieldSampler< Field3D::half, float > >&, bool );
-	template void testTexDevice< LinearFieldInterp< DenseFieldSampler< Field3D::half, float > > > ( thrust::host_vector<Vec3f>&, thrust::host_vector<float>&, LinearFieldInterp< DenseFieldSampler< Field3D::half, float > >&, bool );
+  template
+  void testHost< LinearFieldInterp< SparseFieldSampler<double, double> > >
+  ( thrust::host_vector<Vec3f>&,
+    thrust::host_vector<float>&,
+    LinearFieldInterp< SparseFieldSampler<double, double> >&,
+    bool );
 
-	template void testHost< LinearFieldInterp< SparseFieldSampler< Field3D::half, float > > > ( thrust::host_vector<Vec3f>&, thrust::host_vector<float>&, LinearFieldInterp< SparseFieldSampler< Field3D::half, float > >&, bool );
-	template void testDevice< LinearFieldInterp< SparseFieldSampler< Field3D::half, float > > > ( thrust::host_vector<Vec3f>&, thrust::host_vector<float>&, LinearFieldInterp< SparseFieldSampler< Field3D::half, float > >&, bool );
-	template void testTexDevice< LinearFieldInterp< SparseFieldSampler< Field3D::half, float > > > ( thrust::host_vector<Vec3f>&, thrust::host_vector<float>&, LinearFieldInterp< SparseFieldSampler< Field3D::half, float > >&, bool );
+  template
+  void testDevice< LinearFieldInterp< SparseFieldSampler<double, double> > >
+  ( thrust::host_vector<Vec3f>&,
+    thrust::host_vector<float>&,
+    LinearFieldInterp< SparseFieldSampler<double, double> >&,
+    bool );
+
+  template
+  void testTexDevice< LinearFieldInterp< SparseFieldSampler<double,double> > >
+  ( thrust::host_vector<Vec3f>&,
+    thrust::host_vector<float>&,
+    LinearFieldInterp< SparseFieldSampler<double, double> >&,
+    bool );
+
+  //--------------------------------------------------------------------------//
+  // float instantiation
+  template
+  void testHost< LinearFieldInterp< DenseFieldSampler<float, float> > >
+  ( thrust::host_vector<Vec3f>&,
+    thrust::host_vector<float>&,
+    LinearFieldInterp< DenseFieldSampler<float, float> >&,
+    bool );
+
+  template
+  void testDevice< LinearFieldInterp< DenseFieldSampler<float, float> > >
+  ( thrust::host_vector<Vec3f>&,
+    thrust::host_vector<float>&,
+    LinearFieldInterp< DenseFieldSampler<float, float> >&,
+    bool );
+
+  template
+  void testTexDevice< LinearFieldInterp< DenseFieldSampler<float, float> > >
+  ( thrust::host_vector<Vec3f>&,
+    thrust::host_vector<float>&,
+    LinearFieldInterp< DenseFieldSampler<float, float> >&,
+    bool );
+
+  template
+  void testHost< LinearFieldInterp< SparseFieldSampler<float, float> > >
+  ( thrust::host_vector<Vec3f>&,
+    thrust::host_vector<float>&,
+    LinearFieldInterp< SparseFieldSampler<float, float> >&,
+    bool );
+
+  template
+  void testDevice< LinearFieldInterp< SparseFieldSampler<float, float> > >
+  ( thrust::host_vector<Vec3f>&,
+    thrust::host_vector<float>&,
+    LinearFieldInterp< SparseFieldSampler<float, float> >&,
+    bool );
+
+  template
+  void testTexDevice< LinearFieldInterp< SparseFieldSampler<float, float> > >
+  ( thrust::host_vector<Vec3f>&,
+    thrust::host_vector<float>&,
+    LinearFieldInterp< SparseFieldSampler<float, float> >&,
+    bool );
+
+  //--------------------------------------------------------------------------//
+  // half instantiation
+  template
+  void testHost<
+    LinearFieldInterp< DenseFieldSampler<Field3D::half, float> > >
+  ( thrust::host_vector<Vec3f>&,
+    thrust::host_vector<float>&,
+    LinearFieldInterp< DenseFieldSampler<Field3D::half, float> >&,
+    bool );
+
+  template
+  void testDevice<
+    LinearFieldInterp< DenseFieldSampler<Field3D::half, float> > >
+  ( thrust::host_vector<Vec3f>&,
+    thrust::host_vector<float>&,
+    LinearFieldInterp< DenseFieldSampler<Field3D::half, float> >&,
+    bool );
+
+  template
+  void testTexDevice<
+    LinearFieldInterp< DenseFieldSampler<Field3D::half, float> > >
+  ( thrust::host_vector<Vec3f>&,
+    thrust::host_vector<float>&,
+    LinearFieldInterp< DenseFieldSampler<Field3D::half, float> >&,
+    bool );
+
+  template
+  void testHost<
+    LinearFieldInterp< SparseFieldSampler<Field3D::half, float> > >
+  ( thrust::host_vector<Vec3f>&,
+    thrust::host_vector<float>&,
+    LinearFieldInterp< SparseFieldSampler<Field3D::half, float> >&,
+    bool );
+
+  template
+  void testDevice<
+    LinearFieldInterp< SparseFieldSampler<Field3D::half, float> > >
+  ( thrust::host_vector<Vec3f>&,
+    thrust::host_vector<float>&,
+    LinearFieldInterp< SparseFieldSampler<Field3D::half, float> >&,
+    bool );
+
+  template
+  void testTexDevice<
+    LinearFieldInterp< SparseFieldSampler<Field3D::half, float> > >
+  ( thrust::host_vector<Vec3f>&,
+    thrust::host_vector<float>&,
+    LinearFieldInterp< SparseFieldSampler<Field3D::half, float> >&,
+    bool );
 
 }
 

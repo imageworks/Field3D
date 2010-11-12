@@ -38,28 +38,20 @@
 #ifndef _INCLUDED_Field3D_gpu_Buffer_H_
 #define _INCLUDED_Field3D_gpu_Buffer_H_
 
-#define __CL_ENABLE_EXCEPTIONS
-
 #include "Field3D/gpu/ns.h"
 
 FIELD3D_GPU_NAMESPACE_OPEN
 
 //----------------------------------------------------------------------------//
+// Buffer
+//----------------------------------------------------------------------------//
 //! A Buffer is similar conceptually to std::vector
-template< typename T >
+//----------------------------------------------------------------------------//
+
+template <typename Data_T>
 struct Buffer
 { /* empty */
 };
-
-//----------------------------------------------------------------------------//
-//! A Cuda buffer
-template< typename T >
-struct BufferCuda;
-
-//----------------------------------------------------------------------------//
-// An OpenCL buffer
-template< typename T >
-struct BufferCL;
 
 FIELD3D_GPU_NAMESPACE_HEADER_CLOSE
 

@@ -43,75 +43,93 @@
 FIELD3D_GPU_NAMESPACE_OPEN
 
 //----------------------------------------------------------------------------//
+// FieldSampler
+//----------------------------------------------------------------------------//
 //! Base class for sampling from a voxel grid
+//----------------------------------------------------------------------------//
+
 struct FieldSampler
 {
-	FieldSampler( Field3D::V3i _dataResolution, Field3D::Box3i _dataWindow )
-	: m_dataResolution( make_int3(_dataResolution.x, _dataResolution.y, _dataResolution.z) )
-	, ystride( _dataResolution.x )
-	, zstride( _dataResolution.x * _dataResolution.y )
-	, nxnynz( _dataResolution.x * _dataResolution.y * _dataResolution.z )
-	, dataWindowMin( make_int3( _dataWindow.min.x, _dataWindow.min.y, _dataWindow.min.z ) )
-	, dataWindowMax( make_int3( _dataWindow.max.x, _dataWindow.max.y, _dataWindow.max.z ) )
-	{}
+  //--------------------------------------------------------------------------//
+  FieldSampler(Field3D::V3i _dataResolution, Field3D::Box3i _dataWindow)
+  : m_dataResolution(make_int3(_dataResolution.x,
+                               _dataResolution.y,
+                               _dataResolution.z))
+  , m_ystride(_dataResolution.x)
+  , m_zstride(_dataResolution.x * _dataResolution.y)
+  , m_nxnynz(_dataResolution.x * _dataResolution.y * _dataResolution.z)
+  , m_dataWindowMin(make_int3(_dataWindow.min.x,
+                            _dataWindow.min.y,
+                            _dataWindow.min.z))
+  , m_dataWindowMax(make_int3(_dataWindow.max.x,
+                            _dataWindow.max.y,
+                            _dataWindow.max.z))
+  {}
 
-	//! get voxel resolution
-	inline __host__  __device__
-	const int3& dataResolution() const
-	{
-		return m_dataResolution;
-	}
+  //--------------------------------------------------------------------------//
+  //! get voxel resolution
+  inline __host__ __device__
+  const int3& dataResolution() const
+  {
+    return m_dataResolution;
+  }
 
-	/*! The total number of voxels in the data window as if the field was dense
-	 * \note For sparse fields, not all voxels are allocated
-	 */
-	int dataWindowVoxelCount() const
-	{
-		return m_dataResolution.x * m_dataResolution.y * m_dataResolution.z;
-	}
+  //--------------------------------------------------------------------------//
+  /*! The total number of voxels in the data window as if the field was dense
+   * \note For sparse fields, not all voxels are allocated
+   */
+  int dataWindowVoxelCount() const
+  {
+    return m_dataResolution.x * m_dataResolution.y * m_dataResolution.z;
+  }
 
-	/*! 1d to 3d index mapping as if the field was dense
-	 * \note For sparse fields, the returned voxel index may not be for an allocated voxel
-	 */
-	inline __host__  __device__
-	int3 denseVoxelIndex( int i ) const
-	{
-		int3 id;
-		id.x = i % ystride + dataWindowMin.x;
-		id.y = ( i / ystride ) % m_dataResolution.y + dataWindowMin.y;
-		id.z = i / zstride + dataWindowMin.z;
-		return id;
-	}
+  //--------------------------------------------------------------------------//
+  /*! 1d to 3d index mapping as if the field was dense
+   * \note For sparse fields, the returned voxel index
+   *       may not be for an allocated voxel
+   */
+  inline __host__ __device__
+  int3 denseVoxelIndex(int i) const
+  {
+    int3 id;
+    id.x = i % m_ystride + m_dataWindowMin.x;
+    id.y = ( i / m_ystride ) % m_dataResolution.y + m_dataWindowMin.y;
+    id.z = i / m_zstride + m_dataWindowMin.z;
+    return id;
+  }
 
-	inline __host__  __device__
-	const int3& getDataWindowMin() const
-	{
-		return dataWindowMin;
-	}
+  //--------------------------------------------------------------------------//
+  inline __host__ __device__
+  const int3& getDataWindowMin() const
+  {
+    return m_dataWindowMin;
+  }
 
-	inline __host__  __device__
-	const int3& getDataWindowMax() const
-	{
-		return dataWindowMax;
-	}
+  //--------------------------------------------------------------------------//
+  inline __host__ __device__
+  const int3& getDataWindowMax() const
+  {
+    return m_dataWindowMax;
+  }
 
-	inline __host__   __device__
-	void applyDataWindowOffset( int &i,
-								int &j,
-								int &k ) const
-	{
-		i -= dataWindowMin.x;
-		j -= dataWindowMin.y;
-		k -= dataWindowMin.z;
-	}
+  //--------------------------------------------------------------------------//
+  inline __host__ __device__
+  void applyDataWindowOffset(int &i,
+                             int &j,
+                             int &k) const
+  {
+    i -= m_dataWindowMin.x;
+    j -= m_dataWindowMin.y;
+    k -= m_dataWindowMin.z;
+  }
 
 protected:
-	const int ystride;
-	const int zstride;
-	const int nxnynz;
-	const int3 m_dataResolution;
-	const int3 dataWindowMin;
-	const int3 dataWindowMax;
+  const int m_ystride;
+  const int m_zstride;
+  const int m_nxnynz;
+  const int3 m_dataResolution;
+  const int3 m_dataWindowMin;
+  const int3 m_dataWindowMax;
 };
 
 FIELD3D_GPU_NAMESPACE_HEADER_CLOSE
@@ -119,6 +137,4 @@ FIELD3D_GPU_NAMESPACE_HEADER_CLOSE
 //----------------------------------------------------------------------------//
 
 
-
 #endif // Include guard
-

@@ -45,44 +45,54 @@
 FIELD3D_GPU_NAMESPACE_OPEN
 
 // forward declaration
-template< typename T >
+template <typename Data_T>
 struct IteratorCL;
-template< typename T >
+template <typename Data_T>
 struct IteratorTraits;
 
 //----------------------------------------------------------------------------//
 //! A flag to identify host iterators etc.
 struct host_tag {};
+
+//----------------------------------------------------------------------------//
 //! A flag to identify Cuda iterators etc.
 struct cuda_tag {};
+
+//----------------------------------------------------------------------------//
 //! A flag to identify OpenCL iterators etc.
 struct opencl_tag {};
 
 //----------------------------------------------------------------------------//
+// IteratorTraits
+//----------------------------------------------------------------------------//
 /*! traits for a raw pointer (assumes pointing to host memory)
- * \note: use thrust::device_ptr<T> when pointing to device memory
+ * \note: use thrust::device_ptr<Data_T> when pointing to device memory
  */
-template< typename T >
-struct IteratorTraits< const T* >
+//----------------------------------------------------------------------------//
+
+template <typename Data_T>
+struct IteratorTraits <const Data_T*>
 {
-	typedef host_tag type;
+  typedef host_tag type;
 };
 
 #ifdef INCLUDE_FIELD3D_CUDA
 //----------------------------------------------------------------------------//
 //! traits for a cuda iterator
-template< typename T >
-struct IteratorTraits< thrust::detail::normal_iterator< thrust::device_ptr< T > > >
+template <typename Data_T>
+struct IteratorTraits<
+thrust::detail::normal_iterator< thrust::device_ptr< Data_T > >
+>
 {
-	typedef cuda_tag type;
+  typedef cuda_tag type;
 };
 
 //----------------------------------------------------------------------------//
 //! traits for a thrust device pointer
-template< typename T >
-struct IteratorTraits< thrust::device_ptr<T> >
+template <typename Data_T>
+struct IteratorTraits< thrust::device_ptr<Data_T> >
 {
-	typedef cuda_tag type;
+  typedef cuda_tag type;
 };
 
 #endif
@@ -90,31 +100,34 @@ struct IteratorTraits< thrust::device_ptr<T> >
 #ifdef INCLUDE_FIELD3D_OPENCL
 //----------------------------------------------------------------------------//
 //! traits for an OpenCL iterator
-template< typename T >
-struct IteratorTraits< IteratorCL<T> >
+template <typename Data_T>
+struct IteratorTraits< IteratorCL<Data_T> >
 {
-	typedef opencl_tag type;
+  typedef opencl_tag type;
 };
 #endif
 
 //----------------------------------------------------------------------------//
-//! traits for an std::vector const_iterator
-template< typename T >
-struct IteratorTraits< __gnu_cxx::__normal_iterator<const T*, std::vector<T, std::allocator<T> > > >
+//! traits for a std::vector const_iterator
+template <typename Data_T>
+struct IteratorTraits<
+__gnu_cxx::__normal_iterator<const Data_T*,
+                             std::vector<Data_T, std::allocator<Data_T> > >
+>
 {
-	typedef host_tag type;
+  typedef host_tag type;
 };
 
 //----------------------------------------------------------------------------//
-//! traits for an std::vector iterator
-template< typename T >
-struct IteratorTraits< __gnu_cxx::__normal_iterator<T*, std::vector<T, std::allocator<T> > > >
+//! traits for a std::vector iterator
+template< typename Data_T >
+struct IteratorTraits<
+__gnu_cxx::__normal_iterator<Data_T*,
+                             std::vector<Data_T, std::allocator<Data_T> > >
+>
 {
-	typedef host_tag type;
+  typedef host_tag type;
 };
-
-
-// TODO: add raw pointer traits (may need some guard to differentiate host/device)
 
 FIELD3D_GPU_NAMESPACE_HEADER_CLOSE
 

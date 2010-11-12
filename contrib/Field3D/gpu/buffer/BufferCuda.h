@@ -47,12 +47,19 @@
 FIELD3D_GPU_NAMESPACE_OPEN
 
 //----------------------------------------------------------------------------//
+// BufferCuda
+//----------------------------------------------------------------------------//
 //! A Cuda buffer (for now a thrust::device_vector)
-template< typename T >
-struct BufferCuda: public Buffer<T>, public thrust::device_vector< typename GpuFieldTraits<T>::cuda_value_type >
+//----------------------------------------------------------------------------//
+
+template <typename Data_T>
+struct BufferCuda
+: public Buffer<Data_T>
+, public thrust::device_vector
+  <typename GpuFieldTraits<Data_T>::cuda_value_type>
 {
-	typedef T value_type;
-	typedef typename GpuFieldTraits<T>::cuda_value_type cuda_value_type;
+  typedef Data_T value_type;
+  typedef typename GpuFieldTraits<Data_T>::cuda_value_type cuda_value_type;
 };
 
 FIELD3D_GPU_NAMESPACE_HEADER_CLOSE

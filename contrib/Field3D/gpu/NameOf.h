@@ -47,18 +47,18 @@
 FIELD3D_GPU_NAMESPACE_OPEN
 
 //----------------------------------------------------------------------------//
-// just some pretty formatting of type names
-template< typename T > inline std::string nameOf()
+//! just some pretty formatting of type names
+template <typename T> inline std::string nameOf()
 {
 #ifdef __GNUC__
-	// demangle names for gcc
-	int status;
-	char* demangled = abi::__cxa_demangle(typeid(T).name(), 0, 0, &status);
-	std::string result( demangled );
-	free( demangled );
-	return result;
+  // demangle names for gcc
+  int status;
+  char* demangled = abi::__cxa_demangle(typeid(T).name(), 0, 0, &status);
+  std::string result(demangled);
+  free(demangled);
+  return result;
 #else
-	return typeid(T).name();
+  return typeid(T).name();
 #endif
 }
 

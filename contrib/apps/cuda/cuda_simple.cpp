@@ -49,8 +49,9 @@
 //----------------------------------------------------------------------------//
 namespace nvcc
 {
-	template< typename Interp >
-	void testDevice( const Field3D::Box3i& dataWindow, Interp& interp );
+  template< typename Interp >
+  void testDevice( const Field3D::Box3i& dataWindow,
+                   Interp& interp );
 }
 
 //----------------------------------------------------------------------------//
@@ -58,39 +59,43 @@ namespace nvcc
 template< typename FieldType >
 void testField()
 {
-	// identify the corresponding GPU field type
-	typedef typename Field3D::Gpu::GpuFieldType< FieldType >::type FieldTypeGPU;
+  // identify the corresponding GPU field type
+  typedef typename Field3D::Gpu::GpuFieldType< FieldType >::type FieldTypeGPU;
 
-	std::cout << "testing a field of type " << Field3D::Gpu::nameOf< FieldTypeGPU > () << std::endl;
+  std::cout << "testing a field of type "
+      << Field3D::Gpu::nameOf< FieldTypeGPU >() << std::endl;
 
-	// create a test Field3D field
-	typename FieldType::Ptr field( new FieldType );
-	field->name = "hello";
-	field->attribute = "world";
-	field->setSize( Field3D::V3i( TEST_RESOLUTION, TEST_RESOLUTION, TEST_RESOLUTION ) );
+  // create a test Field3D field
+  typename FieldType::Ptr field( new FieldType );
+  field->name = "hello";
+  field->attribute = "world";
+  field->setSize(Field3D::V3i(TEST_RESOLUTION,
+                              TEST_RESOLUTION,
+                              TEST_RESOLUTION));
 
-	// fill with random values
-	randomValues( -10.0f, 10.0f, *field );
-	field->setStrMetadata( "my_attribute", "my_value" );
+  // fill with random values
+  randomValues( -10.0f, 10.0f, *field );
+  field->setStrMetadata( "my_attribute", "my_value" );
 
-	// create a GPU field and attach it to the field3d field
-	typename FieldTypeGPU::Ptr gpu_field( new FieldTypeGPU );
-	gpu_field->setField( field );
+  // create a GPU field and attach it to the field3d field
+  typename FieldTypeGPU::Ptr gpu_field(new FieldTypeGPU);
+  gpu_field->setField(field);
 
-	//! get a GPU interpolator for the field
-	typename FieldTypeGPU::LinearInterpPtr interp = gpu_field->getLinearInterpolatorDevice();
-	nvcc::testDevice( field->dataWindow(), *interp );
+  //! get a GPU interpolator for the field
+  typename FieldTypeGPU::LinearInterpPtr interp =
+      gpu_field->getLinearInterpolatorDevice();
+  nvcc::testDevice(field->dataWindow(), *interp);
 
-	std::cout << std::endl;
+  std::cout << std::endl;
 }
 
 //----------------------------------------------------------------------------//
 //! entry point
-int main( 	int argc,
-			char **argv )
+int main( int argc,
+          char **argv )
 {
-	testField< Field3D::DenseField<float> > ();
-	testField< Field3D::SparseField< float > > ();
+  testField< Field3D::DenseField<float> > ();
+  testField< Field3D::SparseField<float> > ();
 
-	return 0;
+  return 0;
 }

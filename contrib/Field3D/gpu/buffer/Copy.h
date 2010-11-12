@@ -50,104 +50,114 @@
 FIELD3D_GPU_NAMESPACE_OPEN
 
 //----------------------------------------------------------------------------//
-template< typename InputIterator, typename OutputIterator >
-OutputIterator copy(	InputIterator first,
-                    	InputIterator last,
-						OutputIterator result )
+//! Dispatch an appropriate copy based on iterator traits
+template <typename InputIterator_T, typename OutputIterator_T>
+OutputIterator_T copy(InputIterator_T first,
+                      InputIterator_T last,
+                      OutputIterator_T result)
 {
-	// dispatch the appropriate type of copy
-	return copy( first, last, result, typename IteratorTraits<InputIterator>::type(), typename IteratorTraits<OutputIterator>::type() );
+  return copy(first,
+              last,
+              result,
+              typename IteratorTraits<InputIterator_T>::type(),
+              typename IteratorTraits<OutputIterator_T>::type());
 }
 
 //----------------------------------------------------------------------------//
 //! Copy from host to host
-template< typename InputIterator, typename OutputIterator >
-OutputIterator copy( 	InputIterator first,
-						InputIterator last,
-						OutputIterator result,
-						host_tag,
-						host_tag )
+template <typename InputIterator_T, typename OutputIterator_T>
+OutputIterator_T copy(InputIterator_T first,
+                      InputIterator_T last,
+                      OutputIterator_T result,
+                      host_tag,
+                      host_tag)
 {
 #if FIELD3D_GPU_BUFFER_COPY_LOG
-	std::cout << "copying host->host\n";
+  std::cout << "copying host->host\n";
 #endif
 
-	return std::copy( first, last, result );
+  return std::copy(first, last, result);
 }
 
 #ifdef INCLUDE_FIELD3D_CUDA
 //----------------------------------------------------------------------------//
 //! Copy from host to cuda buffer
-template< typename InputIterator, typename OutputIterator >
-OutputIterator copy( 	InputIterator first,
-						InputIterator last,
-						OutputIterator result,
-						host_tag,
-						cuda_tag )
+template <typename InputIterator_T, typename OutputIterator_T>
+OutputIterator_T copy(InputIterator_T first,
+                      InputIterator_T last,
+                      OutputIterator_T result,
+                      host_tag,
+                      cuda_tag)
 {
 #if FIELD3D_GPU_BUFFER_COPY_LOG
-	std::cout << "copying host->cuda\n";
+  std::cout << "copying host->cuda\n";
 #endif
 
-	// avoid using thrust copy while half is stored as short
-	// return thrust::copy( first, last, result );
-	size_t n = std::distance( first, last );
-	cudaMemcpy( thrust::raw_pointer_cast( &( *result ) ), &( *first ), sizeof( *first ) * n, cudaMemcpyHostToDevice );
-	return result + n;
+  // avoid using thrust copy while half is stored as short
+  // return thrust::copy(first, last, result);
+  size_t n = std::distance(first, last);
+  cudaMemcpy(thrust::raw_pointer_cast( &( *result ) ),
+             &( *first ),
+             sizeof( *first ) * n,
+             cudaMemcpyHostToDevice );
+  return result + n;
 }
 
 //----------------------------------------------------------------------------//
 //! Copy from cuda buffer to host
-template< typename InputIterator, typename OutputIterator >
-OutputIterator copy( 	InputIterator first,
-						InputIterator last,
-						OutputIterator result,
-						cuda_tag,
-						host_tag )
+template <typename InputIterator_T, typename OutputIterator_T>
+OutputIterator_T copy(InputIterator_T first,
+                      InputIterator_T last,
+                      OutputIterator_T result,
+                      cuda_tag,
+                      host_tag)
 {
 #if FIELD3D_GPU_BUFFER_COPY_LOG
-	std::cout << "copying cuda->host\n";
+  std::cout << "copying cuda->host\n";
 #endif
 
-	// avoid using thrust copy while half is stored as short
-	// return thrust::copy( first, last, result );
-	size_t n = last - first;
-	cudaMemcpy( &( *result ), thrust::raw_pointer_cast( &( *first ) ), sizeof(typename OutputIterator::value_type) * n, cudaMemcpyDeviceToHost );
-	return result + n;
+  // avoid using thrust copy while half is stored as short
+  // return thrust::copy( first, last, result );
+  size_t n = last - first;
+  cudaMemcpy(&( *result ),
+             thrust::raw_pointer_cast( &( *first ) ),
+             sizeof(typename OutputIterator_T::value_type) * n,
+             cudaMemcpyDeviceToHost );
+  return result + n;
 }
 #endif
 
 #ifdef INCLUDE_FIELD3D_OPENCL
 //----------------------------------------------------------------------------//
 //! Copy from host to OpenCL buffer
-template< typename InputIterator, typename OutputIterator >
-OutputIterator copy( 	InputIterator first,
-						InputIterator last,
-						OutputIterator result,
-						host_tag,
-						opencl_tag )
+template <typename InputIterator_T, typename OutputIterator_T>
+OutputIterator_T copy(InputIterator_T first,
+                      InputIterator_T last,
+                      OutputIterator_T result,
+                      host_tag,
+                      opencl_tag)
 {
 #if FIELD3D_GPU_BUFFER_COPY_LOG
-	std::cout << "copying host->opencl\n";
+  std::cout << "copying host->opencl\n";
 #endif
 
-	result.vec()->setValue( result.index(), first, last );
+  result.vec()->setValue(result.index(), first, last);
 }
 
 //----------------------------------------------------------------------------//
 //! Copy from OpenCL buffer to host
-template< typename InputIterator, typename OutputIterator >
-OutputIterator copy( 	InputIterator first,
-						InputIterator last,
-						OutputIterator result,
-						opencl_tag,
-						host_tag )
+template<typename InputIterator_T, typename OutputIterator_T>
+OutputIterator_T copy(InputIterator_T first,
+                      InputIterator_T last,
+                      OutputIterator_T result,
+                      opencl_tag,
+                      host_tag)
 {
 #ifdef FIELD3D_GPU_BUFFER_COPY_LOG
-	std::cout << "copying opencl->host\n";
+  std::cout << "copying opencl->host\n";
 #endif
 
-	first.vec()->getValue( first.index(), last.index(), result );
+  first.vec()->getValue(first.index(), last.index(), result);
 }
 #endif
 

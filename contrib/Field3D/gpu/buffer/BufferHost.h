@@ -38,19 +38,23 @@
 #ifndef _INCLUDED_Field3D_gpu_BufferHost_H_
 #define _INCLUDED_Field3D_gpu_BufferHost_H_
 
-#include "Field3D/gpu/buffer/Buffer.h"
 #include <vector>
 
+#include "Field3D/gpu/buffer/Buffer.h"
 #include "Field3D/gpu/ns.h"
 
 FIELD3D_GPU_NAMESPACE_OPEN
 
 //----------------------------------------------------------------------------//
+// BufferHost
+//----------------------------------------------------------------------------//
 //! A Host buffer (for now a std::vector)
+//----------------------------------------------------------------------------//
+
 template< typename T >
 struct BufferHost: public Buffer<T>, public std::vector<T>
 {
-	typedef T value_type;
+  typedef T value_type;
 };
 
 FIELD3D_GPU_NAMESPACE_HEADER_CLOSE

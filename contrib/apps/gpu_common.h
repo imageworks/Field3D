@@ -61,7 +61,6 @@ typedef Imath::Rand48 Rand;
 #define SUPER_SAMPLE_COUNT 3
 #endif
 
-
 //----------------------------------------------------------------------------//
 //! just for debugging
 #define LOGLINE { std::cerr << __FILE__ << ": " << __LINE__ << std::endl; }
@@ -71,10 +70,10 @@ typedef Imath::Rand48 Rand;
 template< typename VEC >
 void dump( const VEC& v )
 {
-	typename VEC::const_iterator i( v.begin() ), e( v.end() );
-	for ( ; i != e ; ++i )
-		std::cout << *i << ", ";
-	std::cout << std::endl;
+  typename VEC::const_iterator i( v.begin() ), e( v.end() );
+  for ( ; i != e ; ++i )
+    std::cout << *i << ", ";
+  std::cout << std::endl;
 }
 
 //----------------------------------------------------------------------------//
@@ -82,30 +81,29 @@ void dump( const VEC& v )
 template< typename VEC >
 void randomValues( float minv, float maxv, VEC& dst )
 {
-	Rand rng(5171);
-	typename VEC::iterator i( dst.begin() ), e( dst.end() );
-	for ( ; i != e ; ++i )
-		*i = rng.nextf( minv, maxv );
+  Rand rng( 5171 );
+  typename VEC::iterator i( dst.begin() ), e( dst.end() );
+  for ( ; i != e ; ++i )
+    *i = rng.nextf( minv, maxv );
 }
 
 //----------------------------------------------------------------------------//
 //! generate some random locations based on an input resolution
 template< typename VEC >
-void randomLocations(	const Field3D::Box3i& bounds,
-						VEC& dst )
+void randomLocations( const Field3D::Box3i& bounds, VEC& dst )
 {
-	Rand rng( 1877 );
-	typename VEC::value_type v;
+  Rand rng( 1877 );
+  typename VEC::value_type v;
 
-	// random sampling over entire field
-	typename VEC::iterator i( dst.begin() ), e( dst.end() );
-	for ( ; i != e ; ++i )
-	{
-		v.x = rng.nextf( bounds.min.x, bounds.max.x );
-		v.y = rng.nextf( bounds.min.y, bounds.max.y );
-		v.z = rng.nextf( bounds.min.z, bounds.max.z );
-		*i = v;
-	}
+  // random sampling over entire field
+  typename VEC::iterator i( dst.begin() ), e( dst.end() );
+  for ( ; i != e ; ++i )
+  {
+    v.x = rng.nextf( bounds.min.x, bounds.max.x );
+    v.y = rng.nextf( bounds.min.y, bounds.max.y );
+    v.z = rng.nextf( bounds.min.z, bounds.max.z );
+    *i = v;
+  }
 }
 
 #endif  // Include guard

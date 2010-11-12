@@ -52,92 +52,138 @@
 FIELD3D_GPU_NAMESPACE_OPEN
 
 //----------------------------------------------------------------------------//
-//! continuous (interpolated) sampling via a uniform grid sampler (ie providing i,j,k access)
-template< typename S >
+// LinearFieldInterp
+//----------------------------------------------------------------------------//
+//! continuous (interpolated) sampling via a uniform grid sampler
+//  (ie providing i,j,k access)
+//----------------------------------------------------------------------------//
+
+template <typename Sampler_T>
 struct LinearFieldInterp
 {
-	typedef LinearFieldInterp<S> interp_type;
-	typedef S sampler_type;
-	typedef typename S::sample_type sample_type;
-	typedef typename S::value_type value_type;
+  typedef LinearFieldInterp<Sampler_T> interp_type;
+  typedef Sampler_T sampler_type;
+  typedef typename Sampler_T::sample_type sample_type;
+  typedef typename Sampler_T::value_type value_type;
 
-	LinearFieldInterp( S _sampler )
-	: sampler( _sampler )
-	{}
+  // Constructors --------------------------------------------------------------
 
-	//! sample at a voxel space location
-	template< typename ACCESSOR >
-	__host__ __device__
-	void sample( ACCESSOR& ac, const float3& vsP, sample_type& dst ) const
-	{
-		// Voxel centers are at .5 coordinates
-		// NOTE: Don't use contToDisc for this, we're looking for sample
-		// point locations, not coordinate shifts.
-		float3 p = vsP - make_float3( 0.5f );
+  LinearFieldInterp(Sampler_T _sampler)
+  : m_sampler(_sampler)
+  {}
 
-		// Lower left corner
-		int3 c1 = make_int3(	int(floorf(p.x)),
-								int(floorf(p.y)),
-								int(floorf(p.z)));
-		// Upper right corner
-		int3 c2(c1 + make_int3(1));
-		// C1 fractions
-		float3 f1(make_float3(c2) - p);
-		// C2 fraction
-		float3 f2(make_float3(1.0f) - f1);
+  // Main methods --------------------------------------------------------------
 
-		// Clamp the indexing coordinates
-		if( true ) {
-			c1.x = max( sampler.getDataWindowMin().x, min( c1.x, sampler.getDataWindowMax().x ) );
-			c2.x = max( sampler.getDataWindowMin().x, min( c2.x, sampler.getDataWindowMax().x ) );
-			c1.y = max( sampler.getDataWindowMin().y, min( c1.y, sampler.getDataWindowMax().y ) );
-			c2.y = max( sampler.getDataWindowMin().y, min( c2.y, sampler.getDataWindowMax().y ) );
-			c1.z = max( sampler.getDataWindowMin().z, min( c1.z, sampler.getDataWindowMax().z ) );
-			c2.z = max( sampler.getDataWindowMin().z, min( c2.z, sampler.getDataWindowMax().z ) );
-		}
+  //! sample at a voxel space location
+  template<typename Accessor_T>
+  __host__ __device__
+  void sample(Accessor_T& ac, const float3& vsP, sample_type& dst) const;
 
-		dst =
-			(f1.x * (f1.y * (f1.z * sampler.getValue(ac, c1.x, c1.y, c1.z) +
-							 f2.z * sampler.getValue(ac, c1.x, c1.y, c2.z)) +
-					 f2.y * (f1.z * sampler.getValue(ac, c1.x, c2.y, c1.z) +
-							 f2.z * sampler.getValue(ac, c1.x, c2.y, c2.z))) +
-			 f2.x * (f1.y * (f1.z * sampler.getValue(ac, c2.x, c1.y, c1.z) +
-							 f2.z * sampler.getValue(ac, c2.x, c1.y, c2.z)) +
-					 f2.y * (f1.z * sampler.getValue(ac, c2.x, c2.y, c1.z) +
-							 f2.z * sampler.getValue(ac, c2.x, c2.y, c2.z))));
-	}
+  //! const access to sampler
+  __host__ __device__
+  const Sampler_T& getSampler()
+  {
+    return m_sampler;
+  }
 
-	//! const access to sampler
-	__host__ __device__
-	const S& getSampler()
-	{
-		return sampler;
-	}
+  template <typename TexAccessor_T>
+  void bindTex(TexAccessor_T& tex) const;
+
+  template <typename TexAccessor_T>
+  void unbindTex(TexAccessor_T& tex) const;
+
+  // Data members --------------------------------------------------------------
+private:
+  //! member vars
+  const Sampler_T m_sampler;
+};
+
+//----------------------------------------------------------------------------//
+// LinearFieldInterp implementations
+//----------------------------------------------------------------------------//
+
+//----------------------------------------------------------------------------//
+//! sample at a voxel space location
+template <typename Sampler_T>
+template<typename Accessor_T>
+void LinearFieldInterp<Sampler_T>::sample(Accessor_T& ac,
+                                          const float3& vsP,
+                                          sample_type& dst) const
+{
+  // Voxel centers are at .5 coordinates
+  // NOTE: Don't use contToDisc for this, we're looking for sample
+  // point locations, not coordinate shifts.
+  float3 p = vsP - make_float3(0.5f);
+
+  // Lower left corner
+  int3 c1 = make_int3(int(floorf(p.x)), int(floorf(p.y)), int(floorf(p.z)));
+  // Upper right corner
+  int3 c2(c1 + make_int3(1));
+  // C1 fractions
+  float3 f1(make_float3(c2) - p);
+  // C2 fraction
+  float3 f2(make_float3(1.0f) - f1);
+
+  // Clamp the indexing coordinates
+  if( true )
+  {
+    c1.x = max(m_sampler.getDataWindowMin().x
+         , min(c1.x, m_sampler.getDataWindowMax().x));
+    c2.x = max(m_sampler.getDataWindowMin().x
+         , min(c2.x, m_sampler.getDataWindowMax().x));
+    c1.y = max(m_sampler.getDataWindowMin().y
+         , min(c1.y, m_sampler.getDataWindowMax().y));
+    c2.y = max(m_sampler.getDataWindowMin().y
+         , min(c2.y, m_sampler.getDataWindowMax().y));
+    c1.z = max(m_sampler.getDataWindowMin().z
+         , min(c1.z, m_sampler.getDataWindowMax().z));
+    c2.z = max(m_sampler.getDataWindowMin().z
+         , min(c2.z, m_sampler.getDataWindowMax().z ) );
+  }
+
+  dst = (f1.x * (f1.y * (f1.z * m_sampler.getValue(ac, c1.x, c1.y, c1.z) +
+                         f2.z * m_sampler.getValue(ac, c1.x, c1.y, c2.z)) +
+                 f2.y * (f1.z * m_sampler.getValue(ac, c1.x, c2.y, c1.z) +
+                         f2.z * m_sampler.getValue(ac, c1.x, c2.y, c2.z))) +
+         f2.x * (f1.y * (f1.z * m_sampler.getValue(ac, c2.x, c1.y, c1.z) +
+                         f2.z * m_sampler.getValue(ac, c2.x, c1.y, c2.z)) +
+                 f2.y * (f1.z * m_sampler.getValue(ac, c2.x, c2.y, c1.z) +
+                         f2.z * m_sampler.getValue(ac, c2.x, c2.y, c2.z))));
+}
+
+//----------------------------------------------------------------------------//
 
 #ifdef NVCC
-	template< typename TEX_ACCESSOR >
-	void bindTex( TEX_ACCESSOR& tex ) const
-	{
-		cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc< typename TEX_ACCESSOR::cuda_tex_value_type >();
-		tex.getTex().filterMode = cudaFilterModePoint;
-		tex.getTex().normalized = false;
-		tex.getTex().channelDesc = channelDesc;
-		if (cudaBindTexture( NULL, &tex.getTex(), sampler.dataPtr(), &channelDesc, sampler.texMemSize() ) != (unsigned int) CUDA_SUCCESS) {
-			throw std::runtime_error( "failed to bind texture" );
-		}
-	}
+template< typename Sampler_T>
+template <typename TexAccessor_T>
+void LinearFieldInterp<Sampler_T>::bindTex(TexAccessor_T& tex) const
+{
+  cudaChannelFormatDesc channelDesc
+  = cudaCreateChannelDesc< typename TexAccessor_T::cuda_tex_value_type >();
+  tex.getTex().filterMode = cudaFilterModePoint;
+  tex.getTex().normalized = false;
+  tex.getTex().channelDesc = channelDesc;
+  if (cudaBindTexture(NULL,
+                      &tex.getTex(),
+                      m_sampler.dataPtr(),
+                      &channelDesc,
+                      m_sampler.texMemSize())
+      != (unsigned int) CUDA_SUCCESS)
+  {
+    throw std::runtime_error("failed to bind texture");
+  }
+}
 
-	template< typename TEX_ACCESSOR >
-	void unbindTex( TEX_ACCESSOR& tex ) const
-	{
-		cudaUnbindTexture( &tex.getTex() );
-	}
+//----------------------------------------------------------------------------//
+
+template< typename Sampler_T>
+template <typename TexAccessor_T>
+void LinearFieldInterp<Sampler_T>::unbindTex(TexAccessor_T& tex) const
+{
+  cudaUnbindTexture(&tex.getTex());
+}
 #endif
 
-private:
-	//! member vars
-	const S sampler;
-};
 
 FIELD3D_GPU_NAMESPACE_HEADER_CLOSE
 

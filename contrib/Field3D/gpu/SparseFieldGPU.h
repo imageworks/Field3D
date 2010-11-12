@@ -39,7 +39,7 @@
 #define _INCLUDED_Field3D_gpu_SparseFieldGPU_H_
 
 #ifdef NVCC
-#error "This file is intended for GCC and isn't compatible with NVCC compiler due to Field3D includes"
+#error "This file isn't compatible with NVCC compiler due to Field3D includes"
 #endif
 
 #include "Field3D/gpu/Traits.h"
@@ -59,230 +59,318 @@
 
 FIELD3D_GPU_NAMESPACE_OPEN
 
+//----------------------------------------------------------------------------//
 // forward declarations
-template< typename A, typename B > struct SparseFieldSampler;
-template< typename A > struct LinearFieldInterp;
+template <typename A, typename B> struct SparseFieldSampler;
+template <typename A> struct LinearFieldInterp;
 
+//----------------------------------------------------------------------------//
+// BlockFunctor
 //----------------------------------------------------------------------------//
 /*! A functor to determine whether a block is required
  * \note A user defined BlockFunctor can allow partial loading onto GPU
  *       eg via a bounding box or frustum check
  */
+//----------------------------------------------------------------------------//
+
 struct BlockFunctor
 {
-	//! determine whether block <<bi,bj,bk>> is required
-	template< typename FIELD >
-	bool operator()( FIELD& f, int bi, int bj, int bk ) const;
+  //! determine whether block <<bi,bj,bk>> is required
+  template <typename Field_T>
+  bool operator()(Field_T& f, int bi, int bj, int bk) const;
 };
 
+//----------------------------------------------------------------------------//
+// EveryBlockFunctor
 //----------------------------------------------------------------------------//
 //! A concrete BlockFunctor that indicates all blocks are required
+//----------------------------------------------------------------------------//
+
 struct EveryBlockFunctor : BlockFunctor
 {
-	template< typename FIELD >
-	bool operator()( FIELD& f, int bi, int bj, int bk ) const
-	{
-		return true;
-	}
+  template<typename Field_T>
+  bool operator()(Field_T& f, int bi, int bj, int bk) const
+  {
+    return true;
+  }
 };
 
 //----------------------------------------------------------------------------//
+// SparseFieldGPU
+//----------------------------------------------------------------------------//
 //! Cuda layer for SparseFields
-template< typename Data_T >
+//----------------------------------------------------------------------------//
+
+template <typename Data_T>
 struct SparseFieldGPU : public RefBase
 {
-	typedef boost::intrusive_ptr< SparseFieldGPU > Ptr;
-	typedef typename GpuFieldTraits< Data_T >::value_type value_type;
-	typedef typename GpuFieldTraits< Data_T >::cuda_value_type cuda_value_type;
-	typedef typename GpuFieldTraits< Data_T >::interpolation_type interpolation_type;
-	typedef SparseFieldSampler< value_type, interpolation_type > sampler_type;
-	typedef LinearFieldInterp< sampler_type > LinearInterp;
-	typedef boost::shared_ptr< LinearInterp > LinearInterpPtr;
+  typedef boost::intrusive_ptr<SparseFieldGPU> Ptr;
+  typedef typename GpuFieldTraits<Data_T>::value_type value_type;
+  typedef typename GpuFieldTraits<Data_T>::cuda_value_type cuda_value_type;
+  typedef typename GpuFieldTraits<Data_T>::interpolation_type
+    interpolation_type;
+  typedef SparseFieldSampler<value_type, interpolation_type> sampler_type;
+  typedef LinearFieldInterp<sampler_type> LinearInterp;
+  typedef boost::shared_ptr<LinearInterp> LinearInterpPtr;
 
-	typedef SparseField< Data_T > field3d_type;
-	typedef typename field3d_type::Ptr field_ptr;
+  typedef SparseField<Data_T> field3d_type;
+  typedef typename field3d_type::Ptr field_ptr;
 
-	//! set the Field3D field
-	field_ptr getField()
-	{
-		return m_field;
-	}
+  // Main methods --------------------------------------------------------------
 
-	//! access the Field3D field
-	void setField( field_ptr& ptr )
-	{
-		m_field = ptr;
-	}
+  //! access the Field3D field
+  field_ptr getField()
+  {
+    return m_field;
+  }
 
-	/*! host to device transfer for blocks
-	 *  \note There is an index table and data buffer, with the data buffer
-	 *        containing both empty values and block data
-	 */
-	template< typename IntBuffer, typename Buffer, typename BlockFunctor >
-	void hostToDevice( IntBuffer& blockTable, Buffer& buffer, int& emptyValueOffset, BlockFunctor& bf ) const
-	{
-		int required_block_count = requiredBlockCount( bf );
-		int gpu_cache_element_count = deviceElementsRequired( required_block_count );
-		/*
-		std::cout << "mem required: " << gpu_cache_element_count * sizeof(Data_T) / 1000000 << "Mb for " << gpu_cache_element_count << " elements "
-				<< std::endl;
-*/
-		const V3i br = m_field->blockRes();
-		const int block_count = br.x * br.y * br.z; // total block count
+  //! set the Field3D field
+  void setField(field_ptr& src)
+  {
+    m_field = src;
+  }
 
-		buffer.resize( gpu_cache_element_count );
+  /*! host to device transfer for blocks
+   *  \note There is an index table and data buffer, with the data buffer
+   *        containing both empty values and block data
+   */
+  template<typename IntBuffer_T, typename Buffer_T, typename BlockFunctor_T>
+  void hostToDevice(IntBuffer_T& blockTable,
+                    Buffer_T& buffer,
+                    int& emptyValueOffset,
+                    BlockFunctor_T& bf) const;
 
-		std::vector< Data_T > host_empty_values( block_count );
-		std::vector< int > host_block_table( block_count, -1 ); // initialize to empty value
-
-		int i = 0;
-		int allocated_block_index = 0;
-
-		// allow room for empty values
-		//int write_index = block_count;
-		int write_index = 0;
-		int bs = m_field->blockSize();
-		int block_element_count = bs * bs * bs;
-
-		typename field3d_type::block_iterator bi( m_field->blockBegin() ), be( m_field->blockEnd() );
-		for ( ; bi != be ; ++bi, ++i )
-		{
-			host_empty_values[ i ] = m_field->getBlockEmptyValue( bi.x, bi.y, bi.z );
-			size_t block_element_count = m_field->blockSize() * m_field->blockSize() * m_field->blockSize();
-			if( m_field->blockIsAllocated( bi.x, bi.y, bi.z ) && bf( *this, bi.x, bi.y, bi.z ) ){
-				const Data_T* ptr = m_field->blockData( bi.x, bi.y, bi.z );
-				host_block_table[ i ] = write_index;
-				assert( block.data.size() == block_element_count );
-//				std::cout << "writing to index: " << write_index << " of " << gpu_cache_element_count << std::endl;
-				Field3D::Gpu::copy( ptr, ptr + block_element_count, buffer.begin() + write_index );
-				write_index += block_element_count;
-			}
-		}
-
-		assert( i == block_count );
-
-		emptyValueOffset = write_index;
-
-		// host -> device for empty values (stored after blocks)
-//		std::cout << "writing empty values of size : " << write_index << " # vals: " << host_empty_values.size() << std::endl;
-		Field3D::Gpu::copy( host_empty_values.begin(), host_empty_values.end(), buffer.begin() + write_index );
-
-		// host->device for block table;
-//		std::cout << "writing block table: " << std::endl;
-		blockTable.resize( host_block_table.size() );
-		Field3D::Gpu::copy( host_block_table.begin(), host_block_table.end(), blockTable.begin() );
-
-		m_texMemSize = gpu_cache_element_count * sizeof( Data_T );
-		m_blockCount = required_block_count;
-	//	std::cout << "done" << std::endl;
-	}
-
-	template< typename IntBuffer, typename Buffer >
-	void hostToDevice( IntBuffer& blockTable, Buffer& buffer, int& emptyValueOffset ) const
-	{
-		EveryBlockFunctor f;
-		return hostToDevice( blockTable, buffer, emptyValueOffset, f );
-	}
+  template <typename IntBuffer_T, typename Buffer_T>
+  void hostToDevice(IntBuffer_T& blockTable,
+                    Buffer_T& buffer,
+                    int& emptyValueOffset) const
+  {
+    EveryBlockFunctor f;
+    return hostToDevice(blockTable, buffer, emptyValueOffset, f);
+  }
 
 #ifdef INCLUDE_FIELD3D_CUDA
-	//----------------------------------------------------------------------------//
-	//! manufacture an interpolator for device using a BlockFunctor
-	template< typename BlockFunctor >
-	LinearInterpPtr getLinearInterpolatorDevice( BlockFunctor& bf ) const
-	{
-		int emptyValueOffset;
-		hostToDevice( m_blockTableCuda, m_bufferCuda, emptyValueOffset, bf );
 
-		return LinearInterpPtr( new LinearInterp( sampler_type( m_field->dataResolution(), m_field->dataWindow(),
-				m_blockCount, m_field->blockOrder(), m_field->blockRes(), thrust::raw_pointer_cast( &m_blockTableCuda[ 0 ] ), emptyValueOffset,
-				(cuda_value_type*) thrust::raw_pointer_cast( &m_bufferCuda[ 0 ] ), m_texMemSize ) ) );
-	}
+  //! manufacture an interpolator for device using a BlockFunctor
+  template <typename BlockFunctor_T>
+  LinearInterpPtr getLinearInterpolatorDevice(BlockFunctor_T& bf) const;
 
-	//----------------------------------------------------------------------------//
-	//! manufacture an interpolator for device
-	LinearInterpPtr getLinearInterpolatorDevice() const
-	{
-		EveryBlockFunctor f;
-		return getLinearInterpolatorDevice( f );
-	}
+  //! manufacture an interpolator for device
+  LinearInterpPtr getLinearInterpolatorDevice() const
+  {
+    EveryBlockFunctor f;
+    return getLinearInterpolatorDevice(f);
+  }
 
-	//----------------------------------------------------------------------------//
-	//! manufacture an interpolator for host using a BlockFunctor
-	template< typename BlockFunctor >
-	LinearInterpPtr getLinearInterpolatorHost( BlockFunctor& bf ) const
-	{
-		int emptyValueOffset;
-		hostToDevice( m_blockTableHost, m_bufferHost, emptyValueOffset, bf );
+  //! manufacture an interpolator for host using a BlockFunctor
+  template <typename BlockFunctor_T>
+  LinearInterpPtr getLinearInterpolatorHost(BlockFunctor_T& bf) const;
 
-//		std::cout << "block res: " << m_field->blockRes() << std::endl;
-//		std::cout << "block table host size: " << m_blockTableHost.size() << std::endl;
+  //! manufacture an interpolator for host
+  LinearInterpPtr getLinearInterpolatorHost() const
+  {
+    EveryBlockFunctor f;
+    return getLinearInterpolatorHost(f);
+  }
 
-		return LinearInterpPtr( new LinearInterp( sampler_type( m_field->dataResolution(), m_field->dataWindow(),
-				m_blockCount, m_field->blockOrder(), m_field->blockRes(), &m_blockTableHost[ 0 ], emptyValueOffset,
-				(cuda_value_type*) &m_bufferHost[ 0 ], m_texMemSize ) ) );
-	}
-
-	//----------------------------------------------------------------------------//
-	//! manufacture an interpolator for host
-	LinearInterpPtr getLinearInterpolatorHost() const
-	{
-		EveryBlockFunctor f;
-		return getLinearInterpolatorHost( f );
-	}
 #endif
 
-	//----------------------------------------------------------------------------//
-	//! Number of allocated blocks that meet BlockFunctor requirements
-	template< typename BlockFunctor >
-	int requiredBlockCount( const BlockFunctor& bf ) const
-	{
-		typename field3d_type::block_iterator bi( m_field->blockBegin() ), be( m_field->blockEnd() );
-		int result = 0;
-		for ( ; bi != be ; ++bi )
-		{
-			if( m_field->blockIsAllocated( bi.x, bi.y, bi.z )
-					&& bf( *this, bi.x, bi.y, bi.z ) ){
-				++result;
-			}
-		}
-		return result;
-	}
+  //! Number of allocated blocks that meet BlockFunctor requirements
+  template <typename BlockFunctor_T>
+  int requiredBlockCount(const BlockFunctor_T& bf) const;
 
-	int deviceElementsRequiredForBlocks( int required_block_count ) const
-	{
-		// block data
-		int bs = m_field->blockSize();
-		return required_block_count * bs * bs * bs;
-	}
+  int deviceElementsRequiredForBlocks(int required_block_count) const;
 
-	//----------------------------------------------------------------------------//
-	//! Project the required number of Data_T elements for block cache + emptyValues
-	int deviceElementsRequired( int required_block_count ) const
-	{
-		int result = 0;
+  //! Project the required number of Data_T elements
+  //  for block cache + emptyValues
+  int deviceElementsRequired(int required_block_count) const;
 
-		result += deviceElementsRequiredForBlocks( required_block_count );
-
-		// sparse block emptyValues
-		V3i br = m_field->blockRes();
-		result += br.x * br.y * br.z;
-
-		return result;
-	}
+  // Data members --------------------------------------------------------------
 
 private:
-	field_ptr m_field;
+  field_ptr m_field;
 
 #ifdef INCLUDE_FIELD3D_CUDA
-	mutable BufferCuda< int > m_blockTableCuda;
-	mutable BufferCuda< Data_T > m_bufferCuda;
+  mutable BufferCuda< int > m_blockTableCuda;
+  mutable BufferCuda< Data_T > m_bufferCuda;
 #endif
-	mutable BufferHost< int > m_blockTableHost;
-	mutable BufferHost< Data_T > m_bufferHost;
+  mutable BufferHost< int > m_blockTableHost;
+  mutable BufferHost< Data_T > m_bufferHost;
 
-	mutable int m_blockCount;
-	mutable int m_texMemSize;
+  mutable int m_blockCount;
+  mutable int m_texMemSize;
 };
+
+//----------------------------------------------------------------------------//
+// SparseFieldGPU implementations
+//----------------------------------------------------------------------------//
+
+template<typename Data_T>
+template<typename IntBuffer_T, typename Buffer_T, typename BlockFunctor_T>
+void SparseFieldGPU<Data_T>::hostToDevice(IntBuffer_T& blockTable,
+                                          Buffer_T& buffer,
+                                          int& emptyValueOffset,
+                                          BlockFunctor_T& bf) const
+{
+  int required_block_count = requiredBlockCount(bf);
+  int gpu_cache_element_count =
+  deviceElementsRequired(required_block_count);
+
+  const V3i br = m_field->blockRes();
+  const int block_count = br.x * br.y * br.z; // total block count
+
+  buffer.resize(gpu_cache_element_count);
+
+  std::vector<Data_T> host_empty_values(block_count);
+  // initialize to empty value
+  std::vector<int> host_block_table(block_count, -1);
+
+  int i = 0;
+  int allocated_block_index = 0;
+
+  // allow room for empty values
+  //int write_index = block_count;
+  int write_index = 0;
+  int bs = m_field->blockSize();
+  int block_element_count = bs * bs * bs;
+
+  typename field3d_type::block_iterator bi(m_field->blockBegin()),
+  be(m_field->blockEnd());
+  for (; bi != be; ++bi, ++i)
+  {
+    host_empty_values[i] = m_field->getBlockEmptyValue(bi.x, bi.y, bi.z);
+    size_t block_element_count = m_field->blockSize()
+    * m_field->blockSize()
+    * m_field->blockSize();
+    if( m_field->blockIsAllocated(bi.x, bi.y, bi.z)
+        && bf(*this, bi.x, bi.y, bi.z) )
+    {
+      const Data_T* ptr = m_field->blockData(bi.x, bi.y, bi.z);
+      host_block_table[i] = write_index;
+      assert(block.data.size() == block_element_count);
+
+      Field3D::Gpu::copy(ptr,
+                         ptr + block_element_count,
+                         buffer.begin() + write_index);
+      write_index += block_element_count;
+    }
+  }
+
+  assert(i == block_count);
+
+  emptyValueOffset = write_index;
+
+  // host -> device for empty values (stored after blocks)
+  Field3D::Gpu::copy(host_empty_values.begin(),
+                     host_empty_values.end(),
+                     buffer.begin() + write_index);
+
+  // host->device for block table;
+  blockTable.resize(host_block_table.size() );
+  Field3D::Gpu::copy(host_block_table.begin(),
+                     host_block_table.end(),
+                     blockTable.begin());
+
+  m_texMemSize = gpu_cache_element_count * sizeof(Data_T);
+  m_blockCount = required_block_count;
+}
+
+//----------------------------------------------------------------------------//
+template <typename Data_T>
+template <typename BlockFunctor_T>
+int SparseFieldGPU<Data_T>::requiredBlockCount(const BlockFunctor_T& bf) const
+{
+  typename field3d_type::block_iterator bi(m_field->blockBegin()),
+  be(m_field->blockEnd());
+  int result = 0;
+  for (; bi != be; ++bi)
+  {
+    if( m_field->blockIsAllocated(bi.x, bi.y, bi.z)
+        && bf(*this, bi.x, bi.y, bi.z))
+    {
+      ++result;
+    }
+  }
+  return result;
+}
+
+//----------------------------------------------------------------------------//
+
+template <typename Data_T>
+int SparseFieldGPU<Data_T>::deviceElementsRequiredForBlocks
+  (int required_block_count) const
+{
+  // block data
+  int bs = m_field->blockSize();
+  return required_block_count * bs * bs * bs;
+}
+
+//----------------------------------------------------------------------------//
+
+template <typename Data_T>
+int SparseFieldGPU<Data_T>::deviceElementsRequired(int required_block_count)
+  const
+{
+  int result = 0;
+
+  result += deviceElementsRequiredForBlocks(required_block_count);
+
+  // sparse block emptyValues
+  V3i br = m_field->blockRes();
+  result += br.x * br.y * br.z;
+
+  return result;
+}
+
+//----------------------------------------------------------------------------//
+
+#ifdef INCLUDE_FIELD3D_CUDA
+
+template <typename Data_T>
+template <typename BlockFunctor_T>
+typename SparseFieldGPU<Data_T>::LinearInterpPtr
+SparseFieldGPU<Data_T>::getLinearInterpolatorDevice(BlockFunctor_T& bf) const
+{
+  int emptyValueOffset;
+  hostToDevice(m_blockTableCuda, m_bufferCuda, emptyValueOffset, bf);
+
+  return LinearInterpPtr(
+      new LinearInterp(
+          sampler_type(m_field->dataResolution(),
+                       m_field->dataWindow(),
+                       m_blockCount,
+                       m_field->blockOrder(),
+                       m_field->blockRes(),
+                       thrust::raw_pointer_cast(&m_blockTableCuda[0]),
+                       emptyValueOffset,
+                       (cuda_value_type*)
+                       thrust::raw_pointer_cast(&m_bufferCuda[0]),
+                       m_texMemSize)));
+}
+
+//----------------------------------------------------------------------------//
+
+template <typename Data_T>
+template <typename BlockFunctor_T>
+typename SparseFieldGPU<Data_T>::LinearInterpPtr
+SparseFieldGPU<Data_T>::getLinearInterpolatorHost(BlockFunctor_T& bf) const
+{
+  int emptyValueOffset;
+  hostToDevice(m_blockTableHost, m_bufferHost, emptyValueOffset, bf);
+
+  return LinearInterpPtr(
+      new LinearInterp(
+          sampler_type(m_field->dataResolution(),
+                       m_field->dataWindow(),
+                       m_blockCount,
+                       m_field->blockOrder(),
+                       m_field->blockRes(),
+                       &m_blockTableHost[0],
+                       emptyValueOffset,
+                       (cuda_value_type*) &m_bufferHost[0],
+                       m_texMemSize)));
+}
+#endif
 
 FIELD3D_GPU_NAMESPACE_HEADER_CLOSE
 

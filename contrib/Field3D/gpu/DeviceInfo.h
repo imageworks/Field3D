@@ -38,29 +38,32 @@
 #ifndef _INCLUDED_Field3D_gpu_DeviceInfo_H_
 #define _INCLUDED_Field3D_gpu_DeviceInfo_H_
 
-#include "Field3D/gpu/ns.h"
 #include <cassert>
 #include <cuda_runtime_api.h>
 
+#include "Field3D/gpu/ns.h"
+
 FIELD3D_GPU_NAMESPACE_OPEN
 
+//----------------------------------------------------------------------------//
 //! What compute capability are we running on?
 /*! \note To do this within a kernel use the defined __CUDA_ARCH__ */
-inline int deviceComputeCapability( int deviceId = 0 )
+inline int deviceComputeCapability(int deviceId = 0)
 {
-	cudaDeviceProp deviceProp;
+  cudaDeviceProp deviceProp;
 
-	int nDevCount = 0;
-	cudaGetDeviceCount( &nDevCount );
-	assert( nDevCount > deviceId );
-	cudaGetDeviceProperties( &deviceProp, deviceId );
-	return deviceProp.major * 100 + deviceProp.minor * 10;
+  int nDevCount = 0;
+  cudaGetDeviceCount(&nDevCount);
+  assert(nDevCount > deviceId);
+  cudaGetDeviceProperties(&deviceProp, deviceId);
+  return deviceProp.major * 100 + deviceProp.minor * 10;
 }
 
+//----------------------------------------------------------------------------//
 //! Does the device support double precision float?
-inline bool deviceSupportsDoublePrecision( int deviceId = 0 )
+inline bool deviceSupportsDoublePrecision(int deviceId = 0)
 {
-	return deviceComputeCapability( deviceId ) >= 130;
+  return deviceComputeCapability(deviceId) >= 130;
 }
 
 FIELD3D_GPU_NAMESPACE_HEADER_CLOSE

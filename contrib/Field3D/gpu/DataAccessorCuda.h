@@ -38,54 +38,61 @@
 #ifndef _INCLUDED_Field3D_gpu_DataAccessorCuda_H_
 #define _INCLUDED_Field3D_gpu_DataAccessorCuda_H_
 
-// field3d includes
-#include "Field3D/gpu/ns.h"
-#include "Field3D/Types.h"
-
 // cuda includes
 #include <host_defines.h>
 #include <device_functions.h>
 
+// field3d includes
+#include "Field3D/gpu/ns.h"
+#include "Field3D/Types.h"
+
 FIELD3D_GPU_NAMESPACE_OPEN
 
 //----------------------------------------------------------------------------//
+// DataAccessor
+//----------------------------------------------------------------------------//
 //! 1d access to data
+//----------------------------------------------------------------------------//
+
 struct DataAccessor
-{
+{ /* empty */
 };
 
 //----------------------------------------------------------------------------//
-//! access data directly from cuda global memory, or host memory
-template< typename T >
+// GlobalMemAccessor
+//----------------------------------------------------------------------------//
+//! Access data directly from cuda global memory, or host memory
+//----------------------------------------------------------------------------//
+
+template <typename Data_T>
 struct GlobalMemAccessor: public DataAccessor
 {
-	inline __host__  __device__
-	T operator()( 	int i, T* phi )
-	{
-		return phi[ i ];
-	}
+  inline __host__ __device__
+  Data_T operator()(int i, Data_T* phi)
+  {
+    return phi[i];
+  }
 };
 
 //----------------------------------------------------------------------------//
 //! specialization of GlobalMemAccessor for half float
-template< >
-struct GlobalMemAccessor< Field3D::half >
+template<>
+struct GlobalMemAccessor<Field3D::half>
 {
-	inline __host__  __device__
-	float operator()( 	int i,
-						short* phi )
-	{
+  inline __host__ __device__
+  float operator()(int i, short* phi)
+  {
 #ifdef __CUDA_ARCH__
 #if CUDART_VERSION < 3010
 #error "requires cuda version >= 3.1 for half float intrinsics"
 #endif
-		// half to float intrinsic is only available in device code
-		return __half2float( phi[i] );
+    // half to float intrinsic is only available in device code
+    return __half2float(phi[i]);
 #else
-		// ILM's half to float conversion is only available in host code
-		return *reinterpret_cast< half* > ( &phi[ i ] );
+    // ILM's half to float conversion is only available in host code
+    return *reinterpret_cast<half*>(&phi[i]);
 #endif
-	}
+  }
 };
 
 FIELD3D_GPU_NAMESPACE_HEADER_CLOSE

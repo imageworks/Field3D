@@ -45,84 +45,90 @@
 FIELD3D_GPU_NAMESPACE_OPEN
 
 //----------------------------------------------------------------------------//
+// DenseFieldSampler
+//----------------------------------------------------------------------------//
 //! discrete sampling from a dense voxel grid
-template< typename VALUE_TYPE, typename SAMPLE_TYPE >
+//----------------------------------------------------------------------------//
+
+template <typename Value_T, typename Sample_T>
 struct DenseFieldSampler
 : public FieldSampler
 {
-	typedef VALUE_TYPE value_type;
-	typedef typename GpuFieldTraits< VALUE_TYPE >::cuda_value_type cuda_value_type;
-	typedef SAMPLE_TYPE sample_type;
-	typedef FieldSampler base;
+  typedef Value_T value_type;
+  typedef typename GpuFieldTraits<Value_T>::cuda_value_type
+  cuda_value_type;
+  typedef Sample_T sample_type;
+  typedef FieldSampler base;
 
-	DenseFieldSampler( 	const Field3D::V3i& _dataResolution,
-						const Field3D::Box3i& _dataWindow,
-						cuda_value_type* _phi )
-	: base( _dataResolution, _dataWindow )
-	, phi( _phi )
-	{}
+  //--------------------------------------------------------------------------//
+  DenseFieldSampler(const Field3D::V3i& _dataResolution,
+                    const Field3D::Box3i& _dataWindow,
+                    cuda_value_type* _phi)
+  : base(_dataResolution, _dataWindow)
+  , m_phi(_phi)
+  {}
 
-	//! 3d to 1d index mapping
-	inline __host__  __device__
-	int getIndex( 	int i,
-					int j,
-					int k ) const
-	{
-		kernel_assert( i >= dataWindowMin.x );
-		kernel_assert( i <= dataWindowMax.x );
-		kernel_assert( j >= dataWindowMin.y );
-		kernel_assert( j <= dataWindowMax.y );
-		kernel_assert( k >= dataWindowMin.z );
-		kernel_assert( k <= dataWindowMax.z );
+  //--------------------------------------------------------------------------//
+  //! 3d to 1d index mapping
+  inline __host__ __device__
+  int getIndex(int i, int j, int k) const
+  {
+    kernel_assert(i >= m_dataWindowMin.x);
+    kernel_assert(i <= m_dataWindowMax.x);
+    kernel_assert(j >= m_dataWindowMin.y);
+    kernel_assert(j <= m_dataWindowMax.y);
+    kernel_assert(k >= m_dataWindowMin.z);
+    kernel_assert(k <= m_dataWindowMax.z);
 
-		// Add crop window offset
-		applyDataWindowOffset( i, j, k );
+    // Add crop window offset
+    applyDataWindowOffset(i, j, k);
 
-		return k * zstride + j * ystride + i;
-	}
+    return k * m_zstride + j * m_ystride + i;
+  }
 
-	int allocatedVoxelCount() const
-	{
-		return dataWindowVoxelCount();
-	}
+  //--------------------------------------------------------------------------//
+  int allocatedVoxelCount() const
+  {
+    return dataWindowVoxelCount();
+  }
 
-	//! get value using 1d index
-	template< typename ACCESSOR >
-	inline __host__  __device__
-	SAMPLE_TYPE getValue( 	ACCESSOR& ac,
-							int idx ) const
-	{
-		return ac( idx, phi );
-	}
+  //--------------------------------------------------------------------------//
+  //! get value using 1d index
+  template<typename Accessor_T>
+  inline __host__ __device__
+  Sample_T getValue(Accessor_T& ac, int idx) const
+  {
+    return ac(idx, m_phi);
+  }
 
-	//! get value using 3d index
-	template< typename ACCESSOR >
-	inline __host__  __device__
-	SAMPLE_TYPE getValue( 	ACCESSOR& ac,
-							int x,
-							int y,
-							int z ) const
-	{
-		return getValue( ac, getIndex( x, y, z ) );
-	}
+  //--------------------------------------------------------------------------//
+  //! get value using 3d index
+  template<typename Accessor_T>
+  inline __host__ __device__
+  Sample_T getValue(Accessor_T& ac, int x, int y, int z) const
+  {
+    return getValue(ac, getIndex(x, y, z));
+  }
 
-	//! expose data pointer for texture binding
-	cuda_value_type* dataPtr() const
-	{
-		return phi;
-	}
+  //--------------------------------------------------------------------------//
+  //! expose data pointer for texture binding
+  cuda_value_type* dataPtr() const
+  {
+    return m_phi;
+  }
 
-	//! expose data size for texture binding
-	size_t texMemSize() const
-	{
-		return nxnynz * sizeof(VALUE_TYPE);
-	}
+  //--------------------------------------------------------------------------//
+  //! expose data size for texture binding
+  size_t texMemSize() const
+  {
+    return m_nxnynz * sizeof(Value_T);
+  }
 
-	//! data ptr
-	cuda_value_type* phi;
+private:
+  //! data ptr
+  cuda_value_type* m_phi;
 };
 
 FIELD3D_GPU_NAMESPACE_HEADER_CLOSE
 
 #endif // Include guard
-

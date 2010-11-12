@@ -47,35 +47,37 @@ FIELD3D_GPU_NAMESPACE_OPEN
 
 //----------------------------------------------------------------------------//
 // forward declaration
-template< typename InputIterator, typename OutputIterator >
-OutputIterator copy(	InputIterator first,
-                    	InputIterator last,
-						OutputIterator result );
+template <typename InputIterator_T, typename OutputIterator_T>
+OutputIterator_T copy(InputIterator_T first,
+                      InputIterator_T last,
+                      OutputIterator_T result);
 
 //----------------------------------------------------------------------------//
 //! dump a host buffer
-template< typename T >
-void dumpBuffer( const std::vector<T>& b )
+template <typename Data_T>
+void dumpBuffer(const std::vector<Data_T>& b)
 {
-	std::cout << "type: " << nameOf<T>() << "\n";
-	typename std::vector< T >::const_iterator i( b.begin() ), e( b.end() );
-	for( ; i != e; ++i ){
-		std::cout << *i << " ";
-	}
-	std::cout << std::endl;
+  std::cout << "type: " << nameOf<Data_T>() << "\n";
+  typename std::vector<Data_T>::const_iterator i(b.begin()), e(b.end());
+  for(; i != e; ++i){
+    std::cout << *i << " ";
+  }
+  std::cout << std::endl;
 }
 
 //----------------------------------------------------------------------------//
 //! dump a device buffer
-template< typename Buffer >
-void dumpBuffer( const Buffer& device_buffer )
+template <typename Buffer>
+void dumpBuffer(const Buffer& device_buffer)
 {
-	std::vector< typename Buffer::value_type > host_buffer( device_buffer.size() );
+  std::vector<typename Buffer::value_type> host_buffer(device_buffer.size());
 
-	// device->host
-	Field3D::Gpu::copy( device_buffer.begin(), device_buffer.end(), host_buffer.begin() );
+  // device->host
+  Field3D::Gpu::copy(device_buffer.begin(),
+                     device_buffer.end(),
+                     host_buffer.begin());
 
-	dumpBuffer( host_buffer );
+  dumpBuffer(host_buffer);
 }
 
 FIELD3D_GPU_NAMESPACE_HEADER_CLOSE

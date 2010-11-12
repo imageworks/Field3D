@@ -53,63 +53,75 @@ template <class Data_T> class DenseFieldGPU;
 template <class Data_T> class SparseFieldGPU;
 
 //----------------------------------------------------------------------------//
+// GpuFieldType
+//----------------------------------------------------------------------------//
 //! Traits class that maps from Field3D field types to Field3D::GPU field types
-template< typename T >
+//----------------------------------------------------------------------------//
+
+template <typename Data_T>
 struct GpuFieldType;
 
 //----------------------------------------------------------------------------//
 //! specialization for dense fields
-template< typename Data_T >
-struct GpuFieldType< Field3D::DenseField< Data_T > >
+template <typename Data_T>
+struct GpuFieldType<Field3D::DenseField<Data_T> >
 {
-	typedef Field3D::Gpu::DenseFieldGPU< Data_T > type;
+  typedef Field3D::Gpu::DenseFieldGPU<Data_T> type;
 };
 
 //----------------------------------------------------------------------------//
 //! specialization for sparse fields
-template< typename Data_T >
-struct GpuFieldType< Field3D::SparseField< Data_T > >
+template <typename Data_T>
+struct GpuFieldType< Field3D::SparseField<Data_T> >
 {
-	typedef Field3D::Gpu::SparseFieldGPU< Data_T > type;
+  typedef Field3D::Gpu::SparseFieldGPU<Data_T> type;
 };
 
 //----------------------------------------------------------------------------//
+// Field3DFieldType
+//----------------------------------------------------------------------------//
 //! Traits class that maps from Field3D field types to Field3D::GPU field types
-template< typename T >
+//----------------------------------------------------------------------------//
+
+template <typename T>
 struct Field3DFieldType;
 
 //----------------------------------------------------------------------------//
 //! specialization for dense fields
-template< typename Data_T >
-struct Field3DFieldType< Field3D::Gpu::DenseFieldGPU< Data_T > >
+template <typename Data_T>
+struct Field3DFieldType<Field3D::Gpu::DenseFieldGPU<Data_T> >
 {
-	typedef Field3D::DenseField< Data_T > type;
+  typedef Field3D::DenseField< Data_T > type;
 };
 
 //----------------------------------------------------------------------------//
 //! specialization for sparse fields
-template< typename Data_T >
-struct Field3DFieldType< Field3D::Gpu::SparseFieldGPU< Data_T > >
+template<typename Data_T>
+struct Field3DFieldType<Field3D::Gpu::SparseFieldGPU<Data_T> >
 {
-	typedef Field3D::SparseField< Data_T > type;
+  typedef Field3D::SparseField<Data_T> type;
 };
 
 //----------------------------------------------------------------------------//
+// GpuFieldTraits
+//----------------------------------------------------------------------------//
 //! Traits class that defines gpu storage and access types
-template< typename T >
+//----------------------------------------------------------------------------//
+
+template <typename T>
 struct GpuFieldTraits
 {
 };
 
 //----------------------------------------------------------------------------//
 //! specialization for double precision float scalar field
-template< >
-struct GpuFieldTraits< double >
+template<>
+struct GpuFieldTraits<double>
 {
-	typedef double value_type;
-	typedef double interpolation_type;
-	typedef double cuda_value_type;
-	typedef double cl_value_type;
+  typedef double value_type;
+  typedef double interpolation_type;
+  typedef double cuda_value_type;
+  typedef double cl_value_type;
 #ifdef NVCC
 
 #ifdef __CUDA_ARCH__
@@ -118,49 +130,52 @@ struct GpuFieldTraits< double >
 #endif
 #endif
 
-	typedef int2 cuda_tex_value_type;
-	typedef texture< cuda_tex_value_type, 1, cudaReadModeElementType > cuda_tex_type;
+  typedef int2 cuda_tex_value_type;
+  typedef texture<cuda_tex_value_type, 1, cudaReadModeElementType>
+    cuda_tex_type;
 #endif
 };
 
 //----------------------------------------------------------------------------//
 //! specialization for single precision float scalar field
-template< >
-struct GpuFieldTraits< float >
+template<>
+struct GpuFieldTraits<float>
 {
-	typedef float value_type;
-	typedef float interpolation_type;
-	typedef float cuda_value_type;
-	typedef float cl_value_type;
+  typedef float value_type;
+  typedef float interpolation_type;
+  typedef float cuda_value_type;
+  typedef float cl_value_type;
 #ifdef NVCC
-	typedef float cuda_tex_value_type;
-	typedef texture< cuda_tex_value_type, 1, cudaReadModeElementType > cuda_tex_type;
+  typedef float cuda_tex_value_type;
+  typedef texture<cuda_tex_value_type, 1, cudaReadModeElementType>
+    cuda_tex_type;
 #endif
 };
 
 //----------------------------------------------------------------------------//
 //! specialization for half precision float scalar field
-template< >
-struct GpuFieldTraits< Field3D::half >
+template<>
+struct GpuFieldTraits<Field3D::half>
 {
-	typedef Field3D::half value_type;
-	typedef float interpolation_type;
-	typedef short cuda_value_type;
-	typedef Field3D::half cl_value_type;
+  typedef Field3D::half value_type;
+  typedef float interpolation_type;
+  typedef short cuda_value_type;
+  typedef Field3D::half cl_value_type;
 #ifdef NVCC
-	typedef short cuda_tex_value_type;
-	typedef texture< cuda_tex_value_type, 1, cudaReadModeElementType > cuda_tex_type;
+  typedef short cuda_tex_value_type;
+  typedef texture< cuda_tex_value_type, 1, cudaReadModeElementType >
+    cuda_tex_type;
 #endif
 };
 
 //----------------------------------------------------------------------------//
 //! specialization for ints
-template< >
-struct GpuFieldTraits< int >
+template<>
+struct GpuFieldTraits<int>
 {
-	typedef int value_type;
-	typedef int cuda_value_type;
-	typedef int cl_value_type;
+  typedef int value_type;
+  typedef int cuda_value_type;
+  typedef int cl_value_type;
 };
 
 FIELD3D_GPU_NAMESPACE_HEADER_CLOSE

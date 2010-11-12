@@ -50,16 +50,15 @@
     } \
   FIELD3D_NAMESPACE_HEADER_CLOSE
 
-
 //----------------------------------------------------------------------------//
 
 // an assert that can be used in a cuda kernel
 #ifdef __CUDA_ARCH__
 // when compiling device code, ignore
-#define kernel_assert( v )
+#define kernel_assert(v)
 #else
 // when compiling host code, include the assert
-#define kernel_assert( v ) assert( v )
+#define kernel_assert(v) assert(v)
 #endif
 
 //----------------------------------------------------------------------------//

@@ -55,30 +55,44 @@ namespace nvcc
 	template< typename Interp >
 	void testDevice( const Field3D::Box3i& dataWindow, Interp& interp )
 	{
-		GlobalMemAccessor< typename Interp::value_type > ac;
+		GlobalMemAccessor<typename Interp::value_type> ac;
 
 		int sample_count = 10;
 		// set up some random locations
-		thrust::host_vector< Vec3f > host_p( sample_count );
-		randomLocations( dataWindow, host_p );
+		thrust::host_vector< Vec3f > host_p(sample_count);
+        randomLocations(dataWindow, host_p);
 		// copy to device
-		thrust::device_vector< Vec3f > device_p = host_p;
+		thrust::device_vector<Vec3f> device_p = host_p;
 		// allocate result vector
-		thrust::device_vector< typename Interp::sample_type > device_result( sample_count, 0.0f );
+		thrust::device_vector<typename Interp::sample_type>
+		  device_result( sample_count, 0.0f );
 
 		// make our user defined functor
-		RandomSampleFunctor< Interp, GlobalMemAccessor< typename Interp::value_type > > f( ac, interp, thrust::raw_pointer_cast( &device_p[ 0 ] ),
-				thrust::raw_pointer_cast( &device_result[ 0 ] ) );
+		RandomSampleFunctor< Interp,
+		  GlobalMemAccessor< typename Interp::value_type > >
+		  f(ac,
+		    interp,
+		    thrust::raw_pointer_cast(&device_p[0]),
+			thrust::raw_pointer_cast(&device_result[0]));
+
 		// execute it
-		RunFunctor( f, sample_count, thrust::device_space_tag() );
+		RunFunctor(f, sample_count, thrust::device_space_tag());
 
 		// copy the result back to host for logging
-		thrust::host_vector< typename Interp::sample_type > host_result = device_result;
+		thrust::host_vector< typename Interp::sample_type >
+		  host_result = device_result;
 		std::cout << "gpu result: ";
 		dump( host_result );
 	}
 
 	// explicit instantiation for different field types
-	template void testDevice< LinearFieldInterp< DenseFieldSampler< float, float > > > ( const Field3D::Box3i& dataWindow, LinearFieldInterp< DenseFieldSampler< float, float > >& );
-	template void testDevice< LinearFieldInterp< SparseFieldSampler< float, float > > > ( const Field3D::Box3i& dataWindow, LinearFieldInterp< SparseFieldSampler< float, float > >& );
+	template
+	void testDevice< LinearFieldInterp< DenseFieldSampler<float, float> > >
+	( const Field3D::Box3i& dataWindow,
+	  LinearFieldInterp< DenseFieldSampler<float, float> >& );
+
+	template
+	void testDevice< LinearFieldInterp< SparseFieldSampler<float, float> > >
+	( const Field3D::Box3i& dataWindow,
+	  LinearFieldInterp< SparseFieldSampler<float, float> >& );
 }

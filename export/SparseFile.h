@@ -644,7 +644,7 @@ void Reference<Data_T>::decBlockRef(int blockIdx)
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-int Reference<Data_T>::blockSize(int blockIdx) const
+int Reference<Data_T>::blockSize(int /* blockIdx */) const
 {
   return valuesPerBlock * sizeof(Data_T);
 }

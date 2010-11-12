@@ -82,6 +82,8 @@ Options parseOptions(int argc, char **argv);
 
 void createField(const Options &options);
 
+void writeGlobalMetadata(Field3DOutputFile &out);
+
 template <typename Data_T>
 void createConcreteScalarField(const Options &options);
 
@@ -226,6 +228,18 @@ void createField(const Options &options)
 
 //----------------------------------------------------------------------------//
 
+void writeGlobalMetadata(Field3DOutputFile &out)
+{
+  out.metadata().setFloatMetadata("float_global_metadata", 1.0f);
+  out.metadata().setVecFloatMetadata("vec_float_global_metadata", V3f(1.0f));
+  out.metadata().setIntMetadata("int_global_metadata", 1);
+  out.metadata().setVecIntMetadata("vec_int_global_metadata", V3i(1));
+  out.metadata().setStrMetadata("str_global_metadata", "string");
+  out.writeGlobalMetadata();  
+}
+
+//----------------------------------------------------------------------------//
+
 template <typename Data_T>
 void createConcreteScalarField(const Options &options)
 {
@@ -244,6 +258,7 @@ void createConcreteScalarField(const Options &options)
   Field3DOutputFile out;
   out.create(options.filename);
   out.writeScalarLayer<Data_T>(field);
+  writeGlobalMetadata(out);
 }
 
 //----------------------------------------------------------------------------//
@@ -268,6 +283,7 @@ void createConcreteVectorField(const Options &options)
   Field3DOutputFile out;
   out.create(options.filename);
   out.writeVectorLayer<Data_T>(field);
+  writeGlobalMetadata(out);
 }
 
 //----------------------------------------------------------------------------//
@@ -276,11 +292,11 @@ void setCommon(const FieldRes::Ptr field, const Options &options)
 {
   field->name = options.name;
   field->attribute = options.attribute; 
-  field->setFloatMetadata("float_metadata", 1.0f);
-  field->setVecFloatMetadata("vec_float_metadata", V3f(1.0f));
-  field->setIntMetadata("int_metadata", 1);
-  field->setVecIntMetadata("vec_int_metadata", V3i(1));
-  field->setStrMetadata("str_metadata", "string");
+  field->metadata().setFloatMetadata("float_metadata", 1.0f);
+  field->metadata().setVecFloatMetadata("vec_float_metadata", V3f(1.0f));
+  field->metadata().setIntMetadata("int_metadata", 1);
+  field->metadata().setVecIntMetadata("vec_int_metadata", V3i(1));
+  field->metadata().setStrMetadata("str_metadata", "string");
 
   M44d localToWorld;
   localToWorld.setScale(options.resolution);

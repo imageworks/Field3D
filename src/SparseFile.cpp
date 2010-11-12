@@ -98,7 +98,6 @@ int SparseFileManager::deallocateBlock(const SparseFile::CacheBlock &cb)
   int bytesFreed = 0;
   SparseFile::Reference<Data_T> &reference = m_fileData.ref<Data_T>(cb.refIdx);
 
-
   // Note: we don't need to lock the block's mutex because
   // deallocateBlock() is only called while the SparseFileManager's
   // mutex is also locked (in flushCache() or deallocateBlocks()).
@@ -108,8 +107,11 @@ int SparseFileManager::deallocateBlock(const SparseFile::CacheBlock &cb)
 
   // lock the current block to make sure its blockUsed flag and ref
   // counts don't change
-  //boost::mutex::scoped_lock lock(reference.blockMutex[cb.blockIdx]);
+  // Note: this lock order is made consistent w/ allocate to prevent
+  // deadlocks and crashes.
 
+  boost::mutex::scoped_lock lock_B(reference.blockMutex[cb.blockIdx]);
+  
   // check whether the block is still in use
   if (reference.refCounts[cb.blockIdx] > 0)
     return bytesFreed;
@@ -120,6 +122,7 @@ int SparseFileManager::deallocateBlock(const SparseFile::CacheBlock &cb)
     reference.blockUsed[cb.blockIdx] = false;
   }
   else {
+
     // the block wasn't in use, so free it
     reference.unloadBlock(cb.blockIdx);
     bytesFreed = reference.blockSize(cb.blockIdx);
@@ -148,12 +151,14 @@ void SparseFileManager::deallocateBlock(CacheList::iterator &it)
 
 void SparseFileManager::deallocateBlocks(int bytesNeeded)
 {
-  boost::mutex::scoped_lock lock(m_mutex);
+  boost::mutex::scoped_lock lock_A(m_mutex);
 
   while (m_blockCacheList.begin() != m_blockCacheList.end() &&
          m_maxMemUseInBytes-m_memUse < bytesNeeded) {
+
     if (m_nextBlock == m_blockCacheList.end())
       m_nextBlock = m_blockCacheList.begin();
+
     SparseFile::CacheBlock &cb = *m_nextBlock;
 
     // if bytesFreed is set to >0, then we've already freed a block
@@ -251,7 +256,10 @@ void SparseFileManager::addBlockToCache(DataTypeEnum blockType,
   // specific block (in activateBlock()), so we should make sure we
   // never lock the SparseFileManager and *then* a block, to ensure we
   // don't have a deadlock.
-  boost::mutex::scoped_lock lock(m_mutex);
+  //
+  //  Note: this was changed so the order was consistent w/ dealloc
+  //  again, see activateBlock()
+  //  boost::mutex::scoped_lock lock(m_mutex);
 
   SparseFile::CacheBlock block(blockType, fileId, blockIdx);
   if (m_nextBlock == m_blockCacheList.end()) {

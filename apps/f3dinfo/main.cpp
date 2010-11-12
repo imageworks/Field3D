@@ -214,15 +214,15 @@ void printFieldInfo(typename Field<Data_T>::Ptr field, const Options &options)
   printMapping(field->mapping());
 
   cout << "    Int metadata:" << endl;
-  printMap(field->intMetadata(), "      ");
+  printMap(field->metadata().intMetadata(), "      ");
   cout << "    Float metadata:" << endl;
-  printMap(field->floatMetadata(), "      ");
+  printMap(field->metadata().floatMetadata(), "      ");
   cout << "    V3i metadata:" << endl;
-  printMap(field->vecIntMetadata(), "      ");
+  printMap(field->metadata().vecIntMetadata(), "      ");
   cout << "    V3f metadata:" << endl;
-  printMap(field->vecFloatMetadata(), "      ");
+  printMap(field->metadata().vecFloatMetadata(), "      ");
   cout << "    String metadata:" << endl;
-  printMap(field->strMetadata(), "      ");
+  printMap(field->metadata().strMetadata(), "      ");
 }
 
 //----------------------------------------------------------------------------//
@@ -323,6 +323,19 @@ void printFileInfo(const std::string &filename, const Options &options)
 
     }
   }
+
+  cout << "  Global metadata" << endl;
+
+  cout << "    Int metadata:" << endl;
+  printMap(in.metadata().intMetadata(), "      ");
+  cout << "    Float metadata:" << endl;
+  printMap(in.metadata().floatMetadata(), "      ");
+  cout << "    V3i metadata:" << endl;
+  printMap(in.metadata().vecIntMetadata(), "      ");
+  cout << "    V3f metadata:" << endl;
+  printMap(in.metadata().vecFloatMetadata(), "      ");
+  cout << "    String metadata:" << endl;
+  printMap(in.metadata().strMetadata(), "      ");
 
 }
 

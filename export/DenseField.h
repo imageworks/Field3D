@@ -174,7 +174,7 @@ public:
   //! Returns the internal memory size in each dimension. This is used for
   //! example in LinearInterpolator, where it optimizes random access to
   //! voxels.
-  const V3i &internalMemSize() const
+  const FIELD3D_VEC3_T<size_t> &internalMemSize() const
   { return m_memSize; }
 
   // From FieldBase ------------------------------------------------------------
@@ -198,9 +198,9 @@ public:
   // Data members --------------------------------------------------------------
 
   //! Memory allocation size in each dimension
-  V3i m_memSize;
+  FIELD3D_VEC3_T<size_t> m_memSize;
   //! X scanline * Y scanline size
-  int m_memSizeXY;
+  size_t m_memSizeXY;
   //! Field storage
   std::vector<Data_T> m_data;
 
@@ -565,13 +565,19 @@ void DenseField<Data_T>::sizeChanged()
   m_memSizeXY = m_memSize.x * m_memSize.y;
 
   // Check that mem size is >= 0 in all dimensions
-  if (std::min(std::min(m_memSize.x, m_memSize.y), m_memSize.z) < 0)
+  if (base::m_dataWindow.max.x < base::m_dataWindow.min.x ||
+      base::m_dataWindow.max.y < base::m_dataWindow.min.y ||
+      base::m_dataWindow.max.z < base::m_dataWindow.min.z)
     throw Exc::ResizeException("Attempt to resize ResizableField object "
                                "using negative size. Data window was: " +
-                               boost::lexical_cast<std::string>(m_memSize));
+                               boost::lexical_cast<std::string>(
+                                 base::m_dataWindow.min) + " - " +
+                               boost::lexical_cast<std::string>(
+                                 base::m_dataWindow.max));
 
   // Allocate memory
   try {
+    std::vector<Data_T>().swap(m_data);
     m_data.resize(m_memSize.x * m_memSize.y * m_memSize.z);
   }
   catch (std::bad_alloc &e) {

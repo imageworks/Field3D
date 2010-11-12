@@ -48,7 +48,6 @@
 #include <hdf5.h>
 #include <H5Epublic.h>
 
-#include <boost/shared_ptr.hpp>
 #include <boost/tokenizer.hpp>
 #include <boost/utility.hpp>
 
@@ -188,6 +187,16 @@ namespace {
     return true;
   }
 
+//----------------------------------------------------------------------------//
+
+  static herr_t localPrintError( hid_t estack_id, void *stream )
+  {
+    printf("H5E message -----------------------\n");
+    return H5Eprint2(estack_id, static_cast<FILE*>(stream));
+  }
+  
+//----------------------------------------------------------------------------//
+
 } // end of local namespace
 
 //----------------------------------------------------------------------------//
@@ -265,12 +274,17 @@ Partition::getVectorLayerNames(std::vector<std::string> &names) const
 //----------------------------------------------------------------------------//
 
 Field3DFileBase::Field3DFileBase()
-  : m_file(-1)
+  : m_file(-1), m_metadata(this)
 {
   // Suppressing HDF error messages
   // Explanation about the function for the error stack is here:
   // http://www.hdfgroup.org/HDF5/doc/RM/RM_H5E.html#Error-SetAuto2
-  H5Eset_auto(H5E_DEFAULT, NULL, NULL);
+  if (getenv("DEBUG_HDF")) {
+    cerr << "Field3DFile -- HDF5 messages are on" << endl;
+    H5Eset_auto(H5E_DEFAULT, localPrintError, NULL);
+  } else {
+    H5Eset_auto(H5E_DEFAULT, NULL, NULL);
+  }
 }
 
 //----------------------------------------------------------------------------//
@@ -591,6 +605,21 @@ bool Field3DInputFile::open(const string &filename)
       //Msg::print(Msg::SevWarning, "Missing version_number attribute");
     }
 
+    try { 
+      if (H5Lexists(m_file, "field3d_global_metadata", H5P_DEFAULT)) {      
+        // read the metadata 
+        H5ScopedGopen metadataGroup(m_file, "field3d_global_metadata");
+        if (metadataGroup.id() > 0) {    
+          readMetadata(metadataGroup.id());
+        }
+      }
+    }
+    catch (...) {
+      Msg::print(Msg::SevWarning, 
+                 "Unknown error when reading file metadata ");
+      //throw BadFileHierarchyException(filename);
+    }
+
     try {
       if (!readPartitionAndLayerInfo()) {
         success = false;
@@ -809,7 +838,7 @@ readMetadata(hid_t metadata_id, FieldBase::Ptr field) const
               }
               continue;
             }
-            field->setStrMetadata(name, value);
+            field->metadata().setStrMetadata(name, value);
              
           }
           else {
@@ -832,14 +861,14 @@ readMetadata(hid_t metadata_id, FieldBase::Ptr field) const
                 if (!readAttribute(metadata_id, name, dims[0], value))
                   Msg::print(Msg::SevWarning, "Failed to read metadata " 
                             + string(name));
-                field->setIntMetadata(name, value);
+                field->metadata().setIntMetadata(name, value);
               }
               else if (dims[0] == 3){
                 V3i value;
                 if (!readAttribute(metadata_id, name, dims[0], value.x))
                   Msg::print(Msg::SevWarning, "Failed to read metadata " + 
                             string(name) );
-                field->setVecIntMetadata(name, value);
+                field->metadata().setVecIntMetadata(name, value);
               }
               else {
                 Msg::print(Msg::SevWarning, 
@@ -855,14 +884,123 @@ readMetadata(hid_t metadata_id, FieldBase::Ptr field) const
                   Msg::print(Msg::SevWarning, "Failed to read metadata " + 
                             string(name) );
                 
-                field->setFloatMetadata(name, value);
+                field->metadata().setFloatMetadata(name, value);
               }
               else if (dims[0] == 3){
                 V3f value;
                 if (!readAttribute(metadata_id, name, dims[0], value.x))
                   Msg::print(Msg::SevWarning, "Failed to read metadata "+ 
                             string(name) );
-                field->setVecFloatMetadata(name, value);
+                field->metadata().setVecFloatMetadata(name, value);
+              }
+              else {
+                Msg::print(Msg::SevWarning, "Attribute of size " +
+                           boost::lexical_cast<std::string>(dims[0]) +
+                           " is not valid for metadata");
+              }
+            }
+            else {               
+              Msg::print(Msg::SevWarning, "Attribute '" + string(name) + 
+                        + "' has unsupported data type for metadata");
+              
+            }
+          }
+        }
+        if (name) {
+          delete[] name;
+        }
+      }
+    }
+  }
+
+  return true;
+}
+
+//----------------------------------------------------------------------------//
+
+//! \todo Replace char* with std::string
+bool  
+Field3DInputFile::readMetadata(hid_t metadata_id)
+{
+
+  hsize_t num_attrs = H5Aget_num_attrs(metadata_id);
+
+  if (num_attrs > 0) { 
+    for (hsize_t idx=0; idx < num_attrs ; ++idx) {
+      H5ScopedAopenIdx attrIdx(metadata_id, idx);
+      size_t len = H5Aget_name(attrIdx.id(), 0, NULL);
+      if (len > 0) {
+        char *name = new char[len+1];
+        if (H5Aget_name(attrIdx.id(), len+1, name) > 0) {
+          H5ScopedAopen attr(metadata_id, name, H5P_DEFAULT);
+          H5ScopedAget_space attrSpace(attr);
+          H5ScopedAget_type attrType(attr);           
+          H5T_class_t typeClass = H5Tget_class(attrType);
+
+          if (typeClass == H5T_STRING) { 
+            string value;
+            if (!readAttribute(metadata_id, name, value)) {
+              Msg::print(Msg::SevWarning, 
+                         "Failed to read metadata " + string(name));
+              if (name) {
+                delete[] name;
+              }
+              continue;
+            }
+            metadata().setStrMetadata(name, value);
+             
+          }
+          else {
+
+            if (H5Sget_simple_extent_ndims(attrSpace) != 1) {
+              Msg::print(Msg::SevWarning, "Bad attribute rank for attribute " 
+                        + string(name));
+              if (name) {
+                delete[] name;
+              }
+              continue;
+            }            
+
+            hsize_t dims[1];
+            H5Sget_simple_extent_dims(attrSpace, dims, NULL);
+ 
+            if (typeClass == H5T_INTEGER) { 
+              if (dims[0] == 1){
+                int value;
+                if (!readAttribute(metadata_id, name, dims[0], value))
+                  Msg::print(Msg::SevWarning, "Failed to read metadata " 
+                            + string(name));
+                metadata().setIntMetadata(name, value);
+              }
+              else if (dims[0] == 3){
+                V3i value;
+                if (!readAttribute(metadata_id, name, dims[0], value.x))
+                  Msg::print(Msg::SevWarning, "Failed to read metadata " + 
+                            string(name) );
+                metadata().setVecIntMetadata(name, value);
+              }
+              else {
+                Msg::print(Msg::SevWarning, 
+                           "Attribute of size " + 
+                           boost::lexical_cast<std::string>(dims[0]) 
+                           + " is not valid for metadata");
+              }
+            }
+            else if (typeClass == H5T_FLOAT) { 
+              if (dims[0] == 1){
+                float value;
+                if (!readAttribute(metadata_id, name, dims[0], value))
+                  Msg::print(Msg::SevWarning, "Failed to read metadata " + 
+                            string(name) );
+                
+                metadata().setFloatMetadata(name, value);
+              }
+              else if (dims[0] == 3){
+                V3f value;
+                if (!readAttribute(metadata_id, name, dims[0], value.x))
+                  Msg::print(Msg::SevWarning, "Failed to read metadata "+ 
+                            string(name) );
+                metadata().setVecFloatMetadata(name, value);
               }
               else {
                 Msg::print(Msg::SevWarning, "Attribute of size " +
@@ -1150,8 +1288,10 @@ bool Field3DOutputFile::writeMetadata(hid_t metadataGroup, FieldBase::Ptr field)
   using namespace Hdf5Util;
 
   {
-    FieldBase::StrMetadata::const_iterator i = field->strMetadata().begin();
-    FieldBase::StrMetadata::const_iterator end = field->strMetadata().end();
+    FieldMetadata<FieldBase>::StrMetadata::const_iterator i = 
+      field->metadata().strMetadata().begin();
+    FieldMetadata<FieldBase>::StrMetadata::const_iterator end = 
+      field->metadata().strMetadata().end();
     for (; i != end; ++i) {
       if (!writeAttribute(metadataGroup, i->first, i->second))
       {
@@ -1162,8 +1302,10 @@ bool Field3DOutputFile::writeMetadata(hid_t metadataGroup, FieldBase::Ptr field)
   }
 
   {
-    FieldBase::IntMetadata::const_iterator i = field->intMetadata().begin();
-    FieldBase::IntMetadata::const_iterator end = field->intMetadata().end();
+    FieldMetadata<FieldBase>::IntMetadata::const_iterator i = 
+      field->metadata().intMetadata().begin();
+    FieldMetadata<FieldBase>::IntMetadata::const_iterator end = 
+      field->metadata().intMetadata().end();
     for (; i != end; ++i) {
       if (!writeAttribute(metadataGroup, i->first, 1, i->second))
       {
@@ -1174,8 +1316,10 @@ bool Field3DOutputFile::writeMetadata(hid_t metadataGroup, FieldBase::Ptr field)
   }
 
   {
-    FieldBase::FloatMetadata::const_iterator i = field->floatMetadata().begin();
-    FieldBase::FloatMetadata::const_iterator end = field->floatMetadata().end();
+    FieldMetadata<FieldBase>::FloatMetadata::const_iterator i = 
+      field->metadata().floatMetadata().begin();
+    FieldMetadata<FieldBase>::FloatMetadata::const_iterator end = 
+      field->metadata().floatMetadata().end();
     for (; i != end; ++i) {
       if (!writeAttribute(metadataGroup, i->first, 1, i->second))
       {
@@ -1186,10 +1330,10 @@ bool Field3DOutputFile::writeMetadata(hid_t metadataGroup, FieldBase::Ptr field)
   }
 
   {
-    FieldBase::VecIntMetadata::const_iterator i = 
-      field->vecIntMetadata().begin();
-    FieldBase::VecIntMetadata::const_iterator end = 
-      field->vecIntMetadata().end();
+    FieldMetadata<FieldBase>::VecIntMetadata::const_iterator i = 
+      field->metadata().vecIntMetadata().begin();
+    FieldMetadata<FieldBase>::VecIntMetadata::const_iterator end = 
+      field->metadata().vecIntMetadata().end();
     for (; i != end; ++i) {
       if (!writeAttribute(metadataGroup, i->first, 3, i->second.x))
       {
@@ -1200,10 +1344,10 @@ bool Field3DOutputFile::writeMetadata(hid_t metadataGroup, FieldBase::Ptr field)
   }
 
   {
-    FieldBase::VecFloatMetadata::const_iterator i = 
-      field->vecFloatMetadata().begin();
-    FieldBase::VecFloatMetadata::const_iterator end = 
-      field->vecFloatMetadata().end();
+    FieldMetadata<FieldBase>::VecFloatMetadata::const_iterator i = 
+      field->metadata().vecFloatMetadata().begin();
+    FieldMetadata<FieldBase>::VecFloatMetadata::const_iterator end = 
+      field->metadata().vecFloatMetadata().end();
     for (; i != end; ++i) {
       if (!writeAttribute(metadataGroup, i->first, 3, i->second.x))
       {
@@ -1216,6 +1360,107 @@ bool Field3DOutputFile::writeMetadata(hid_t metadataGroup, FieldBase::Ptr field)
 
   return true;
 
+}
+
+//----------------------------------------------------------------------------//
+
+bool Field3DOutputFile::writeMetadata(hid_t metadataGroup)
+{
+  using namespace Hdf5Util;
+
+  {
+    FieldMetadata<Field3DFileBase>::StrMetadata::const_iterator i = 
+      metadata().strMetadata().begin();
+    FieldMetadata<Field3DFileBase>::StrMetadata::const_iterator end = 
+      metadata().strMetadata().end();
+    for (; i != end; ++i) {
+      if (!writeAttribute(metadataGroup, i->first, i->second))
+      {
+        Msg::print(Msg::SevWarning, "Writing attribute " + i->first );
+        return false;
+      }
+    }
+  }
+
+  {
+    FieldMetadata<Field3DFileBase>::IntMetadata::const_iterator i = 
+      metadata().intMetadata().begin();
+    FieldMetadata<Field3DFileBase>::IntMetadata::const_iterator end = 
+      metadata().intMetadata().end();
+    for (; i != end; ++i) {
+      if (!writeAttribute(metadataGroup, i->first, 1, i->second))
+      {
+        Msg::print(Msg::SevWarning, "Writing attribute " + i->first);
+        return false;
+      }
+    }
+  }
+
+  {
+    FieldMetadata<Field3DFileBase>::FloatMetadata::const_iterator i = 
+      metadata().floatMetadata().begin();
+    FieldMetadata<Field3DFileBase>::FloatMetadata::const_iterator end = 
+      metadata().floatMetadata().end();
+    for (; i != end; ++i) {
+      if (!writeAttribute(metadataGroup, i->first, 1, i->second))
+      {
+        Msg::print(Msg::SevWarning, "Writing attribute " + i->first);
+        return false;
+      }
+    }
+  }
+
+  {
+    FieldMetadata<Field3DFileBase>::VecIntMetadata::const_iterator i = 
+      metadata().vecIntMetadata().begin();
+    FieldMetadata<Field3DFileBase>::VecIntMetadata::const_iterator end = 
+      metadata().vecIntMetadata().end();
+    for (; i != end; ++i) {
+      if (!writeAttribute(metadataGroup, i->first, 3, i->second.x))
+      {
+        Msg::print(Msg::SevWarning, "Writing attribute " + i->first);
+        return false;
+      }
+    }
+  }
+
+  {
+    FieldMetadata<Field3DFileBase>::VecFloatMetadata::const_iterator i = 
+      metadata().vecFloatMetadata().begin();
+    FieldMetadata<Field3DFileBase>::VecFloatMetadata::const_iterator end = 
+      metadata().vecFloatMetadata().end();
+    for (; i != end; ++i) {
+      if (!writeAttribute(metadataGroup, i->first, 3, i->second.x))
+      {
+        Msg::print(Msg::SevWarning, "Writing attribute " + i->first);
+        return false;
+      }
+    }
+
+  }
+
+  return true;
+
+}
+
+//----------------------------------------------------------------------------//
+
+bool 
+Field3DOutputFile::writeGlobalMetadata()
+{
+
+  // Add metadata group and write it out  
+  H5ScopedGcreate metadataGroup(m_file, "field3d_global_metadata");
+  if (metadataGroup.id() < 0) {
+    Msg::print(Msg::SevWarning, "Error creating group: file metadata");
+    return false;
+  }  
+  if (!writeMetadata(metadataGroup.id())) {
+    Msg::print(Msg::SevWarning, "Error writing file metadata.");
+    return false;
+  }    
+ 
+  return true;
 }
 
 //----------------------------------------------------------------------------//

@@ -245,9 +245,13 @@ void PluginLoader::loadPlugins()
           }
         }
       } else {
-        Msg::print(Msg::SevWarning,
-                  "Field3D plugin loader: failed to load "
-                  "the symbol registerField3DPlugin");
+        char *debugEnvVar = getenv("FIELD3D_DEBUG");
+        if (debugEnvVar) {
+          // debug env var exist, so print warning
+          Msg::print(Msg::SevWarning,
+                     "Field3D plugin loader: failed to load "
+                     "the symbol registerField3DPlugin");
+        }
       }
     }
   }

@@ -52,9 +52,10 @@
 #include <boost/intrusive_ptr.hpp> 
 #include <boost/thread/mutex.hpp>
 
-#include "DataTypeConversion.h"
+#include "Traits.h"
 #include "Exception.h"
 #include "FieldMapping.h"
+#include "FieldMetadata.h"
 #include "Log.h"
 #include "RefCount.h"
 #include "Types.h"
@@ -135,12 +136,6 @@ public:
   // Typedefs ------------------------------------------------------------------
 
   typedef boost::intrusive_ptr<FieldBase> Ptr;
-  typedef std::map<std::string, std::string> StrMetadata;
-  typedef std::map<std::string, int> IntMetadata;
-  typedef std::map<std::string, float> FloatMetadata;
-  typedef std::map<std::string, V3i> VecIntMetadata;
-  typedef std::map<std::string, V3f> VecFloatMetadata;
-
   typedef FieldBase class_type;
 
   // Constructors --------------------------------------------------------------
@@ -150,6 +145,9 @@ public:
 
   //! Constructor
   FieldBase();
+
+  //! Copy Constructor
+  FieldBase(const FieldBase &);
 
   //! Destructor
   virtual ~FieldBase();
@@ -200,61 +198,13 @@ public:
   //! \name Metadata
   //! \{
 
-  //! Tries to retrieve a V3f metadata value. Returns the specified
-  //! default value if no metadata was found. 
-  V3f vecFloatMetadata(const std::string &name, const V3f &defaultVal) const;
+  //! accessor to the m_metadata class
+  FieldMetadata<FieldBase>& metadata()
+  { return m_metadata; }
 
-  //! Tries to retrieve a float metadata value. Returns the specified
-  //! default value if no metadata was found. 
-  float floatMetadata(const std::string &name, const float defaultVal) const;
-
-  //! Tries to retrieve a V3i metadata value. Returns the specified
-  //! default value if no metadata was found. 
-  V3i vecIntMetadata(const std::string &name, const V3i &defaultVal) const;
-
-  //! Tries to retrieve an int metadata value. Returns the specified
-  //! default value if no metadata was found. 
-  int intMetadata(const std::string &name, const int defaultVal) const;
-
-  //! Tries to retrieve a string metadata value. Returns the specified
-  //! default value if no metadata was found. 
-  std::string strMetadata(const std::string &name, 
-                          const std::string &defaultVal) const;
-
-  //! Read only access to the m_vecFloatMetadata dictionary
-  const VecFloatMetadata& vecFloatMetadata() 
-  { return m_vecFloatMetadata; }
-    
-  //! Read only access to the m_floatMetadata dictionary
-  const FloatMetadata& floatMetadata() 
-  { return m_floatMetadata; }
-
-  //! Read only access to the m_vecIntMetadata dictionary
-  const VecIntMetadata& vecIntMetadata() 
-  { return m_vecIntMetadata; }
-
-  //! Read only access to the m_intMetadata dictionary
-  const IntMetadata& intMetadata() 
-  { return m_intMetadata; }
-
-  //! Read only access to the m_strMetadata dictionary
-  const StrMetadata& strMetadata() 
-  { return m_strMetadata; }
-
-  //! Set the a V3f value for the given metadata name.
-  void setVecFloatMetadata(const std::string &name, const V3f &val);
-    
-  //! Set the a float value for the given metadata name.
-  void setFloatMetadata(const std::string &name, const float val);
-
-  //! Set the a V3i value for the given metadata name.
-  void setVecIntMetadata(const std::string &name, const V3i &val);
-
-  //! Set the a int value for the given metadata name.
-  void setIntMetadata(const std::string &name, const int val);
-
-  //! Set the a string value for the given metadata name.
-  void setStrMetadata(const std::string &name, const std::string &val); 
+  //! Read only access to the m_metadata class
+  const FieldMetadata<FieldBase>& metadata() const
+  { return m_metadata; }
 
   //! This function should implemented by concrete classes to  
   //! get the callback when metadata changes
@@ -262,7 +212,8 @@ public:
   { /* Empty */ }
 
   //! Copies the metadata from a second field
-  void copyMetadata(const FieldBase &field);
+  void copyMetadata(const FieldBase &field)
+  { m_metadata = field.metadata(); }
 
   //! \}
 
@@ -277,16 +228,8 @@ public:
 
   // Private data members ------------------------------------------------------
 
-  //! V3f metadata
-  VecFloatMetadata m_vecFloatMetadata;
-  //! Float metadata
-  FloatMetadata m_floatMetadata;
-  //! V3i metadata
-  VecIntMetadata m_vecIntMetadata;
-  //! Int metadata
-  IntMetadata m_intMetadata;
-  //! String metadata
-  StrMetadata m_strMetadata;
+  //! metadata
+  FieldMetadata<FieldBase> m_metadata;
 
 };
 
@@ -544,7 +487,7 @@ class Field : public FieldRes
   // Other member functions ----------------------------------------------------
 
   virtual std::string dataTypeString() const 
-  { return dataTypeToString<Data_T>(); }
+  { return DataTypeTraits<Data_T>::name(); }
 
 private:
 

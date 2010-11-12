@@ -59,6 +59,7 @@
 
 #include "EmptyField.h"
 #include "Field.h"
+#include "FieldMetadata.h"
 #include "ClassFactory.h"
 #include "Hdf5Util.h"
 
@@ -283,6 +284,20 @@ public:
 
   //! \}
 
+  // Access to metadata --------------------------------------------------------  
+
+  //! accessor to the m_metadata class
+  FieldMetadata<Field3DFileBase>& metadata()
+  { return m_metadata; }
+
+  //! Read only access to the m_metadata class
+  const FieldMetadata<Field3DFileBase>& metadata() const
+  { return m_metadata; }
+ 
+  //! This function should implemented by concrete classes to  
+  //! get the callback when metadata changes
+  virtual void metadataHasChanged(const std::string &/* name */) 
+  { /* Empty */ }
 
   // Debug ---------------------------------------------------------------------
 
@@ -355,7 +370,18 @@ protected:
   //! The key is the "group" and the value is a space separated list of 
   //! "partitionName.0:Layer1 partitionName.1:Layer0  ..."  
   GroupMembershipMap m_groupMembership;
-  
+
+  //! metadata
+  FieldMetadata<Field3DFileBase> m_metadata;
+
+private:
+
+  // Private member functions --------------------------------------------------
+
+  Field3DFileBase(const Field3DFileBase&);
+  void operator =(const Field3DFileBase&); 
+
+
 };
 
 //----------------------------------------------------------------------------//
@@ -538,6 +564,9 @@ private:
   //! Read metadata for this layer
   bool readMetadata(hid_t metadata_id, FieldBase::Ptr field) const;
 
+  //! Read global metadata for this file
+  bool readMetadata(hid_t metadata_id);
+
   // Data members --------------------------------------------------------------
 
   //! Filename, only to be set by open().
@@ -631,6 +660,9 @@ public:
   //! Creates a .f3d file on disk
   bool create(const std::string &filename, CreateMode cm = OverwriteMode);
 
+  //! This routine is call if you want to write out global metadata to disk
+  bool writeGlobalMetadata();
+
   //! This routine is called just before closing to write out any group
   //! membership to disk.
   bool writeGroupMembership();
@@ -653,6 +685,9 @@ public:
 
   //! Writes metadata for this layer
   bool writeMetadata(hid_t metadataGroup, FieldBase::Ptr layer);
+
+  //! Writes metadata for this file
+  bool writeMetadata(hid_t metadataGroup);
 
 };
 
@@ -928,7 +963,7 @@ Field3DInputFile::readScalarLayersAs(const std::string &layerName) const
   typename FieldList::iterator i = originals.begin();
   for (; i != originals.end(); ++i) {
     typename Field_T<Data_T>::Ptr targetField;
-    targetField = boost::dynamic_pointer_cast<Field_T<Data_T> >(*i);
+    targetField = field_dynamic_cast<Field_T<Data_T> >(*i);
     if (targetField) {
       output.push_back(targetField);
     } else {
@@ -963,7 +998,7 @@ Field3DInputFile::readScalarLayersAs(const std::string &partitionName,
   typename FieldList::iterator i = originals.begin();
   for (; i != originals.end(); ++i) {
     typename Field_T<Data_T>::Ptr targetField;
-    targetField = boost::dynamic_pointer_cast<Field_T<Data_T> >(*i);
+    targetField = field_dynamic_cast<Field_T<Data_T> >(*i);
     if (targetField) {
       output.push_back(targetField);
     } else {
@@ -997,7 +1032,7 @@ Field3DInputFile::readVectorLayersAs(const std::string &layerName) const
   typename FieldList::iterator i = originals.begin();
   for (; i != originals.end(); ++i) {
     typename Field_T<Data_T>::Ptr targetField;
-    targetField = boost::dynamic_pointer_cast<Field_T<Data_T> >(*i);
+    targetField = field_dynamic_cast<Field_T<Data_T> >(*i);
     if (targetField) {
       output.push_back(targetField);
     } else {
@@ -1032,7 +1067,7 @@ Field3DInputFile::readVectorLayersAs(const std::string &partitionName,
   typename FieldList::iterator i = originals.begin();
   for (; i != originals.end(); ++i) {
     typename Field_T<Data_T>::Ptr targetField;
-    targetField = boost::dynamic_pointer_cast<Field_T<Data_T> >(*i);
+    targetField = field_dynamic_cast<Field_T<Data_T> >(*i);
     if (targetField) {
       output.push_back(targetField);
     } else {
@@ -1117,6 +1152,14 @@ Field3DInputFile::readProxyLayer(const std::string &partitionName,
           // Construct the field and load the data
           typename EmptyField<Data_T>::Ptr field(new EmptyField<Data_T>);
           field->setSize(extents, dataW);
+
+          // read the metadata 
+          string metadataPath = layerPath + "/metadata";
+          H5ScopedGopen metadataGroup(m_file, metadataPath.c_str());
+          if (metadataGroup.id() > 0) {    
+            readMetadata(metadataGroup.id(), field);
+          }
+
           // ... Set the name of the field so it's possible to 
           // ... re-create the file
           field->name = partitionName;
@@ -1488,10 +1531,12 @@ readField(const std::string &className, hid_t layerGroup,
     return FieldPtr();
   }
 
-  FieldBase::Ptr field = io->read(layerGroup, filename, layerPath);
+  DataTypeEnum typeEnum = DataTypeTraits<Data_T>::typeEnum();
+  FieldBase::Ptr field = io->read(layerGroup, filename, layerPath, typeEnum);
   
   if (!field) {
-    Msg::print(Msg::SevWarning, "Couldn't read layer");
+    // We don't need to print a message, because it could just be that
+    // a layer of the specified data type and name couldn't be found
     return FieldPtr();
   }
 

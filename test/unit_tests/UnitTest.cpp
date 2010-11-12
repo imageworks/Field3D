@@ -42,14 +42,15 @@
 
 #include <boost/timer.hpp>
 
-#include <Field3D/DenseField.h>
-#include <Field3D/EmptyField.h>
-#include <Field3D/Field3DFile.h>
-#include <Field3D/FieldInterp.h>
-#include <Field3D/InitIO.h>
-#include <Field3D/MACField.h>
-#include <Field3D/SparseField.h>
-#include <Field3D/Types.h>
+#include "Field3D/DenseField.h"
+#include "Field3D/EmptyField.h"
+#include "Field3D/Field3DFile.h"
+#include "Field3D/FieldInterp.h"
+#include "Field3D/InitIO.h"
+#include "Field3D/MACField.h"
+#include "Field3D/SparseField.h"
+#include "Field3D/Types.h"
+#include "Field3D/Log.h"
 
 //----------------------------------------------------------------------------//
 
@@ -93,7 +94,7 @@ namespace {
     boost::timer timer;
     ~ScopedPrintTimer()
     {
-      Msg::print("  Time elapsed: " + boost::lexical_cast<std::string>(timer.elapsed()));
+      Msg::print("  Time elapsed: " + lexical_cast<string>(timer.elapsed()));
     }
   };
 }
@@ -108,7 +109,7 @@ void testBasicField()
   typedef FIELD3D_VEC3_T<Data_T> Vec3_T;
 
   SField dummy;
-  string TName(NameForType<Data_T>::name());
+  string TName(DataTypeTraits<Data_T>::name());
   Msg::print("Basic Field tests for type " + dummy.className() + 
             "<" + TName + ">");
 
@@ -352,7 +353,7 @@ void testBasicField()
     typename SField::const_iterator j = sField.cbegin(toRead);
     int cellCountJ = 0;
     for (; j != end; ++j) {
-      // Msg::print("Checking " + str(j.x) + " " + str(j.y) + " " + str(j.z));
+
       BOOST_CHECK_EQUAL(*j, testVal);    
       cellCountJ++;
     }
@@ -489,21 +490,21 @@ void testBasicField()
                   WriteSequence<Data_T>());
     std::for_each((*vField).begin(), (*vField).end(), 
                   WriteSequence<Vec3_T>());
-    sField->setIntMetadata("first",1);
-    sField->setIntMetadata("second",2);
+    sField->metadata().setIntMetadata("first",1);
+    sField->metadata().setIntMetadata("second",2);
 
     typename SField::Ptr sfclone = 
-      dynamic_pointer_cast<SField >((*sField).clone());
+      field_dynamic_cast<SField >((*sField).clone());
     BOOST_CHECK_EQUAL(isIdentical<Data_T>(sField, sfclone), true);
 
     typename VField::Ptr vfclone = 
-      dynamic_pointer_cast<VField >((*vField).clone());
+      field_dynamic_cast<VField >((*vField).clone());
     BOOST_CHECK_EQUAL(isIdentical<Vec3_T>(vField, vfclone), true);
 
-    BOOST_CHECK_EQUAL(sField->intMetadata("first",-1), 
-                      sfclone->intMetadata("first", -1));
-    BOOST_CHECK_EQUAL(sField->intMetadata("second", -1), 
-                      sfclone->intMetadata("second",-1));
+    BOOST_CHECK_EQUAL(sField->metadata().intMetadata("first",-1), 
+                      sfclone->metadata().intMetadata("first", -1));
+    BOOST_CHECK_EQUAL(sField->metadata().intMetadata("second", -1), 
+                      sfclone->metadata().intMetadata("second",-1));
     
     typename SField::Ptr sfcopy = new SField(*sField);
     BOOST_CHECK_EQUAL(isIdentical<Data_T>(sField, sfcopy), true);
@@ -511,10 +512,10 @@ void testBasicField()
     typename VField::Ptr vfcopy = new VField(*vField);
     BOOST_CHECK_EQUAL(isIdentical<Vec3_T>(vField, vfcopy), true);
 
-    BOOST_CHECK_EQUAL(sField->intMetadata("first",-1), 
-                      sfcopy->intMetadata("first",-1));
-    BOOST_CHECK_EQUAL(sField->intMetadata("second",-1), 
-                      sfcopy->intMetadata("second",-1));
+    BOOST_CHECK_EQUAL(sField->metadata().intMetadata("first",-1), 
+                      sfcopy->metadata().intMetadata("first",-1));
+    BOOST_CHECK_EQUAL(sField->metadata().intMetadata("second",-1), 
+                      sfcopy->metadata().intMetadata("second",-1));
 
     typename SField::Ptr sfequal(new SField);
     *sfequal = *sField;
@@ -524,10 +525,10 @@ void testBasicField()
     *vfequal = *vField;
     BOOST_CHECK_EQUAL(isIdentical<Vec3_T>(vField, vfequal), true);
 
-    BOOST_CHECK_EQUAL(sField->intMetadata("first",-1), 
-                      sfequal->intMetadata("first",-1));
-    BOOST_CHECK_EQUAL(sField->intMetadata("second",-1), 
-                      sfequal->intMetadata("second",-1));
+    BOOST_CHECK_EQUAL(sField->metadata().intMetadata("first",-1), 
+                      sfequal->metadata().intMetadata("first",-1));
+    BOOST_CHECK_EQUAL(sField->metadata().intMetadata("second",-1), 
+                      sfequal->metadata().intMetadata("second",-1));
   }
 
 }
@@ -540,7 +541,7 @@ void testEmptyField()
   typedef FIELD3D_VEC3_T<Data_T> Vec3_T;
 
   EmptyField<Data_T> dummy;
-  string TName(NameForType<Data_T>::name());
+  string TName(DataTypeTraits<Data_T>::name());
   Msg::print("Basic Field tests for type " + dummy.className() + 
             "<" + TName + ">");
 
@@ -660,7 +661,7 @@ void testFieldMapping()
   typedef FIELD3D_VEC3_T<Data_T> Vec3_T;
 
   DenseField<Data_T> dummy;
-  string TName(NameForType<Data_T>::name());
+  string TName(DataTypeTraits<Data_T>::name());
   Msg::print("FieldMapping tests for type " + dummy.className() + 
             "<" + TName + ">");
 
@@ -708,7 +709,7 @@ void testLinearInterp()
   typedef Field_T<Vec3_T> VField;
 
   SField dummy;
-  string TName(NameForType<Data_T>::name());
+  string TName(DataTypeTraits<Data_T>::name());
   Msg::print("Linear interpolation tests for type " + dummy.className() + 
             "<" + TName + ">");
 
@@ -734,6 +735,39 @@ void testLinearInterp()
 //----------------------------------------------------------------------------//
 
 template <template <typename T> class Field_T, class Data_T>
+void testFastLinearInterp()
+{
+  typedef FIELD3D_VEC3_T<Data_T> Vec3_T;
+  typedef Field_T<Data_T> SField;
+  typedef Field_T<Vec3_T> VField;
+
+  SField dummy;
+  string TName(DataTypeTraits<Data_T>::name());
+  Msg::print("Linear fast interpolation tests for type " + dummy.className() + 
+            "<" + TName + ">");
+
+  string currentTest = "Simple linear inter test";
+
+  {
+    Msg::print(currentTest);
+    ScopedPrintTimer t;
+    SField sField;
+    sField.setSize(V3i(10), 2);
+    typename Field_T<Data_T>::LinearInterp lin;
+    Box3i bottomSlice(V3i(-2), V3i(0, 9, 9));
+    sField.clear(0.0f);
+    std::fill(sField.begin(bottomSlice), sField.end(bottomSlice), 1.0f);
+    BOOST_CHECK_EQUAL(sField.value(1, 0, 0), 0.0f);
+    BOOST_CHECK_EQUAL(sField.value(0, 0, 0), 1.0f);
+    BOOST_CHECK_EQUAL(lin.sample(sField, V3d(1.0, 3.1, 2.1)), 0.5f);
+    BOOST_CHECK_EQUAL(lin.sample(sField, V3d(1.5, 3.1, 2.1)), 0.0f);
+    BOOST_CHECK_EQUAL(lin.sample(sField, V3d(0.5, 3.1, 2.1)), 1.0f);
+  }
+}
+
+//----------------------------------------------------------------------------//
+
+template <template <typename T> class Field_T, class Data_T>
 void testCubicInterp()
 {
   typedef FIELD3D_VEC3_T<Data_T> Vec3_T;
@@ -741,7 +775,7 @@ void testCubicInterp()
   typedef Field_T<Vec3_T> VField;
 
   SField dummy;
-  string TName(NameForType<Data_T>::name());
+  string TName(DataTypeTraits<Data_T>::name());
   Msg::print("Cubic interpolation tests for type " + dummy.className() + 
             "<" + TName + ">");
 
@@ -769,6 +803,41 @@ void testCubicInterp()
 //----------------------------------------------------------------------------//
 
 template <template <typename T> class Field_T, class Data_T>
+void testFastCubicInterp()
+{
+  typedef FIELD3D_VEC3_T<Data_T> Vec3_T;
+  typedef Field_T<Data_T> SField;
+  typedef Field_T<Vec3_T> VField;
+
+  SField dummy;
+  string TName(DataTypeTraits<Data_T>::name());
+  Msg::print("Cubic fast interpolation tests for type " + dummy.className() + 
+            "<" + TName + ">");
+
+  string currentTest = "Simple Cubic inter test";
+
+  {
+    Msg::print(currentTest);
+    ScopedPrintTimer t;
+    typename SField::Ptr sField(new SField);
+
+    sField->setSize(V3i(10), 2);
+    typename Field_T<Data_T>::CubicInterp cube;
+    Box3i bottomSlice(V3i(-2), V3i(0, 9, 9));
+    sField->clear(0.0f);
+    std::fill(sField->begin(bottomSlice), sField->end(bottomSlice), 1.0f);
+
+    BOOST_CHECK_EQUAL(sField->value(1, 0, 0), 0.0f);
+    BOOST_CHECK_EQUAL(sField->value(0, 0, 0), 1.0f);
+    BOOST_CHECK_EQUAL(cube.sample(*sField, V3d(1.0, 3.1, 2.1)), 0.5f);
+    BOOST_CHECK_EQUAL(cube.sample(*sField, V3d(1.5, 3.1, 2.1)), 0.0f);
+    BOOST_CHECK_EQUAL(cube.sample(*sField, V3d(0.5, 3.1, 2.1)), 1.0f);
+  }
+}
+
+//----------------------------------------------------------------------------//
+
+template <template <typename T> class Field_T, class Data_T>
 void testField3DFile()
 {
   typedef FIELD3D_VEC3_T<Data_T> Vec3_T;
@@ -776,7 +845,7 @@ void testField3DFile()
   typedef Field_T<Vec3_T> VField;
 
   SField dummy;
-  string TName(NameForType<Data_T>::name());
+  string TName(DataTypeTraits<Data_T>::name());
   Msg::print("Field3DFile tests for type " + dummy.className() + 
             "<" + TName + ">");
 
@@ -851,11 +920,45 @@ void testField3DFile()
     writeSuccess = out.writeVectorLayer<Data_T>(field2Name, velName, 
                                                 vField);
     BOOST_CHECK_EQUAL(writeSuccess, true);
+
+    /// write out global metadata
+    V3f metaVecFloat(1.0,2.0,3.0);
+    float metaFloat(123.0);
+    V3i metaVecInt(4,5,6);
+    int metaInt (456);
+    string metaStr("Great Job!!!");
+    out.metadata().setVecFloatMetadata("testGlobalMetadataVecFloat", 
+                                       metaVecFloat);
+    out.metadata().setFloatMetadata("testGlobalMetadataFloat", metaFloat);
+    out.metadata().setVecIntMetadata("testGlobalMetadataVecInt", metaVecInt);
+    out.metadata().setIntMetadata("testGlobalMetadataInt" , metaInt);
+    out.metadata().setStrMetadata("testGlobalMetadataStr", metaStr);
+
+    out.writeGlobalMetadata();
+
     out.close();
     
     // Open file up again
     Field3DInputFile iFile;
     iFile.open(filename);
+
+    // check the global meta data are correct
+    V3f inMetaVecFloat = iFile.metadata().vecFloatMetadata(
+      "testGlobalMetadataVecFloat", V3f(9.0));
+    BOOST_CHECK_EQUAL(metaVecFloat,inMetaVecFloat);
+    float inMetaFloat = iFile.metadata().floatMetadata(
+      "testGlobalMetadataFloat", 9.0f);
+    BOOST_CHECK_EQUAL(metaFloat,inMetaFloat);
+    V3i inMetaVecInt = iFile.metadata().vecIntMetadata(
+      "testGlobalMetadataVecInt", V3i(9));
+    BOOST_CHECK_EQUAL(metaVecInt,inMetaVecInt);
+    int inMetaInt = iFile.metadata().intMetadata(
+      "testGlobalMetadataInt", 9); 
+    BOOST_CHECK_EQUAL(metaInt,inMetaInt);
+    string inMetaStr = iFile.metadata().strMetadata(
+      "testGlobalMetadataStr", "Hello");
+    BOOST_CHECK_EQUAL(metaStr,inMetaStr);
+
 
     // Check that names are correct
     vector<string> partitions, names;
@@ -933,7 +1036,7 @@ void testField3DFile()
 template <class Data_T>
 void testEmptySparseFieldToDisk()
 {
-  string TName(NameForType<Data_T>::name());
+  string TName(DataTypeTraits<Data_T>::name());
   Msg::print(string("Testing empty sparse field to disk for ") + 
             "<" + TName + ">");
 
@@ -974,7 +1077,7 @@ void testLayerFetching()
   typedef Field_T<Vec3_T> VField;
 
   SField dummy;
-  string TName(NameForType<Data_T>::name());
+  string TName(DataTypeTraits<Data_T>::name());
   Msg::print("Testing layer fetching for " + dummy.className() + 
             "<" + TName + ">");
 
@@ -1077,7 +1180,7 @@ void testReadAsDifferentType()
   typedef Field_T<Vec3_T> VField;
 
   SField dummy;
-  string TName(NameForType<Data_T>::name());
+  string TName(DataTypeTraits<Data_T>::name());
   Msg::print("Testing on-the-fly conversion for " + dummy.className() + 
             "<" + TName + ">");
 
@@ -1522,7 +1625,7 @@ void testEmptyMACFieldToDisk()
 {
   typedef MACField<FIELD3D_VEC3_T<Float_T> > MACField_T;
 
-  string TName(NameForType<Float_T>::name());
+  string TName(DataTypeTraits<Float_T>::name());
   Msg::print(string("Testing empty MAC field to disk for ") + 
             "<" + TName + ">");
 
@@ -1559,7 +1662,7 @@ template <class Data_T>
 void testSparseFieldBlockAccess()
 {
   // SparseField<Data_T> dummy;
-  string TName(NameForType<Data_T>::name());
+  string TName(DataTypeTraits<Data_T>::name());
   Msg::print("Testing SparseField<" + TName + "> block iterator");
   {
     SparseField<Data_T> field;
@@ -1609,7 +1712,7 @@ void testDuplicatePartitions()
   typedef Field_T<Vec3_T> VField;
 
   SField dummy;
-  string TName(NameForType<Data_T>::name());
+  string TName(DataTypeTraits<Data_T>::name());
   Msg::print("Testing duplicate partition names for " + dummy.className() + 
             "<" + TName + ">");
 
@@ -1754,6 +1857,13 @@ init_unit_test_suite(int argc, char* argv[])
   test->add(BOOST_TEST_CASE((&testLinearInterp<DenseField, double>)));
   test->add(BOOST_TEST_CASE((&testLinearInterp<SparseField, double>)));
 
+  test->add(BOOST_TEST_CASE((&testFastLinearInterp<DenseField, half>)));
+  test->add(BOOST_TEST_CASE((&testFastLinearInterp<SparseField, half>)));
+  test->add(BOOST_TEST_CASE((&testFastLinearInterp<DenseField, float>)));
+  test->add(BOOST_TEST_CASE((&testFastLinearInterp<SparseField, float>)));
+  test->add(BOOST_TEST_CASE((&testFastLinearInterp<DenseField, double>)));
+  test->add(BOOST_TEST_CASE((&testFastLinearInterp<SparseField, double>)));
+
 
 #endif
 #if DO_CUBIC_INTERP_TESTS
@@ -1764,6 +1874,13 @@ init_unit_test_suite(int argc, char* argv[])
   test->add(BOOST_TEST_CASE((&testCubicInterp<SparseField, float>)));
   test->add(BOOST_TEST_CASE((&testCubicInterp<DenseField, double>)));
   test->add(BOOST_TEST_CASE((&testCubicInterp<SparseField, double>)));
+
+  test->add(BOOST_TEST_CASE((&testFastCubicInterp<DenseField, half>)));
+  test->add(BOOST_TEST_CASE((&testFastCubicInterp<SparseField, half>)));
+  test->add(BOOST_TEST_CASE((&testFastCubicInterp<DenseField, float>)));
+  test->add(BOOST_TEST_CASE((&testFastCubicInterp<SparseField, float>)));
+  test->add(BOOST_TEST_CASE((&testFastCubicInterp<DenseField, double>)));
+  test->add(BOOST_TEST_CASE((&testFastCubicInterp<SparseField, double>)));
 
 
 #endif

@@ -46,13 +46,11 @@
 #ifndef _INCLUDED_Field3D_FieldInterp_H_
 #define _INCLUDED_Field3D_FieldInterp_H_
 
-#include <boost/shared_ptr.hpp>
-
 #include "Field.h"
 #include "DenseField.h"
 #include "MACField.h"
 #include "ProceduralField.h"
-
+#include "RefCount.h"
 //----------------------------------------------------------------------------//
 
 #include "ns.h"
@@ -70,10 +68,10 @@ FIELD3D_NAMESPACE_OPEN
 */
 
 template <class Data_T>
-class FieldInterp
+class FieldInterp : public RefBase
 {
  public:
-  typedef boost::shared_ptr<FieldInterp> Ptr;
+  typedef boost::intrusive_ptr<FieldInterp> Ptr;
   virtual ~FieldInterp() 
   { }
   virtual Data_T sample(const Field<Data_T> &data, const V3d &vsP) const = 0;
@@ -94,7 +92,7 @@ template <class Data_T>
 class LinearFieldInterp : public FieldInterp<Data_T>
 {
  public:
-  typedef boost::shared_ptr<LinearFieldInterp> Ptr;
+  typedef boost::intrusive_ptr<LinearFieldInterp> Ptr;
   virtual Data_T sample(const Field<Data_T> &data, const V3d &vsP) const;
 };
 
@@ -113,7 +111,7 @@ template <class Data_T>
 class CubicFieldInterp : public FieldInterp<Data_T>
 {
  public:
-  typedef boost::shared_ptr<CubicFieldInterp> Ptr;
+  typedef boost::intrusive_ptr<CubicFieldInterp> Ptr;
   virtual Data_T sample(const Field<Data_T> &data, const V3d &vsP) const;
 };
 
@@ -129,10 +127,10 @@ class CubicFieldInterp : public FieldInterp<Data_T>
 //----------------------------------------------------------------------------//
 
 template <class Field_T>
-class LinearGenericFieldInterp
+class LinearGenericFieldInterp : public RefBase
 {
  public:
-  typedef boost::shared_ptr<LinearGenericFieldInterp> Ptr;
+  typedef boost::intrusive_ptr<LinearGenericFieldInterp> Ptr;
   typename Field_T::value_type sample(const Field_T &data, const V3d &vsP) const;
 };
 
@@ -148,11 +146,11 @@ class LinearGenericFieldInterp
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-class LinearMACFieldInterp
+class LinearMACFieldInterp : public RefBase
 {
  public:
 
-  typedef boost::shared_ptr<LinearMACFieldInterp> Ptr;
+  typedef boost::intrusive_ptr<LinearMACFieldInterp> Ptr;
 
   Data_T sample(const MACField<Data_T> &data, const V3d &vsP) const;
 };
@@ -169,10 +167,10 @@ class LinearMACFieldInterp
 //----------------------------------------------------------------------------//
 
 template <class Field_T>
-class CubicGenericFieldInterp
+class CubicGenericFieldInterp : public RefBase
 {
 public:
-  typedef boost::shared_ptr<CubicGenericFieldInterp> Ptr;
+  typedef boost::intrusive_ptr<CubicGenericFieldInterp> Ptr;
   typename Field_T::value_type sample(const Field_T &data, const V3d &vsP) const;
 };
 
@@ -188,10 +186,10 @@ public:
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-class CubicMACFieldInterp
+class CubicMACFieldInterp : public RefBase
 {
 public:
-  typedef boost::shared_ptr<CubicMACFieldInterp> Ptr;
+  typedef boost::intrusive_ptr<CubicMACFieldInterp> Ptr;
   Data_T sample(const MACField<Data_T> &data, const V3d &vsP) const;
 };
 
@@ -208,10 +206,10 @@ public:
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-class ProceduralFieldLookup
+class ProceduralFieldLookup : public RefBase
 {
 public:
-  typedef boost::shared_ptr<ProceduralFieldLookup> Ptr;
+  typedef boost::intrusive_ptr<ProceduralFieldLookup> Ptr;
   Data_T sample(const ProceduralField<Data_T> &data,
                 const V3d &vsP) const;
 };
@@ -333,7 +331,10 @@ Data_T CubicFieldInterp<Data_T>::sample(const Field<Data_T> &data,
   // Voxel centers are at .5 coordinates
   // NOTE: Don't use contToDisc for this, we're looking for sample
   // point locations, not coordinate shifts.
-  FIELD3D_VEC3_T<double> p(vsP - FIELD3D_VEC3_T<double>(0.5));
+  V3d clampedVsP(std::max(0.5, vsP.x),
+                 std::max(0.5, vsP.y),
+                 std::max(0.5, vsP.z));
+  FIELD3D_VEC3_T<double> p(clampedVsP - FIELD3D_VEC3_T<double>(0.5));
 
   // Lower left corner
   V3i c(static_cast<int>(floor(p.x)), 
@@ -623,7 +624,10 @@ CubicGenericFieldInterp<Field_T>::sample(const Field_T &data,
   // Pixel centers are at .5 coordinates
   // NOTE: Don't use contToDisc for this, we're looking for sample
   // point locations, not coordinate shifts.
-  FIELD3D_VEC3_T<double> p(vsP - FIELD3D_VEC3_T<double>(0.5));
+  V3d clampedVsP(std::max(0.5, vsP.x),
+                 std::max(0.5, vsP.y),
+                 std::max(0.5, vsP.z));
+  FIELD3D_VEC3_T<double> p(clampedVsP - FIELD3D_VEC3_T<double>(0.5));
 
   const Box3i &dataWindow = data.dataWindow();
 
@@ -749,7 +753,12 @@ Data_T CubicMACFieldInterp<Data_T>::sample(const MACField<Data_T> &data,
 
   // X component ---
 
-  FIELD3D_VEC3_T<double> p(vsP.x , vsP.y - 0.5, vsP.z - 0.5);
+  V3d clampedVsP(std::max(0.5, vsP.x),
+                 std::max(0.5, vsP.y),
+                 std::max(0.5, vsP.z));
+  FIELD3D_VEC3_T<double> p(vsP.x,
+                           clampedVsP.y - 0.5,
+                           clampedVsP.z - 0.5);
 
   // Lower left corner
   V3i c(static_cast<int>(floor(p.x)), 
@@ -856,7 +865,7 @@ Data_T CubicMACFieldInterp<Data_T>::sample(const MACField<Data_T> &data,
 
   // Y component ---
 
-  p.setValue(vsP.x - 0.5, vsP.y , vsP.z - 0.5);
+  p.setValue(clampedVsP.x - 0.5, vsP.y , clampedVsP.z - 0.5);
 
   // Lower left corner
   c.x = static_cast<int>(floor(p.x));
@@ -961,7 +970,7 @@ Data_T CubicMACFieldInterp<Data_T>::sample(const MACField<Data_T> &data,
 
   // Z component ---
 
-  p.setValue(vsP.x - 0.5 , vsP.y - 0.5, vsP.z);
+  p.setValue(clampedVsP.x - 0.5 , clampedVsP.y - 0.5, vsP.z);
 
   // Lower left corner
   c.x = static_cast<int>(floor(p.x));

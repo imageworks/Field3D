@@ -74,7 +74,8 @@ const std::string DenseFieldIO::k_dataStr("data");
 
 FieldBase::Ptr
 DenseFieldIO::read(hid_t layerGroup, const std::string &/*filename*/, 
-                   const std::string &/*layerPath*/)
+                   const std::string &/*layerPath*/,
+                   DataTypeEnum typeEnum)
 {
   Box3i extents, dataW;
   int components;
@@ -138,17 +139,17 @@ DenseFieldIO::read(hid_t layerGroup, const std::string &/*filename*/,
   isFloat = H5Tequal(dataType, H5T_NATIVE_FLOAT);
   isDouble = H5Tequal(dataType, H5T_NATIVE_DOUBLE);
 
-  if (isHalf && components == 1)
+  if (isHalf && components == 1 && typeEnum == DataTypeHalf)
     result = readData<half>(dataSet.id(), extents, dataW);
-  if (isFloat && components == 1)
+  if (isFloat && components == 1 && typeEnum == DataTypeFloat)
     result = readData<float>(dataSet.id(), extents, dataW);
-  if (isDouble && components == 1)
+  if (isDouble && components == 1 && typeEnum == DataTypeDouble)
     result = readData<double>(dataSet.id(), extents, dataW);
-  if (isHalf && components == 3)
+  if (isHalf && components == 3 && typeEnum == DataTypeVecHalf)
     result = readData<V3h>(dataSet.id(), extents, dataW);
-  if (isFloat && components == 3)
+  if (isFloat && components == 3 && typeEnum == DataTypeVecFloat)
     result = readData<V3f>(dataSet.id(), extents, dataW);
-  if (isDouble && components == 3)
+  if (isDouble && components == 3 && typeEnum == DataTypeVecDouble)
     result = readData<V3d>(dataSet.id(), extents, dataW);
 
   return result;
@@ -169,17 +170,17 @@ DenseFieldIO::write(hid_t layerGroup, FieldBase::Ptr field)
                                   k_versionAttrName);
 
   DenseField<half>::Ptr halfField = 
-    dynamic_pointer_cast<DenseField<half> >(field);
+    field_dynamic_cast<DenseField<half> >(field);
   DenseField<float>::Ptr floatField = 
-    dynamic_pointer_cast<DenseField<float> >(field);
+    field_dynamic_cast<DenseField<float> >(field);
   DenseField<double>::Ptr doubleField = 
-    dynamic_pointer_cast<DenseField<double> >(field);
+    field_dynamic_cast<DenseField<double> >(field);
   DenseField<V3h>::Ptr vecHalfField = 
-    dynamic_pointer_cast<DenseField<V3h> >(field);
+    field_dynamic_cast<DenseField<V3h> >(field);
   DenseField<V3f>::Ptr vecFloatField = 
-    dynamic_pointer_cast<DenseField<V3f> >(field);
+    field_dynamic_cast<DenseField<V3f> >(field);
   DenseField<V3d>::Ptr vecDoubleField = 
-    dynamic_pointer_cast<DenseField<V3d> >(field);
+    field_dynamic_cast<DenseField<V3d> >(field);
 
   bool success = true;
 

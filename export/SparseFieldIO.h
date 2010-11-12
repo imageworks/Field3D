@@ -106,7 +106,8 @@ public:
   //! object from it.
   //! \returns Null if no object was read
   virtual FieldBase::Ptr read(hid_t layerGroup, const std::string &filename, 
-                              const std::string &layerPath);
+                              const std::string &layerPath,
+                              DataTypeEnum typeEnum);
 
   //! Writes the given field to disk. 
   //! \return true if successful, otherwise false
@@ -232,7 +233,7 @@ bool SparseFieldIO::writeInternal(hid_t layerGroup,
 
   // Add the bits per component attribute ---
 
-  int bits = BitsForType<Data_T>::bits();
+  int bits = DataTypeTraits<Data_T>::h5bits();
   if (!writeAttribute(layerGroup, k_bitsPerComponentStr, 1, bits)) {
     Msg::print(Msg::SevWarning, "Error adding bits per component attribute.");
     return false;    
@@ -309,7 +310,7 @@ bool SparseFieldIO::writeInternal(hid_t layerGroup,
 
     // Add the data set
     H5ScopedDcreate dataSet(layerGroup, k_dataStr, 
-                            TypeToH5Type<Data_T>::type(), 
+                            DataTypeTraits<Data_T>::h5type(), 
                             fileDataSpace.id(), 
                             H5P_DEFAULT, dcpl, H5P_DEFAULT);
     if (dataSet.id() < 0)
@@ -337,7 +338,7 @@ bool SparseFieldIO::writeInternal(hid_t layerGroup,
             boost::lexical_cast<std::string>(nextBlockIdx));
         }
         Data_T *data = &b->data[0];
-        status = H5Dwrite(dataSet.id(), TypeToH5Type<Data_T>::type(), 
+        status = H5Dwrite(dataSet.id(), DataTypeTraits<Data_T>::h5type(), 
                           memDataSpace.id(), 
                           fileDataSpace.id(), H5P_DEFAULT, data);
         if (status < 0) {
@@ -385,18 +386,11 @@ bool SparseFieldIO::readData(hid_t location,
 
   // Set up the dynamic read info ---
 
-  SparseFileManager *manager = &SparseFileManager::singleton();
-  
   if (dynamicLoading) {
-    // Set up the field
-    result->m_fileManager = manager;
-    result->m_fileId = manager->getNextId<Data_T>(filename, layerPath);
-    // Set up the manager data
-    SparseFile::Reference<Data_T> &reference = 
-      manager->reference<Data_T>(result->m_fileId);
-    reference.valuesPerBlock = valuesPerBlock;
-    reference.occupiedBlocks = occupiedBlocks;
-    reference.setNumBlocks(result->m_blocks.size());
+      // Set up the field reference
+    result->addReference(filename, layerPath,
+                         valuesPerBlock,
+                         occupiedBlocks);
   }
 
   // Read the block info data sets ---
@@ -409,7 +403,7 @@ bool SparseFieldIO::readData(hid_t location,
     readSimpleData<char>(location, "block_is_allocated_data", isAllocated);
     typename vector<SparseBlock<Data_T> >::iterator b =
       result->m_blocks.begin();
-    typename vector<SparseBlock<Data_T> >::const_iterator bend = 
+    typename vector<SparseBlock<Data_T> >::iterator bend = 
       result->m_blocks.end();
     // We're assuming there are as many blocks in isAllocated as in the field.
     for (; b != bend; ++b, ++i) {
@@ -427,53 +421,55 @@ bool SparseFieldIO::readData(hid_t location,
     readSimpleData<Data_T>(location, "block_empty_value_data", emptyValue);
     typename vector<SparseBlock<Data_T> >::iterator b =
       result->m_blocks.begin();
-    typename vector<SparseBlock<Data_T> >::const_iterator bend = 
+    typename vector<SparseBlock<Data_T> >::iterator bend = 
       result->m_blocks.end();
     typename vector<Data_T>::iterator i = emptyValue.begin();
     // We're assuming there are as many blocks in isAllocated as in the field.
-    for (; b != bend; ++b, ++i)
-      b->emptyValue = *i; 
+    for (; b != bend; ++b, ++i) {
+      b->emptyValue = *i;
+    }
   }
 
   // Read the data ---
 
   if (occupiedBlocks > 0) {
 
-    int nextBlockIdx = 0;
-
-    typename vector<SparseBlock<Data_T> >::iterator b;
-
     if (dynamicLoading) {
-      
-      SparseFile::Reference<Data_T> &reference = 
-        manager->reference<Data_T>(result->m_fileId);
 
-      vector<int>::iterator fb = reference.fileBlockIndices.begin();
-      typename SparseFile::Reference<Data_T>::BlockPtrs::iterator bp = 
-        reference.blocks.begin();
+      result->setupReferenceBlocks();
 
-      for (b = result->m_blocks.begin(); 
-           b != result->m_blocks.end(); ++b, ++fb, ++bp) {
-        if (b->isAllocated) {
-          *fb = nextBlockIdx;
-          *bp = &(*b);
-          nextBlockIdx++;
-        } else {
-          *fb = -1;
-        }
-      }
-      
     } else {
+      
+      typename vector<SparseBlock<Data_T> >::iterator b =
+        result->m_blocks.begin();
+      typename vector<SparseBlock<Data_T> >::iterator bend =
+        result->m_blocks.end();
 
       SparseDataReader<Data_T> reader(location, valuesPerBlock, occupiedBlocks);
 
-      for (b = result->m_blocks.begin(); 
-           b != result->m_blocks.end(); ++b) {
-        if (b->isAllocated) {
-          reader.readBlock(nextBlockIdx, b->data[0]);
-          nextBlockIdx++;
+      // We'll read at most 50meg at a time
+      static const long maxMemPerPass = 50*1024*1024;
+
+      for (int nextBlockIdx = 0;;) {
+
+        long mem = 0;
+        std::vector<Data_T*> memoryList;
+        
+        for (; b != bend && mem < maxMemPerPass; ++b) {
+          if (b->isAllocated) {
+            mem += sizeof(Data_T)*valuesPerBlock;
+            memoryList.push_back(&b->data[0]);
+          }
         }
-      }
+
+        // all done.
+        if (!memoryList.size()) {
+          break;
+        }
+
+        reader.readBlockList(nextBlockIdx, memoryList);
+        nextBlockIdx += memoryList.size();
+      }                           
 
     }
 

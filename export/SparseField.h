@@ -70,8 +70,6 @@ class LinearGenericFieldInterp;
 template <class Field_T>
 class CubicGenericFieldInterp; 
 
-class SparseFileManager;
-
 //----------------------------------------------------------------------------//
 // SparseBlock
 //----------------------------------------------------------------------------//
@@ -106,6 +104,14 @@ struct SparseBlock
   const Data_T& value(int i, int j, int k, int blockOrder) const
   { return data[(k << blockOrder << blockOrder) + (j << blockOrder) + i]; }
 
+  //! Alloc data
+  void resize(int n)
+  { this->data.resize(n); }
+
+  //! Remove data
+  void clear()
+  { std::vector<Data_T>().swap(data); }
+
   //! Returns reference to start of memory
   Data_T& dataRef()
   { return data[0]; }
@@ -122,6 +128,12 @@ struct SparseBlock
 
   //! Container for this block's data. It's either size 0 or size m_blockSize^3
   std::vector<Data_T> data;
+
+private:
+
+  //! \note Should make data private and eventually a pointer so that the 
+  //! overhead of a constant sparse field is a little less
+
 };
 
 } // namespace Sparse
@@ -165,6 +177,16 @@ public:
 
   //! Constructs an empty buffer
   SparseField();
+
+  //! Copy constructor
+  SparseField(const SparseField &o);
+
+  //! Destructor
+  ~SparseField();
+
+  //! Assignment operator.  For cache-managed fields, it creates a new
+  //! file reference, and for non-managed fields, it copies the data
+  SparseField & operator=(const SparseField &o);
 
   // \}
 
@@ -315,6 +337,16 @@ public:
 
   //! \}
 
+  // Internal utility functions ------------------------------------------------
+
+  //! Internal function to create a Reference for the current field,
+  //! for use in dynamic reading.
+  void addReference(const std::string &filename, const std::string &layerPath,
+                    int valuesPerBlock, int occupiedBlocks);
+  //! Internal function to setup the Reference's block pointers, for
+  //! use with dynamic reading.
+  void setupReferenceBlocks();
+
  protected:
 
   friend class SparseFieldIO;
@@ -366,6 +398,16 @@ public:
   //! Dummy value used when needing to return but indicating a failed call.
   Data_T m_dummy;
 
+private:
+
+  //! Copies internal data, including blocks, from another SparseField,
+  //! used by copy constructor and operator=
+  void copySparseField(const SparseField &o);
+
+  //! Internal function to copy empty values and allocated flags,
+  //! without copying data, used when copying a dynamically read field
+  void copyBlockStates(const SparseField<Data_T> &o);
+
 };
 
 //----------------------------------------------------------------------------//
@@ -395,20 +437,49 @@ struct CheckAllEqual
   //! \param block Reference to the block to check
   //! \param retEmptyValue If the block is to be removed, store the
   //! "empty value" that replaces it in this variable
+  //! \param validSize Number of voxels per dim within field data window
+  //! \param blockSize Number of voxels actually allocated per dim
   //! \returns Whether or not the supplied block can be released.
-  bool check(const SparseBlock<Data_T> &block, Data_T &retEmptyValue)
+  bool check(const SparseBlock<Data_T> &block, Data_T &retEmptyValue,
+             const V3i &validSize, const V3i &blockSize)
   {
     // Store first value
     Data_T first = block.data[0];
     // Iterate over rest
     bool match = true;
-    for (typename std::vector<Data_T>::const_iterator i = block.data.begin();
-         i != block.data.end(); ++i) {
-      if (*i != first) {
-        match = false;
-        break;
+    if (validSize == blockSize) {
+      // interior block so look at all voxels
+      for (typename std::vector<Data_T>::const_iterator i = block.data.begin();
+           i != block.data.end(); ++i) {
+        if (*i != first) {
+          match = false;
+          break;
+        }
       }
-    }
+    } else {
+      // only look at valid voxels
+      int x=0, y=0, z=0;
+      for (typename std::vector<Data_T>::const_iterator i = block.data.begin();
+           i != block.data.end(); ++i, ++x) {
+        if (x >= blockSize.x) {
+          x = 0;
+          ++y;
+          if (y >= blockSize.y) {
+            y = 0;
+            ++z;
+          }
+        }
+        if (x >= validSize.x || y >= validSize.y || z >= validSize.z) {
+          continue;
+        }
+
+        if (*i != first) {
+          match = false;
+          break;
+        }
+      }
+    } // end of interior block test
+
     if (match) {
       retEmptyValue = first;
       return true;
@@ -417,6 +488,46 @@ struct CheckAllEqual
     }
   }
 };
+
+//----------------------------------------------------------------------------//
+
+template <typename Data_T>
+inline bool isAnyLess(const Data_T &left, const Data_T &right)
+{
+  return (std::abs(left) < right);
+}
+
+//----------------------------------------------------------------------------//
+
+template <>
+inline bool isAnyLess(const V3h &left, const V3h &right)
+{
+  return (std::abs(left.x) < right.x || 
+          std::abs(left.y) < right.y || 
+          std::abs(left.z) < right.z );
+}
+
+//----------------------------------------------------------------------------//
+
+template <>
+inline bool isAnyLess(const V3f &left, const V3f &right)
+{
+  return (std::abs(left.x) < right.x || 
+          std::abs(left.y) < right.y || 
+          std::abs(left.z) < right.z );
+}
+
+//----------------------------------------------------------------------------//
+
+template <>
+inline bool isAnyLess(const V3d &left, const V3d &right)
+{
+  return (std::abs(left.x) < right.x || 
+          std::abs(left.y) < right.y || 
+          std::abs(left.z) < right.z );
+}
+
+//----------------------------------------------------------------------------//
 
 //! Checks if all the absolute values in the SparseBlock are greater than
 //! some number. Useful for making narrow band levelsets
@@ -433,20 +544,48 @@ struct CheckMaxAbs
   //! \param block Reference to the block to check
   //! \param retEmptyValue If the block is to be removed, store the
   //! "empty value" that replaces it in this variable
+  //! \param validSize Number of voxels per dim within field data window
+  //! \param blockSize Number of voxels actually allocated per dim
   //! \returns Whether or not the supplied block can be released.
-  bool check(const SparseBlock<Data_T> &block, Data_T &retEmptyValue)
+  bool check(const SparseBlock<Data_T> &block, Data_T &retEmptyValue,
+             const V3i &validSize, const V3i &blockSize)
   {
     // Store first value
     Data_T first = block.data[0];
     // Iterate over rest
     bool allGreater = true;
-    for (typename std::vector<Data_T>::const_iterator i = block.data.begin();
-         i != block.data.end(); ++i) {
-      if (std::abs(*i) < m_maxValue) {
-        allGreater = false;
-        break;
+    if (validSize == blockSize) {
+      // interior block so look at all voxels
+      for (typename std::vector<Data_T>::const_iterator i = block.data.begin();
+           i != block.data.end(); ++i) {
+        if (isAnyLess<Data_T>(*i, m_maxValue)) {
+          allGreater = false;
+          break;
+        }
       }
-    }
+    } else {
+      // only look at valid voxels
+      int x=0, y=0, z=0;
+      for (typename std::vector<Data_T>::const_iterator i = block.data.begin();
+           i != block.data.end(); ++i, ++x) {
+        if (x >= blockSize.x) {
+          x = 0;
+          ++y;
+          if (y >= blockSize.y) {
+            y = 0;
+            ++z;
+          }
+        }
+        if (x >= validSize.x || y >= validSize.y || z >= validSize.z) {
+          continue;
+        }
+        if (isAnyLess<Data_T>(*i, m_maxValue)) {
+          allGreater = false;
+          break;
+        }
+      }
+    } // end of interior block test
+
     if (allGreater) {
       retEmptyValue = first;
       return true;
@@ -861,6 +1000,139 @@ SparseField<Data_T>::SparseField()
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
+SparseField<Data_T>::SparseField(const SparseField<Data_T> &o) :
+  base(o)
+{
+  copySparseField(o);
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+SparseField<Data_T>::~SparseField()
+{
+  if (m_fileManager) {
+    // this file is dynamically managed, so we need to ensure the
+    // cache doesn't point to this field's blocks because they are
+    // about to be deleted
+    m_fileManager->removeFieldFromCache<Data_T>(m_fileId);
+  }
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+SparseField<Data_T> &
+SparseField<Data_T>::operator=(const SparseField<Data_T> &o)
+{
+  if (this != &o) {
+    this->base::operator=(o);
+    copySparseField(o);
+  }
+  return *this;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+void
+SparseField<Data_T>::copySparseField(const SparseField<Data_T> &o)
+{
+  m_blockOrder = o.m_blockOrder;
+  if (o.m_fileManager) {
+    // allocate m_blocks, sets m_blockRes, m_blockXYSize, m_blocks
+    setupBlocks();
+
+    m_fileManager = o.m_fileManager;
+    SparseFile::Reference<Data_T> &oldReference = 
+      m_fileManager->reference<Data_T>(o.m_fileId);
+    addReference(oldReference.filename, oldReference.layerPath,
+                 oldReference.valuesPerBlock,
+                 oldReference.occupiedBlocks);
+    copyBlockStates(o);
+    setupReferenceBlocks();
+  } else {
+    // directly copy all values and blocks from the source, no extra setup
+    m_blockRes = o.m_blockRes;
+    m_blockXYSize = o.m_blockXYSize;
+    m_blocks = o.m_blocks;
+    m_fileId = -1;
+    m_fileManager = NULL;
+  }
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+void SparseField<Data_T>::addReference(const std::string &filename,
+                                       const std::string &layerPath,
+                                       int valuesPerBlock,
+                                       int occupiedBlocks)
+{
+  m_fileManager = &SparseFileManager::singleton();
+  m_fileId = m_fileManager->getNextId<Data_T>(filename, layerPath);
+  // Set up the manager data
+  SparseFile::Reference<Data_T> &reference = 
+    m_fileManager->reference<Data_T>(m_fileId);
+  reference.valuesPerBlock = valuesPerBlock;
+  reference.occupiedBlocks = occupiedBlocks;
+  reference.setNumBlocks(m_blocks.size());
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+void SparseField<Data_T>::copyBlockStates(const SparseField<Data_T> &o)
+{
+  if (m_blocks.size() != o.m_blocks.size()) return;
+
+  typename std::vector<Sparse::SparseBlock<Data_T> >::iterator b =
+    m_blocks.begin();
+  typename std::vector<Sparse::SparseBlock<Data_T> >::iterator bend = 
+    m_blocks.end();
+  typename std::vector<Sparse::SparseBlock<Data_T> >::const_iterator ob =
+    o.m_blocks.begin();
+
+  for (; b != bend; ++b, ++ob) {
+    b->isAllocated = ob->isAllocated;
+    b->emptyValue = ob->emptyValue;
+    b->clear();
+  }
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+void SparseField<Data_T>::setupReferenceBlocks()
+{
+  if (!m_fileManager || m_fileId < 0) return;
+
+  SparseFile::Reference<Data_T> &reference = 
+    m_fileManager->reference<Data_T>(m_fileId);
+
+  std::vector<int>::iterator fb = reference.fileBlockIndices.begin();
+  typename SparseFile::Reference<Data_T>::BlockPtrs::iterator bp = 
+    reference.blocks.begin();
+  typename std::vector<Sparse::SparseBlock<Data_T> >::iterator b =
+    m_blocks.begin();
+  typename std::vector<Sparse::SparseBlock<Data_T> >::iterator bend =
+    m_blocks.end();
+  int nextBlockIdx = 0;
+
+  for (; b != bend; ++b, ++fb, ++bp) {
+    if (b->isAllocated) {
+      *fb = nextBlockIdx;
+      *bp = &(*b);
+      nextBlockIdx++;
+    } else {
+      *fb = -1;
+    }
+  }
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
 void SparseField<Data_T>::clear(const Data_T &value)
 {
   // If we're clearing, we can get rid of all current blocks
@@ -965,9 +1237,38 @@ int SparseField<Data_T>::releaseBlocks(Functor_T func)
   Data_T emptyValue;
   int numDeallocs = 0;
   typename std::vector<Block>::iterator i;
-  for (i = m_blocks.begin(); i != m_blocks.end(); ++i) {
+
+  // If the block is on the edge of the field, it may have unused
+  // voxels, with undefined values.  We need to pass the range of
+  // valid voxels into the check function, so it only looks at valid
+  // voxels.
+  V3i dataRes = FieldRes::dataResolution();
+  V3i validSize;
+  V3i blockAllocSize(blockSize());
+  int bx, by, bz;
+
+  for (i = m_blocks.begin(), bx=0, by=0, bz=0; i != m_blocks.end(); ++i, ++bx) {
+    if (bx >= m_blockRes.x) {
+      bx = 0;
+      ++by;
+      if (by >= m_blockRes.y) {
+        by = 0;
+        ++bz;
+      }
+    }
+    validSize = blockAllocSize;
+    if (bx == m_blockRes.x-1) {
+      validSize.x = dataRes.x - bx * blockAllocSize.x;
+    }
+    if (by == m_blockRes.y-1) {
+      validSize.y = dataRes.y - by * blockAllocSize.y;
+    }
+    if (bz == m_blockRes.z-1) {
+      validSize.z = dataRes.z - bz * blockAllocSize.z;
+    }
+
     if (i->isAllocated) {
-      if (func.check(*i, emptyValue)) {
+      if (func.check(*i, emptyValue, validSize, blockAllocSize)) {
         deallocBlock(*i, emptyValue);
         numDeallocs++;
       }
@@ -1013,6 +1314,7 @@ Data_T SparseField<Data_T>::fastValue(int i, int j, int k) const
   getVoxelInBlock(i, j, k, vi, vj, vk);
   // Get the actual block
   int id = blockId(bi, bj, bk);
+
   const Block &block = m_blocks[id];
   // Check if block data is allocated
   if (block.isAllocated) {
@@ -1220,6 +1522,7 @@ void SparseField<Data_T>::setupBlocks()
                          static_cast<int>(blockRes.z));
   m_blockRes = intBlockRes;
   m_blockXYSize = m_blockRes.x * m_blockRes.y;
+  //! \todo clear() won't resize. Do the swap trick.
   m_blocks.clear();
   m_blocks.resize(intBlockRes.x * intBlockRes.y * intBlockRes.z);
 
@@ -1269,7 +1572,7 @@ template <class Data_T>
 void SparseField<Data_T>::deallocBlock(Block &block, const Data_T &emptyValue)
 {
   block.isAllocated = false;
-  block.data.clear();
+  block.clear();
   block.emptyValue = emptyValue;
 }
 

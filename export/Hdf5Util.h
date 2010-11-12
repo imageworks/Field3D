@@ -58,6 +58,7 @@
 #include <hdf5.h>
 
 #include "Exception.h"
+#include "Traits.h"
 #include "Field.h"
 
 //----------------------------------------------------------------------------//
@@ -488,224 +489,6 @@ bool checkHdf5Gzip();
 // Templated functions and classes
 //----------------------------------------------------------------------------//
 
-//! Compile-time traits-class for conversion between c++ type and hdf5 type
-//! \ingroup hdf5 template_util
-template <class CppType_T>
-struct TypeToH5Type
-{
-  static hid_t type();
-};
-
-//----------------------------------------------------------------------------//
-
-//! Compile-time traits-class for getting a proper name from type
-//! \ingroup hdf5 template_util
-//! \todo This shouldn't really be in hdf5 utils?
-template <class T>
-struct NameForType
-{
-  static std::string name();
-};
-
-//----------------------------------------------------------------------------//
-
-//! Compile-time traits-class for getting bits per component from type
-//! \ingroup hdf5 template_util
-//! \todo This shouldn't really be in hdf5 utils?
-template <class T>
-struct BitsForType
-{
-  static int bits();
-};
-
-//----------------------------------------------------------------------------//
-// Specializations
-//----------------------------------------------------------------------------//
-
-template <>
-inline hid_t TypeToH5Type<half>::type()
-{
-  return H5T_NATIVE_SHORT;
-}
-
-//----------------------------------------------------------------------------//
-
-template <>
-inline hid_t TypeToH5Type<float>::type()
-{
-  return H5T_NATIVE_FLOAT;
-}
-
-//----------------------------------------------------------------------------//
-
-template <>
-inline hid_t TypeToH5Type<double>::type()
-{
-  return H5T_NATIVE_DOUBLE;
-}
-
-//----------------------------------------------------------------------------//
-
-template <>
-inline hid_t TypeToH5Type<char>::type()
-{
-  return H5T_NATIVE_CHAR;
-}
-
-//----------------------------------------------------------------------------//
-
-template <>
-inline hid_t TypeToH5Type<V3h>::type()
-{
-  return H5T_NATIVE_SHORT;
-}
-
-//----------------------------------------------------------------------------//
-
-template <>
-inline hid_t TypeToH5Type<V3f>::type()
-{
-  return H5T_NATIVE_FLOAT;
-}
-
-//----------------------------------------------------------------------------//
-
-template <>
-inline hid_t TypeToH5Type<V3d>::type()
-{
-  return H5T_NATIVE_DOUBLE;
-}
-
-//----------------------------------------------------------------------------//
-
-template <>
-inline std::string NameForType<half>::name() 
-{ 
-  return std::string("half"); 
-}
-
-//----------------------------------------------------------------------------//
-
-template <>
-inline std::string NameForType<float>::name() 
-{ 
-  return std::string("float"); 
-}
-
-//----------------------------------------------------------------------------//
-
-template <>
-inline std::string NameForType<double>::name() 
-{ 
-  return std::string("double"); 
-}
-
-//----------------------------------------------------------------------------//
-
-template <>
-inline std::string NameForType<V3h>::name() 
-{ 
-  return std::string("V3h"); 
-}
-
-//----------------------------------------------------------------------------//
-
-template <>
-inline std::string NameForType<V3f>::name() 
-{ 
-  return std::string("V3f"); 
-}
-
-//----------------------------------------------------------------------------//
-
-template <>
-inline std::string NameForType<V3d>::name() 
-{ 
-  return std::string("V3d"); 
-}
-
-//----------------------------------------------------------------------------//
-
-template <>
-inline int BitsForType<half>::bits() 
-{ 
-  return 16; 
-}
-
-//----------------------------------------------------------------------------//
-
-template <>
-inline int BitsForType<float>::bits() 
-{ 
-  return 32; 
-}
-
-//----------------------------------------------------------------------------//
-
-template <>
-inline int BitsForType<double>::bits() 
-{ 
-  return 64; 
-}
-
-//----------------------------------------------------------------------------//
-
-template <>
-inline int BitsForType<V3h>::bits() 
-{ 
-  return 16; 
-}
-
-//----------------------------------------------------------------------------//
-
-template <>
-inline int BitsForType<V3f>::bits() 
-{ 
-  return 32; 
-}
-
-//----------------------------------------------------------------------------//
-
-template <>
-inline int BitsForType<V3d>::bits() 
-{ 
-  return 64; 
-}
-
-//----------------------------------------------------------------------------//
-// Implementations
-//----------------------------------------------------------------------------//
-
-template <class CppType_T>
-hid_t TypeToH5Type<CppType_T>::type()
-{
-  assert(false && "Unsupported type in TypeToH5Type::type()");
-  Msg::print(Msg::SevWarning, "Unsupported type in TypeToH5Type::type()");
-  return -1;
-}
-
-//----------------------------------------------------------------------------//
-
-template <class T>
-std::string NameForType<T>::name()
-{
-  assert(false && "Unsupported type in NameForType::name()");
-  Msg::print(Msg::SevWarning, "Unsupported type in NameForType::name()");
-  return std::string("ERROR in NameForType::name()");
-}
-
-//----------------------------------------------------------------------------//
-
-template <class T>
-int BitsForType<T>::bits()
-{
-  assert(false && "Unsupported type in BitsForType::bits()");
-  Msg::print(Msg::SevWarning, "Unsupported type in BitsForType::bits()");
-  return -1;
-}
-
-//----------------------------------------------------------------------------//
-
 template <typename T>
 void writeSimpleData(hid_t location, const std::string &name,
                      const std::vector<T> &data)
@@ -719,7 +502,7 @@ void writeSimpleData(hid_t location, const std::string &name,
   totalSize[0] = data.size() * components;
 
   // Get the internal data type
-  hid_t type = TypeToH5Type<T>::type();
+  hid_t type = DataTypeTraits<T>::h5type();
 
   H5ScopedScreate dataSpace(H5S_SIMPLE);
 
@@ -774,7 +557,7 @@ void readSimpleData(hid_t location, const std::string &name,
   data.resize(reportedSize);
   
   // Get the internal data type
-  hid_t type = TypeToH5Type<T>::type();
+  hid_t type = DataTypeTraits<T>::h5type();
 
   if (H5Dread(dataSet.id(), type, H5S_ALL, H5S_ALL, 
               H5P_DEFAULT, &data[0]) < 0) {

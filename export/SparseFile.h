@@ -54,7 +54,7 @@
 #include "Exception.h"
 #include "Hdf5Util.h"
 #include "SparseDataReader.h"
-#include "DataTypeConversion.h"
+#include "Traits.h"
 
 //----------------------------------------------------------------------------//
 
@@ -72,6 +72,9 @@ namespace Sparse {
   struct SparseBlock;
 
 }
+
+template <typename Data_T>
+class SparseField;
 
 //----------------------------------------------------------------------------//
 
@@ -315,7 +318,8 @@ class SparseFileManager
 
 public:
 
-  friend class SparseFieldIO;
+  template <class Data_T>
+  friend class SparseField;
 
   // typedefs ------------------------------------------------------------------
 
@@ -397,6 +401,9 @@ protected:
   //! in order to reference its fields at a later time
   template <class Data_T>
   int getNextId(const std::string filename, const std::string layerPath);
+
+  template <class Data_T>
+  void removeFieldFromCache(int refIdx);
 
 private:
 
@@ -501,7 +508,7 @@ template <class Data_T>
 Reference<Data_T> &
 Reference<Data_T>::operator=(const Reference<Data_T> &o)
 {
-  // copy public member variables (where appropriate)
+  // Copy public member variables (where appropriate)
   filename = o.filename;
   layerPath = o.layerPath;
   valuesPerBlock = o.valuesPerBlock;
@@ -516,9 +523,13 @@ Reference<Data_T>::operator=(const Reference<Data_T> &o)
     delete[] blockMutex;
   blockMutex = new boost::mutex[blocks.size()];
 
-  // copy private member variables (where appropriate)
+  // Copy private member variables (where appropriate)
   m_fileHandle = o.m_fileHandle;
-  m_layerGroup = o.m_layerGroup;
+  // Don't copy id, let hdf5 generate a new one.
+  if (m_fileHandle >= 0) {
+    m_layerGroup.open(m_fileHandle, layerPath.c_str());
+  }
+
   if (m_reader)
     delete m_reader;
   m_reader = NULL;
@@ -560,7 +571,7 @@ void Reference<Data_T>::openFile()
   using namespace Exc;
   using namespace Hdf5Util;
 
-  boost::mutex::scoped_lock lock(m_mutex);
+  boost::mutex::scoped_lock lock_A(m_mutex);
 
   // check that the file wasn't already opened before obtaining the lock
   if (fileIsOpen()) {
@@ -589,8 +600,9 @@ template <class Data_T>
 void Reference<Data_T>::loadBlock(int blockIdx)
 {
   boost::mutex::scoped_lock lock(m_mutex);
-  // Allocate the block
-  blocks[blockIdx]->data.resize(valuesPerBlock);
+
+  // Allocate the block  
+  blocks[blockIdx]->resize(valuesPerBlock);
   assert(blocks[blockIdx]->data.size() > 0);
   // Read the data
   assert(m_reader);
@@ -605,7 +617,8 @@ template <class Data_T>
 void Reference<Data_T>::unloadBlock(int blockIdx)
 {
   // Deallocate the block
-  std::vector<Data_T>().swap(blocks[blockIdx]->data);
+  blocks[blockIdx]->clear();
+
   // Mark block as unloaded
   blockLoaded[blockIdx] = 0;
 }
@@ -942,6 +955,49 @@ SparseFileManager::getNextId(const std::string filename,
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
+void
+SparseFileManager::removeFieldFromCache(int refIdx)
+{
+  boost::mutex::scoped_lock lock(m_mutex);
+
+  DataTypeEnum blockType = DataTypeTraits<Data_T>::typeEnum();
+  SparseFile::Reference<Data_T> &reference = m_fileData.ref<Data_T>(refIdx);
+
+  CacheList::iterator it = m_blockCacheList.begin();
+  CacheList::iterator end = m_blockCacheList.end();
+  CacheList::iterator next;
+
+  int bytesFreed = 0;
+
+  while (it != end) {
+    if (it->blockType == blockType && it->refIdx == refIdx) {
+      if (it == m_nextBlock) {
+        ++m_nextBlock;
+      }
+      next = it;
+      ++next;
+      bytesFreed += reference.blockSize(it->blockIdx);
+      m_blockCacheList.erase(it);
+      it = next;
+    } else {
+      ++it;
+    }
+  }
+  m_memUse -= bytesFreed;
+
+  // reset the block indices to -1, to ensure that the cache manager
+  // won't try to activate a block
+  reference.fileBlockIndices.clear();
+  reference.fileBlockIndices.resize(reference.blocks.size(), -1);
+  // clear the reference's pointers into the field, and relevant 
+  reference.blocks.clear();
+  reference.blockLoaded.clear();
+  reference.blockUsed.clear();
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
 SparseFile::Reference<Data_T> &
 SparseFileManager::reference(int index)
 { 
@@ -964,16 +1020,19 @@ SparseFileManager::activateBlock(int fileId, int blockIdx)
         // will just return
         deallocateBlocks(blockSize);
       }
+
       if (!reference.fileIsOpen()) {
         reference.openFile();
       }
-      boost::mutex::scoped_lock lock(reference.blockMutex[blockIdx]);
+
+      boost::mutex::scoped_lock lock_A(m_mutex);
+      boost::mutex::scoped_lock lock_B(reference.blockMutex[blockIdx]);
       // check to see if it was loaded between when the function
       // started and we got the lock on the block
       if (!reference.blockLoaded[blockIdx]) {
         reference.loadBlock(blockIdx);
         reference.loadCounts[blockIdx]++;
-        addBlockToCache(dataTypeToEnum<Data_T>(), fileId, blockIdx);
+        addBlockToCache(DataTypeTraits<Data_T>::typeEnum(), fileId, blockIdx);
         m_memUse += blockSize;
       }
     }

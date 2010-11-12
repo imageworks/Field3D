@@ -103,7 +103,8 @@ public:
   //! \returns Pointer to the created field, or a null pointer if the field
   //! couldn't be read.
   virtual FieldBase::Ptr read(hid_t layerGroup, const std::string &filename, 
-                              const std::string &layerPath) = 0;
+                              const std::string &layerPath,
+                              DataTypeEnum typeEnum) = 0;
 
   //! Write the field to the given layer group
   //! \returns Whether the operation was successful

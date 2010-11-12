@@ -99,7 +99,10 @@ void ClassFactory::registerField(CreateFieldFnPtr createFunc)
     if (find(m_fieldNames.begin(), m_fieldNames.end(),
              simpleClassName) == m_fieldNames.end()) {
       m_fieldNames.push_back(simpleClassName);
-      Msg::print("Registered Field class " + simpleClassName);
+      char *debugEnvVar = getenv("FIELD3D_DEBUG");
+      if (debugEnvVar) {
+        Msg::print("Registered Field class " + simpleClassName);
+      }
     }
 
   } 
@@ -148,7 +151,10 @@ void ClassFactory::registerFieldIO(CreateFieldIOFnPtr createFunc)
     if (find(m_fieldIONames.begin(), m_fieldIONames.end(),
              className) == m_fieldIONames.end()) {
       m_fieldIONames.push_back(className);
-      Msg::print("Registered FieldIO class " + className);
+      char *debugEnvVar = getenv("FIELD3D_DEBUG");
+      if (debugEnvVar) {
+        Msg::print("Registered FieldIO class " + className);
+      }
     }
 
   } 
@@ -197,7 +203,10 @@ void ClassFactory::registerFieldMapping(CreateFieldMappingFnPtr createFunc)
     if (find(m_fieldMappingNames.begin(), m_fieldMappingNames.end(),
              className) == m_fieldMappingNames.end()) {
       m_fieldMappingNames.push_back(className);
-      Msg::print("Registered FieldMapping class " + className);
+      char *debugEnvVar = getenv("FIELD3D_DEBUG");
+      if (debugEnvVar) {
+        Msg::print("Registered FieldMapping class " + className);
+      }
     }
   } 
 }
@@ -244,7 +253,10 @@ void ClassFactory::registerFieldMappingIO(CreateFieldMappingIOFnPtr createFunc)
     if (find(m_fieldMappingNames.begin(), m_fieldMappingNames.end(),
              className) == m_fieldMappingNames.end()) {
       m_fieldMappingNames.push_back(className);
-      Msg::print("Registered FieldMappingIO class " + className);
+      char *debugEnvVar = getenv("FIELD3D_DEBUG");
+      if (debugEnvVar) {
+        Msg::print("Registered FieldMappingIO class " + className);
+      }
     }
   } 
 }

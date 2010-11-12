@@ -105,7 +105,8 @@ public:
   //! object from it. Calls out to readData() for template-specific work.
   //! \returns Null if no object was read
   virtual FieldBase::Ptr read(hid_t layerGroup, const std::string &filename, 
-                              const std::string &layerPath);
+                              const std::string &layerPath,
+                              DataTypeEnum typeEnum);
 
   //! Writes the given field to disk. This function calls out to writeInternal
   //! once the template type has been determined.
@@ -227,7 +228,7 @@ bool DenseFieldIO::writeInternal(hid_t layerGroup,
   }
   
   H5ScopedDcreate dataSet(layerGroup, k_dataStr, 
-                          TypeToH5Type<Data_T>::type(), 
+                          DataTypeTraits<Data_T>::h5type(), 
                           dataSpace.id(), 
                           H5P_DEFAULT, dcpl, H5P_DEFAULT);
 
@@ -255,7 +256,7 @@ bool DenseFieldIO::writeData(hid_t dataSet,
   using namespace Hdf5Util;
 
   hid_t err = H5Dwrite(dataSet, 
-                       TypeToH5Type<Data_T>::type(), 
+                       DataTypeTraits<Data_T>::h5type(), 
                        H5S_ALL, H5S_ALL, 
                        H5P_DEFAULT, &(*field->begin()));
 
@@ -276,11 +277,11 @@ DenseFieldIO::readData(hid_t dataSet, const Box3i &extents, const Box3i &dataW)
   typename DenseField<Data_T>::Ptr field(new DenseField<Data_T>);
   field->setSize(extents, dataW);
 
-  if (H5Dread(dataSet, Hdf5Util::TypeToH5Type<Data_T>::type(), 
+  if (H5Dread(dataSet, DataTypeTraits<Data_T>::h5type(), 
               H5S_ALL, H5S_ALL, H5P_DEFAULT, &(*field->begin())) < 0) 
   {
     std::string typeName = "DenseField<" + 
-      Hdf5Util::NameForType<Data_T>::name() + ">";
+      DataTypeTraits<Data_T>::name() + ">";
     throw Exc::Hdf5DataReadException("Couldn't read " + typeName + " data");
   } 
 

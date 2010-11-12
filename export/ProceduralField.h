@@ -192,7 +192,7 @@ inline half
 ProceduralField<half>::typedIntMetadata(const std::string &name,
                                         const half& defaultVal) const
 {
-  return intMetadata(name, static_cast<int>(defaultVal));
+  return metadata().intMetadata(name, static_cast<int>(defaultVal));
 }
 
 //----------------------------------------------------------------------------//
@@ -202,7 +202,7 @@ inline float
 ProceduralField<float>::typedIntMetadata(const std::string &name,
                                          const float& defaultVal) const
 {
-  return intMetadata(name, static_cast<int>(defaultVal));
+  return metadata().intMetadata(name, static_cast<int>(defaultVal));
 }
 
 //----------------------------------------------------------------------------//
@@ -212,7 +212,7 @@ inline double
 ProceduralField<double>::typedIntMetadata(const std::string &name,
                                           const double& defaultVal) const
 {
-  return intMetadata(name, static_cast<int>(defaultVal));
+  return metadata().intMetadata(name, static_cast<int>(defaultVal));
 }
 
 //----------------------------------------------------------------------------//
@@ -222,7 +222,7 @@ inline V3h
 ProceduralField<V3h>::typedIntMetadata(const std::string &name,
                                        const V3h& defaultVal) const
 {
-  return V3h(vecIntMetadata(name, defaultVal));
+  return V3h(metadata().vecIntMetadata(name, defaultVal));
 }
 
 //----------------------------------------------------------------------------//
@@ -232,7 +232,7 @@ inline V3f
 ProceduralField<V3f>::typedIntMetadata(const std::string &name,
                                        const V3f& defaultVal) const
 {
-  return V3f(vecIntMetadata(name, defaultVal));
+  return V3f(metadata().vecIntMetadata(name, defaultVal));
 }
 
 //----------------------------------------------------------------------------//
@@ -242,7 +242,7 @@ inline V3d
 ProceduralField<V3d>::typedIntMetadata(const std::string &name,
                                        const V3d& defaultVal) const
 {
-  return V3d(vecIntMetadata(name, defaultVal));
+  return V3d(metadata().vecIntMetadata(name, defaultVal));
 }
 
 //----------------------------------------------------------------------------//
@@ -252,7 +252,7 @@ inline half
 ProceduralField<half>::typedFloatMetadata(const std::string &name, 
                                           const half& defaultVal) const
 {
-  return floatMetadata(name, static_cast<float>(defaultVal));
+  return metadata().floatMetadata(name, static_cast<float>(defaultVal));
 }
 
 //----------------------------------------------------------------------------//
@@ -262,7 +262,7 @@ inline float
 ProceduralField<float>::typedFloatMetadata(const std::string &name, 
                                            const float& defaultVal) const
 {
-  return floatMetadata(name, defaultVal);
+  return metadata().floatMetadata(name, defaultVal);
 }
 
 //----------------------------------------------------------------------------//
@@ -272,7 +272,7 @@ inline double
 ProceduralField<double>::typedFloatMetadata(const std::string &name, 
                                             const double& defaultVal) const
 {
-  return floatMetadata(name, static_cast<float>(defaultVal));
+  return metadata().floatMetadata(name, static_cast<float>(defaultVal));
 }
 
 //----------------------------------------------------------------------------//
@@ -282,7 +282,7 @@ inline V3h
 ProceduralField<V3h>::typedFloatMetadata(const std::string &name, 
                                          const V3h& defaultVal) const
 {
-  return V3h(vecFloatMetadata(name, defaultVal));
+  return V3h(metadata().vecFloatMetadata(name, defaultVal));
 }
 
 //----------------------------------------------------------------------------//
@@ -292,7 +292,7 @@ inline V3f
 ProceduralField<V3f>::typedFloatMetadata(const std::string &name, 
                                          const V3f& defaultVal) const
 {
-  return V3f(vecFloatMetadata(name, defaultVal));
+  return V3f(metadata().vecFloatMetadata(name, defaultVal));
 }
 
 //----------------------------------------------------------------------------//
@@ -302,7 +302,7 @@ inline V3d
 ProceduralField<V3d>::typedFloatMetadata(const std::string &name, 
                                          const V3d& defaultVal) const
 {
-  return V3d(vecFloatMetadata(name, defaultVal));
+  return V3d(metadata().vecFloatMetadata(name, defaultVal));
 }
 
 //----------------------------------------------------------------------------//

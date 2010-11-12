@@ -47,7 +47,7 @@
 //----------------------------------------------------------------------------//
 
 #include <hdf5.h>
-
+#include <string.h> // for memcpy
 #include "Hdf5Util.h"
 
 //----------------------------------------------------------------------------//
@@ -80,6 +80,10 @@ public:
   //! Reads a block, storing the data in result, which is assumed to contain
   //! enough room for m_valuesPerBlock entries.
   void readBlock(int idx, Data_T &result);
+
+  //! Reads a series of blocks, storing each block of data in memoryList, 
+  //! which is assumed to contain enough room for m_valuesPerBlock entries.
+  void readBlockList(int idx, const std::vector<Data_T*>& memoryList);
 
 private:
 
@@ -156,6 +160,7 @@ void SparseDataReader<Data_T>::readBlock(int idx, Data_T &result)
   offset[1] = 0;               // Index of first data in block. Always 0
   count[0] = 1;                // Number of columns to read. Always 1
   count[1] = m_valuesPerBlock; // Number of values in one column
+
   status = H5Sselect_hyperslab(m_fileDataSpace.id(), H5S_SELECT_SET, 
                                offset, NULL, count, NULL);
   if (status < 0) {
@@ -163,9 +168,80 @@ void SparseDataReader<Data_T>::readBlock(int idx, Data_T &result)
                                  boost::lexical_cast<std::string>(idx));
   }
 
-  status = H5Dread(m_dataSet.id(), TypeToH5Type<Data_T>::type(), 
+  status = H5Dread(m_dataSet.id(), DataTypeTraits<Data_T>::h5type(), 
                    m_memDataSpace.id(), m_fileDataSpace.id(), 
                    H5P_DEFAULT, &result);
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+void SparseDataReader<Data_T>::readBlockList
+(int idxLo, const std::vector<Data_T*>& memoryList)
+{
+  using namespace Hdf5Util;
+  using namespace Exc;
+
+  hsize_t offset[2];
+  hsize_t count[2];
+  herr_t status;
+
+  offset[0] = idxLo;            // Index of block
+  offset[1] = 0;                // Index of first data in block. Always 0
+  count[0] = memoryList.size(); // Number of columns to read.
+  count[1] = m_valuesPerBlock;  // Number of values in one column
+  
+  status = H5Sselect_hyperslab(m_fileDataSpace.id(), H5S_SELECT_SET, 
+                               offset, NULL, count, NULL);
+  if (status < 0) {
+    throw ReadHyperSlabException("Couldn't select slab " + 
+                                 boost::lexical_cast<std::string>(idxLo));
+  }
+
+  // Make the memory data space ---
+ 
+  Hdf5Util::H5ScopedScreate localMemDataSpace;
+  hsize_t memDims[2];  
+  memDims[0] = memoryList.size();
+  memDims[1] = m_valuesPerBlock;
+  localMemDataSpace.create(H5S_SIMPLE);
+  H5Sset_extent_simple(localMemDataSpace.id(), 2, memDims, NULL);
+
+  // Setup the temporary memory region ---
+
+  int bytesPerValue = 0;
+  {
+    hid_t t = DataTypeTraits<Data_T>::h5type();
+    if (t == H5T_NATIVE_CHAR)
+      bytesPerValue = 1;
+    else if (t == H5T_NATIVE_SHORT)
+      bytesPerValue = 2;
+    else if (t == H5T_NATIVE_FLOAT)
+      bytesPerValue = 4;
+    else if (t == H5T_NATIVE_DOUBLE)
+      bytesPerValue = 8;
+  }
+
+  int dim = sizeof(Data_T) / bytesPerValue;
+  std::vector<Data_T> bigblock(memoryList.size() * m_valuesPerBlock/dim);
+
+  status = H5Dread(m_dataSet.id(), 
+                   DataTypeTraits<Data_T>::h5type(), 
+                   localMemDataSpace.id(),
+                   m_fileDataSpace.id(), 
+                   H5P_DEFAULT, &bigblock[0]);
+
+  if (status < 0) {
+    throw Hdf5DataReadException("Couldn't read slab " + 
+                                boost::lexical_cast<std::string>(idxLo));
+  }
+
+  // Distribute block data into memory slots ---
+  for (size_t i = 0; i < memoryList.size(); ++i) {
+    memcpy(memoryList[i], 
+           &bigblock[i * m_valuesPerBlock / dim],
+           bytesPerValue * m_valuesPerBlock);
+  }
 }
 
 //----------------------------------------------------------------------------//

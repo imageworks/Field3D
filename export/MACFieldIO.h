@@ -104,7 +104,8 @@ public:
   //! object from it.
   //! \returns Null if no object was read
   virtual FieldBase::Ptr read(hid_t layerGroup, const std::string &filename, 
-                              const std::string &layerPath);
+                              const std::string &layerPath,
+                              DataTypeEnum typeEnum);
 
   //! Writes the given field to disk. 
   //! \return true if successful, otherwise false
@@ -189,7 +190,7 @@ bool MACFieldIO::writeInternal(hid_t layerGroup,
 
   // Add the bits per component attribute ---
 
-  int bits = BitsForType<Data_T>::bits();
+  int bits = DataTypeTraits<Data_T>::h5bits();
   if (!writeAttribute(layerGroup, k_bitsPerComponentStr, 1, bits)) {
     throw WriteAttributeException("Couldn't write attribute " + k_bitsPerComponentStr);
     return false;    
@@ -273,7 +274,7 @@ bool MACFieldIO::writeData(hid_t layerGroup,
   }
   
   H5ScopedDcreate dataSet(layerGroup, compStr, 
-                          TypeToH5Type<Data_T>::type(), 
+                          DataTypeTraits<Data_T>::h5type(), 
                           dataSpace.id(), 
                           H5P_DEFAULT, dcpl, H5P_DEFAULT);
 
@@ -282,7 +283,7 @@ bool MACFieldIO::writeData(hid_t layerGroup,
                                  "MACFieldIO::writeData");
 
   hid_t err = H5Dwrite(dataSet, 
-                       TypeToH5Type<Data_T>::type(), 
+                       DataTypeTraits<Data_T>::h5type(), 
                        H5S_ALL, H5S_ALL, 
                        H5P_DEFAULT, &(*field->cbegin_comp(comp)));
   if (err < 0) 
@@ -322,11 +323,11 @@ bool MACFieldIO::readData(hid_t layerGroup,
     if (dataType.id() < 0)
       throw GetDataTypeException("Couldn't get data type");
 
-    if (H5Dread(dataSet, Hdf5Util::TypeToH5Type<Data_T>::type(), 
+    if (H5Dread(dataSet, DataTypeTraits<Data_T>::h5type(), 
                 H5S_ALL, H5S_ALL, H5P_DEFAULT, &(*field->begin_comp(MACCompU))) < 0) 
       {
         std::string typeName = "MACField<" + 
-          Hdf5Util::NameForType<Data_T>::name() + ">";
+          DataTypeTraits<Data_T>::name() + ">";
         throw Exc::Hdf5DataReadException("Couldn't read " + typeName + " data");
       } 
 
@@ -350,11 +351,11 @@ bool MACFieldIO::readData(hid_t layerGroup,
       throw GetDataTypeException("Couldn't get data type");
 
 
-    if (H5Dread(dataSet, Hdf5Util::TypeToH5Type<Data_T>::type(), 
+    if (H5Dread(dataSet, DataTypeTraits<Data_T>::h5type(), 
                 H5S_ALL, H5S_ALL, H5P_DEFAULT, &(*field->begin_comp(MACCompV))) < 0) 
       {
         std::string typeName = "MACField<" + 
-          Hdf5Util::NameForType<Data_T>::name() + ">";
+          DataTypeTraits<Data_T>::name() + ">";
         throw Exc::Hdf5DataReadException("Couldn't read " + typeName + " data");
       } 
 
@@ -378,11 +379,11 @@ bool MACFieldIO::readData(hid_t layerGroup,
       throw GetDataTypeException("Couldn't get data type");
 
 
-    if (H5Dread(dataSet, Hdf5Util::TypeToH5Type<Data_T>::type(), 
+    if (H5Dread(dataSet, DataTypeTraits<Data_T>::h5type(), 
                 H5S_ALL, H5S_ALL, H5P_DEFAULT, &(*field->begin_comp(MACCompW))) < 0) 
       {
         std::string typeName = "MACField<" + 
-          Hdf5Util::NameForType<Data_T>::name() + ">";
+          DataTypeTraits<Data_T>::name() + ">";
         throw Exc::Hdf5DataReadException("Couldn't read " + typeName + " data");
       } 
 

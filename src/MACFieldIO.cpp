@@ -77,7 +77,8 @@ const std::string MACFieldIO::k_wDataStr("w_data");
 
 FieldBase::Ptr
 MACFieldIO::read(hid_t layerGroup, const std::string &filename, 
-                 const std::string &layerPath)
+                 const std::string &layerPath,
+                 DataTypeEnum typeEnum)
 {
   Box3i extents, dataW;
   int components;
@@ -118,6 +119,7 @@ MACFieldIO::read(hid_t layerGroup, const std::string &filename,
   switch (bits) {
   case 16:
     {
+      if (typeEnum != DataTypeVecHalf) break;
       MACField<V3h>::Ptr field(new MACField<V3h>);
       field->setSize(extents, dataW);
       readData<V3h>(layerGroup, field);
@@ -127,6 +129,7 @@ MACFieldIO::read(hid_t layerGroup, const std::string &filename,
     break;
   case 64:
     {
+      if (typeEnum != DataTypeVecDouble) break;
       MACField<V3d>::Ptr field(new MACField<V3d>);
       field->setSize(extents, dataW);
       readData<V3d>(layerGroup, field);
@@ -137,6 +140,7 @@ MACFieldIO::read(hid_t layerGroup, const std::string &filename,
   case 32:
   default:
     {
+      if (typeEnum != DataTypeVecFloat) break;
       MACField<V3f>::Ptr field(new MACField<V3f>);
       field->setSize(extents, dataW);
       readData<V3f>(layerGroup, field);
@@ -165,11 +169,11 @@ MACFieldIO::write(hid_t layerGroup, FieldBase::Ptr field)
   }
 
   MACField<V3h>::Ptr vecHalfField = 
-    dynamic_pointer_cast<MACField<V3h> >(field);
+    field_dynamic_cast<MACField<V3h> >(field);
   MACField<V3f>::Ptr vecFloatField = 
-    dynamic_pointer_cast<MACField<V3f> >(field);
+    field_dynamic_cast<MACField<V3f> >(field);
   MACField<V3d>::Ptr vecDoubleField = 
-    dynamic_pointer_cast<MACField<V3d> >(field);
+    field_dynamic_cast<MACField<V3d> >(field);
 
   bool success = true;
   if (vecFloatField) {

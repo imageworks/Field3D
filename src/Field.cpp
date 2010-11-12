@@ -52,10 +52,21 @@ FIELD3D_NAMESPACE_OPEN
 //----------------------------------------------------------------------------//
 
 FieldBase::FieldBase()
-  :RefBase()
+  : RefBase(),
+    m_metadata(this)
 { 
   // Empty
 }
+
+FieldBase::FieldBase(const FieldBase &other)
+  : RefBase(),
+    name(other.name),
+    attribute(other.attribute),
+    m_metadata(this)
+{ 
+  m_metadata = other.m_metadata;  
+}
+
 
 //----------------------------------------------------------------------------//
 
@@ -64,130 +75,6 @@ FieldBase::~FieldBase()
   // Empty
 }
 
-//----------------------------------------------------------------------------//
-
-void FieldBase::setVecFloatMetadata(const std::string &name, const V3f &val)
-{ 
-  m_vecFloatMetadata[name] = val; 
-  this->metadataHasChanged(name);
-}
-    
-//----------------------------------------------------------------------------//
-
-void FieldBase::setFloatMetadata(const std::string &name, const float val)
-{ 
-  m_floatMetadata[name] = val; 
-  this->metadataHasChanged(name);
-}
-
-//----------------------------------------------------------------------------//
-
-void FieldBase::setVecIntMetadata(const std::string &name, const V3i &val)
-{ 
-  m_vecIntMetadata[name] = val; 
-  this->metadataHasChanged(name);
-}
-
-//----------------------------------------------------------------------------//
-
-void FieldBase::setIntMetadata(const std::string &name, const int val)
-{ 
-  m_intMetadata[name] = val; 
-  this->metadataHasChanged(name);
-}
-
-//----------------------------------------------------------------------------//
-
-void FieldBase::setStrMetadata(const std::string &name, const std::string &val)
-{ 
-  m_strMetadata[name] = val; 
-  this->metadataHasChanged(name);
-}
-
-//----------------------------------------------------------------------------//
-
-void FieldBase::copyMetadata(const FieldBase &field)
-{
-  m_vecFloatMetadata = field.m_vecFloatMetadata;
-  m_floatMetadata = field.m_floatMetadata;
-  m_vecIntMetadata = field.m_vecIntMetadata;
-  m_intMetadata = field.m_intMetadata;
-  m_strMetadata = field.m_strMetadata;    
-}
-
-//----------------------------------------------------------------------------//
-
-V3f FieldBase::vecFloatMetadata(const std::string &name,
-                                const V3f& defaultVal) const
-{
-  V3f retVal = defaultVal;
-
-  VecFloatMetadata::const_iterator i = m_vecFloatMetadata.find(name);
-  if (i != m_vecFloatMetadata.end()) {
-    retVal = i->second;
-  } 
-
-  return retVal;
-}
-
-//----------------------------------------------------------------------------//
-
-float FieldBase::floatMetadata(const std::string &name, 
-                               const float defaultVal) const
-{
-  float retVal = defaultVal;
-
-  FloatMetadata::const_iterator i = m_floatMetadata.find(name);
-  if (i != m_floatMetadata.end()) {
-    retVal = i->second;
-  } 
-
-  return retVal;
-}
-
-//----------------------------------------------------------------------------//
-
-V3i FieldBase::vecIntMetadata(const std::string &name,
-                              const V3i& defaultVal) const
-{
-  V3i retVal = defaultVal;
-
-  VecIntMetadata::const_iterator i = m_vecIntMetadata.find(name);
-  if (i != m_vecIntMetadata.end()) {
-    retVal = i->second;
-  } 
-
-  return retVal;
-}
-
-//----------------------------------------------------------------------------//
-
-int FieldBase::intMetadata(const std::string &name, const int defaultVal) const
-{
-  int retVal = defaultVal;
-
-  IntMetadata::const_iterator i = m_intMetadata.find(name);
-  if (i != m_intMetadata.end()) {
-    retVal = i->second;
-  } 
-
-  return retVal;
-}
-
-//----------------------------------------------------------------------------//
-
-std::string FieldBase::strMetadata(const std::string &name, 
-                                   const std::string &defaultVal) const
-{
-  std::string retVal = defaultVal;
-
-  StrMetadata::const_iterator i = m_strMetadata.find(name);
-  if (i != m_strMetadata.end()) {
-    retVal = i->second;
-  } 
-
-  return retVal;
-}
 
 //----------------------------------------------------------------------------//
 // FieldTraits template specializations

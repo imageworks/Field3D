@@ -82,7 +82,8 @@ const std::string SparseFieldIO::k_numOccupiedBlocksStr("num_occupied_blocks");
 
 FieldBase::Ptr
 SparseFieldIO::read(hid_t layerGroup, const std::string &filename, 
-                    const std::string &layerPath)
+                    const std::string &layerPath,
+                    DataTypeEnum typeEnum)
 {
   Box3i extents, dataW;
   int components;
@@ -172,19 +173,19 @@ SparseFieldIO::read(hid_t layerGroup, const std::string &filename,
   // Finally, read the data ---
 
   if (components == 1) {
-    if (isHalf) {
+    if (isHalf && typeEnum == DataTypeHalf) {
       SparseField<half>::Ptr field(new SparseField<half>);
       field->setSize(extents, dataW);
       field->setBlockOrder(blockOrder);
       readData<half>(layerGroup, numBlocks, filename, layerPath, field);
       result = field;      
-    } else if (isFloat) {
+    } else if (isFloat && typeEnum == DataTypeFloat) {
       SparseField<float>::Ptr field(new SparseField<float>);
       field->setSize(extents, dataW);
       field->setBlockOrder(blockOrder);
       readData<float>(layerGroup, numBlocks, filename, layerPath, field);
       result = field;      
-    } else if (isDouble) {
+    } else if (isDouble && typeEnum == DataTypeDouble) {
       SparseField<double>::Ptr field(new SparseField<double>);
       field->setSize(extents, dataW);
       field->setBlockOrder(blockOrder);
@@ -192,19 +193,19 @@ SparseFieldIO::read(hid_t layerGroup, const std::string &filename,
       result = field;      
     }
   } else if (components == 3) {
-    if (isHalf) {
+    if (isHalf && typeEnum == DataTypeVecHalf) {
       SparseField<V3h>::Ptr field(new SparseField<V3h>);
       field->setSize(extents, dataW);
       field->setBlockOrder(blockOrder);
       readData<V3h>(layerGroup, numBlocks, filename, layerPath, field);
       result = field;      
-    } else if (isFloat) {
+    } else if (isFloat && typeEnum == DataTypeVecFloat) {
       SparseField<V3f>::Ptr field(new SparseField<V3f>);
       field->setSize(extents, dataW);
       field->setBlockOrder(blockOrder);
       readData<V3f>(layerGroup, numBlocks, filename, layerPath, field);
       result = field;      
-    } else if (isDouble) {
+    } else if (isDouble && typeEnum == DataTypeVecDouble) {
       SparseField<V3d>::Ptr field(new SparseField<V3d>);
       field->setSize(extents, dataW);
       field->setBlockOrder(blockOrder);
@@ -234,17 +235,17 @@ SparseFieldIO::write(hid_t layerGroup, FieldBase::Ptr field)
   }
 
   SparseField<half>::Ptr halfField = 
-    dynamic_pointer_cast<SparseField<half> >(field);
+    field_dynamic_cast<SparseField<half> >(field);
   SparseField<float>::Ptr floatField = 
-    dynamic_pointer_cast<SparseField<float> >(field);
+    field_dynamic_cast<SparseField<float> >(field);
   SparseField<double>::Ptr doubleField = 
-    dynamic_pointer_cast<SparseField<double> >(field);
+    field_dynamic_cast<SparseField<double> >(field);
   SparseField<V3h>::Ptr vecHalfField = 
-    dynamic_pointer_cast<SparseField<V3h> >(field);
+    field_dynamic_cast<SparseField<V3h> >(field);
   SparseField<V3f>::Ptr vecFloatField = 
-    dynamic_pointer_cast<SparseField<V3f> >(field);
+    field_dynamic_cast<SparseField<V3f> >(field);
   SparseField<V3d>::Ptr vecDoubleField = 
-    dynamic_pointer_cast<SparseField<V3d> >(field);
+    field_dynamic_cast<SparseField<V3d> >(field);
 
   bool success = true;
   if (halfField) {

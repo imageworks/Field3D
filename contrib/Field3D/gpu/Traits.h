@@ -126,7 +126,7 @@ struct GpuFieldTraits<double>
 
 #ifdef __CUDA_ARCH__
 #if __CUDA_ARCH__ < 130
-#warning "compute capability 1.3 required for double support
+#warning "compute capability 1.3 required for double support"
 #endif
 #endif
 

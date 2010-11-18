@@ -44,7 +44,8 @@ FIND_PACKAGE (ILMBase)
 
 # Duplicate the export directory to Field3D
 FILE ( REMOVE_RECURSE ${CMAKE_HOME_DIRECTORY}/Field3D)
-FILE ( COPY export/ DESTINATION ${CMAKE_HOME_DIRECTORY}/Field3D)
+FILE ( GLOB_RECURSE h_files export/*.h)
+FILE ( COPY ${h_files} DESTINATION ${CMAKE_HOME_DIRECTORY}/Field3D)
 
 # includes
 INCLUDE_DIRECTORIES ( . )
@@ -148,36 +149,7 @@ INSTALL ( TARGETS
 )
 
 INSTALL ( FILES
-  export/StdMathLib.h
-  export/MACFieldIO.h
-  export/Types.h
-  export/FieldIO.h
-  export/PluginLoader.h
-  export/EmptyField.h
-  export/Exception.h
-  export/SpiMathLib.h
-  export/MACField.h
-  export/DenseField.h
-  export/DataTypeConversion.h
-  export/Hdf5Util.h
-  export/SparseField.h
-  export/FieldMapping.h
-  export/Log.h
-  export/Field3DFile.h
-  export/ClassFactory.h
-  export/RefCount.h
-  export/Field.h
-  export/FieldMappingIO.h
-  export/InitIO.h
-  export/ns.h
-  export/SparseFile.h
-  export/ProceduralField.h
-  export/FieldInterp.h
-  export/Documentation.h
-  export/SparseDataReader.h
-  export/SparseFieldIO.h
-  export/MACFieldUtil.h
-  export/DenseFieldIO.h
+  ${h_files}
   DESTINATION include/Field3D
 )
 

@@ -147,40 +147,19 @@ INSTALL ( TARGETS
   DESTINATION lib
 )
 
-INSTALL ( FILES
-  export/StdMathLib.h
-  export/MACFieldIO.h
-  export/Types.h
-  export/FieldIO.h
-  export/PluginLoader.h
-  export/EmptyField.h
-  export/Exception.h
-  export/SpiMathLib.h
-  export/MACField.h
-  export/DenseField.h
-  export/DataTypeConversion.h
-  export/Hdf5Util.h
-  export/SparseField.h
-  export/FieldMapping.h
-  export/Log.h
-  export/Field3DFile.h
-  export/ClassFactory.h
-  export/RefCount.h
-  export/Field.h
-  export/FieldMappingIO.h
-  export/InitIO.h
-  export/ns.h
-  export/SparseFile.h
-  export/ProceduralField.h
-  export/FieldInterp.h
-  export/Documentation.h
-  export/SparseDataReader.h
-  export/SparseFieldIO.h
-  export/MACFieldUtil.h
-  export/DenseFieldIO.h
+FILE(GLOB Field3d_Includes  "${CMAKE_CURRENT_SOURCE_DIR}/export/*.h")
+
+INSTALL ( FILES 
+  ${Field3d_Includes} 
   DESTINATION include/Field3D
 )
 
-INSTALL (DIRECTORY ${CMAKE_HOME_DIRECTORY}/docs
+INSTALL( PROGRAMS 
+  "${CMAKE_CURRENT_BINARY_DIR}/f3dinfo" 
+  DESTINATION bin
+)
+
+INSTALL (DIRECTORY 
+  ${CMAKE_HOME_DIRECTORY}/docs
   DESTINATION ${CMAKE_INSTALL_PREFIX}
 )

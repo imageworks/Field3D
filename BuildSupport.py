@@ -213,7 +213,7 @@ def setupEnv(env, pathToRoot = "."):
     if isDebugBuild():
         env.Append(CCFLAGS = ["-g"])
     else:
-        env.Append(CCFLAGS = ["-g -O3"])
+        env.Append(CCFLAGS = ["-g", "-O3"])
     env.Append(CCFLAGS = ["-Wall"])
     # Set number of jobs to use
     env.SetOption('num_jobs', numCPUs())

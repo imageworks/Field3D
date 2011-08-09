@@ -17,6 +17,18 @@ The Field3D source code is distributed under the "New BSD" license.
 See the file called COPYING for details.
 
 ------------------------------------------------------------------------
+  PACKAGES
+------------------------------------------------------------------------
+
+On MacOS X, MacPorts provides a package that downloads, compiles and
+installs Field3d into /opt/local (by default).  The installation files
+for MacPorts can be found at http://www.macports.org/ .
+
+After installing MacPorts, just type:
+
+> sudo port install field3d
+
+------------------------------------------------------------------------
   FIELD3D DEPENDENCIES
 ------------------------------------------------------------------------
 
@@ -47,17 +59,6 @@ More information about IlmBase/OpenEXR can be found at:
 
 To use a math library other than Imath - see the section USING A 
 CUSTOM MATH LIBRARY below.
-
-Under MacOS X, MacPorts is a useful utility for installing the libraries
-needed. The installation files for MacPorts can be found at:
-  http://www.macports.org/
-
-After installing MacPorts, just type:
-
-> sudo port install scons
-> sudo port install boost
-> sudo port install hdf5-18
-> sudo port install ilmbase
 
 ------------------------------------------------------------------------
   BUILDING FIELD3D

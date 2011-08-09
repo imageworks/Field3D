@@ -89,6 +89,6 @@ allows the C++ objects to be written to and read from disk.
 \n
 
 The majority of the documentation is available in the project Wiki at 
-http://code.google.com/p/field3d/
+https://sites.google.com/site/field3d/
 
 */ // \mainpage

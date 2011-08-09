@@ -7,7 +7,7 @@ classes that handle in-memory storage and a file format based on HDF5 that
 allows the C++ objects to be written to and read from disk.
 
 The majority of the documentation is available in the project Wiki at 
-http://code.google.com/p/field3d/
+https://sites.google.com/site/field3d/
 
 ------------------------------------------------------------------------
   LICENSE
@@ -128,5 +128,5 @@ Contributors:
 For questions and/or comments, please join the field3d-dev discussion
 group at Google Groups. http://groups.google.com/group/field3d-dev
 
-The project web page URL is: http://code.google.com/p/field3d/
+The project web page URL is: https://sites.google.com/site/field3d/
 

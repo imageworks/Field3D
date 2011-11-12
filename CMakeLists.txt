@@ -39,7 +39,7 @@ set( CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJECT_SOURCE_DIR}/cmake )
 
 FIND_PACKAGE (Doxygen)
 FIND_PACKAGE (HDF5)
-FIND_PACKAGE( Boost COMPONENTS thread program_options)
+FIND_PACKAGE (Boost COMPONENTS thread program_options)
 FIND_PACKAGE (ILMBase)
 
 OPTION (INSTALL_DOCS "Automatically install documentation." ON)
@@ -80,6 +80,10 @@ ADD_LIBRARY ( Field3D
   src/PluginLoader.cpp
   src/SparseFieldIO.cpp
   src/SparseFile.cpp
+)
+
+SET_TARGET_PROPERTIES ( Field3D
+  PROPERTIES SOVERSION 1.2
 )
 
 SET ( Field3D_Target_Link_Libraries
@@ -162,8 +166,7 @@ INSTALL ( FILES
   DESTINATION include/Field3D
 )
 
-INSTALL( PROGRAMS 
-  "${CMAKE_CURRENT_BINARY_DIR}/f3dinfo" 
-  DESTINATION bin
+INSTALL ( TARGETS f3dinfo 
+  RUNTIME DESTINATION bin
 )
 

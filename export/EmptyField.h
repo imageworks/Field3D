@@ -96,20 +96,6 @@ public:
   //! Constructs an empty buffer
   EmptyField();
 
-#if 0 // These should be removed
-
-  //! Constructs a buffer of a given size
-  explicit EmptyField(const V3i &size);
-  //! Constructs a buffer of a given size plus padding. The padding will
-  //! be added to the data window but not to the extents
-  explicit EmptyField(const V3i &size, int padding);
-  //! Constructs a buffer with explicit extents
-  explicit EmptyField(const Box3i &extents);
-  //! Constructs a buffer with explicit extents and data window
-  explicit EmptyField(const Box3i &extents, const Box3i &dataWindow);
-
-#endif
-
   // \}
 
   // Main methods --------------------------------------------------------------
@@ -190,51 +176,6 @@ EmptyField<Data_T>::EmptyField()
 { 
   // Empty
 }
-
-#if 0
-
-template <class Data_T>
-EmptyField<Data_T>::EmptyField()
-{ 
-  base::setSize(Box3i(V3i(0), V3i(-1))); 
-}
-
-//----------------------------------------------------------------------------//
-
-template <class Data_T>
-EmptyField<Data_T>::EmptyField(const V3i &size)
-{ 
-  base::setSize(size); 
-}
-
-//----------------------------------------------------------------------------//
-
-template <class Data_T>
-EmptyField<Data_T>::EmptyField(const V3i &size, int padding)
-{ 
-  base::setSize(Box3i(V3i(0), size - V3i(1)),
-                Box3i(V3i(-padding), 
-                             size + V3i(padding - 1))); 
-}
-
-//----------------------------------------------------------------------------//
-
-template <class Data_T>
-EmptyField<Data_T>::EmptyField(const Box3i &extents)
-{ 
-  base::setSize(extents); 
-}
-
-//----------------------------------------------------------------------------//
-
-template <class Data_T>
-EmptyField<Data_T>::EmptyField(const Box3i &extents,
-                               const Box3i &dataWindow)
-{ 
-  base::setSize(extents, dataWindow); 
-}
-
-#endif
 
 //----------------------------------------------------------------------------//
 

@@ -101,8 +101,13 @@ def isDebugBuild():
 
 # ------------------------------------------------------------------------------
 
+def red(s):
+    return "\033[1m" + s + "\033[0m"
+
+# ------------------------------------------------------------------------------
+
 def architectureStr():
-    if ARGUMENTS.get('do64', 0):
+    if ARGUMENTS.get('do64', 1):
         return arch64
     else:
         return arch32
@@ -224,6 +229,15 @@ def setupEnv(env, pathToRoot = "."):
     else:
         env.Append(CCFLAGS = ["-m32"])
         env.Append(LINKFLAGS = ["-m32"])
+    # Prettify SCons output
+    if ARGUMENTS.get("verbose", 0) != "1":
+        env["ARCOMSTR"] = "AR $TARGET"
+        env["CXXCOMSTR"] = "Compiling " + red("$TARGET")
+        env["SHCXXCOMSTR"] = "Compiling " + red("$TARGET")
+        env["LDMODULECOMSTR"] = "Compiling " + red("$TARGET")
+        env["LINKCOMSTR"] = "Linking " + red("$TARGET")
+        env["SHLINKCOMSTR"] = "Linking " + red("$TARGET")
+        env["INSTALLSTR"] = "Installing " + red("$TARGET")
 
 # ------------------------------------------------------------------------------
 

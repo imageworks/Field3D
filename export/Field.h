@@ -67,30 +67,6 @@
 FIELD3D_NAMESPACE_OPEN
 
 //----------------------------------------------------------------------------//
-// Field RTTI Replacement
-//----------------------------------------------------------------------------//
-
-#define DEFINE_CHECK_RTTI_CALL \
-  virtual bool checkRTTI(const std::string &typenameStr) \
-  { return matchRTTI(typenameStr); } \
-
-#define DEFINE_MATCH_RTTI_CALL \
-  bool matchRTTI(const std::string &typenameStr) \
-  { \
-    if (typenameStr == typeid(class_type).name()) { \
-      return true; \
-    } \
-    return base::matchRTTI(typenameStr); \
-  }
-
-#define DEFINE_FIELD_RTTI_CONCRETE_CLASS \
-  DEFINE_CHECK_RTTI_CALL \
-  DEFINE_MATCH_RTTI_CALL
-
-#define DEFINE_FIELD_RTTI_ABSTRACT_CLASS \
-  DEFINE_MATCH_RTTI_CALL
-
-//----------------------------------------------------------------------------//
 // Exceptions
 //----------------------------------------------------------------------------//
 
@@ -100,23 +76,6 @@ DECLARE_FIELD3D_GENERIC_EXCEPTION(MemoryException, Exception)
 DECLARE_FIELD3D_GENERIC_EXCEPTION(ResizeException, Exception)
 
 } // namespace Exc
-
-//----------------------------------------------------------------------------//
-// FieldTraits
-//----------------------------------------------------------------------------//
-
-/*! \class FieldTraits
-  \ingroup template_util
-  Traits class that lets us answer how many components are in a given data type
-*/
-
-template <class Data_T>
-class FieldTraits
-{
- public:
-  //! Dimensions of the given data type. i.e. 3 for V3f, 1 for float
-  static int dataDims();
-};
 
 //----------------------------------------------------------------------------//
 // FieldBase
@@ -154,6 +113,18 @@ public:
 
   //! \}
 
+  // RTTI replacement ----------------------------------------------------------
+
+  static const char *staticClassName()
+  {
+    return "FieldBase";
+  }
+
+  static const char* classType()
+  {
+    return staticClassName();
+  }
+  
   // To be implemented by subclasses -------------------------------------------
 
   //! \name To be implemented by subclasses
@@ -161,35 +132,14 @@ public:
 
   //! Returns the class name of the object. Used by the class pool and when
   //! writing the data to disk.
+  //! \note This is different from classType for any templated class,
+  //! as classType() will include the template parameter(s) but className
+  //! remains just the name of the template itself.
   virtual std::string className() const = 0;
 
   //! Returns a pointer to a copy of the field, pure virtual so ensure
   //! derived classes properly implement it
   virtual Ptr clone() const = 0;
-
-  //! \}
-  
-  // RTTI replacement ----------------------------------------------------------
-
-  /*! \note A note on why the RTTI replacement is needed:
-     RTTI calls fail once the object crosses the dso boundary. We revert
-     to using simple string checks which is more expensive but at least works
-     once the dso is used in Houdini, etc.
-     Use field_dynamic_cast<> for any FieldBase subclass instead of 
-     dynamic_cast<>.
-  */
-
-  //! \name RTTI replacement
-  //! \{
-
-  //! This function is only implemented by concrete classes and triggers
-  //! the actual RTTI check through matchRTTI();
-  virtual bool checkRTTI(const std::string &typenameStr) = 0;
-  
-  //! Performs a check to see if the given typename string matches this class'
-  //! This needs to be implemented in -all- subclasses, even abstract ones.
-  bool matchRTTI(const std::string &typenameStr)
-  { return typenameStr == typeid(*this).name(); }
 
   //! \}
 
@@ -254,6 +204,8 @@ public:
   apply large-kernel filters without having to deal with boundary conditions.
 */
 
+//----------------------------------------------------------------------------//
+
 class FieldRes : public FieldBase
 {
 public:
@@ -263,12 +215,23 @@ public:
   typedef boost::intrusive_ptr<FieldRes> Ptr;
   typedef std::vector<Ptr> Vec;
 
-  virtual std::string dataTypeString() const = 0;
-
   // RTTI replacement ----------------------------------------------------------
 
   typedef FieldRes class_type;
   DEFINE_FIELD_RTTI_ABSTRACT_CLASS;
+
+  virtual std::string dataTypeString() const
+    { return std::string("FieldRes"); }
+
+  static const char *staticClassName()
+  {
+    return "FieldRes";
+  }
+
+  static const char *classType()
+  {
+    return staticClassName();
+  }
   
   // Ctor, dtor ----------------------------------------------------------------
 
@@ -307,7 +270,7 @@ public:
   { return m_mapping; }
 
   //! Returns true is the indicies are in bounds of the data window
-  bool isInBounds(int i, int j, int k);
+  bool isInBounds(int i, int j, int k) const;
 
   // To be implemented by subclasses -------------------------------------------
 
@@ -336,7 +299,7 @@ protected:
   Box3i m_dataWindow;
   //! Pointer to the field's mapping
   FieldMapping::Ptr m_mapping;
-  
+
 private:
 
   // Typedefs ------------------------------------------------------------------
@@ -383,7 +346,7 @@ inline void FieldRes::setMapping(FieldMapping::Ptr mapping)
 
 //----------------------------------------------------------------------------//
 
-inline bool FieldRes::isInBounds(int i, int j, int k) 
+inline bool FieldRes::isInBounds(int i, int j, int k) const
 {
   // Check bounds
   if (i < m_dataWindow.min.x || i > m_dataWindow.max.x ||
@@ -393,27 +356,6 @@ inline bool FieldRes::isInBounds(int i, int j, int k)
   }
 
   return true;
-}
-
-//----------------------------------------------------------------------------//
-// field_dynamic_cast
-//----------------------------------------------------------------------------//
-
-//! Dynamic cast that uses string-comparison in order to be safe even
-//! after an object crosses a shared library boundary.
-//! \ingroup field
-template <class Field_T>
-typename Field_T::Ptr
-field_dynamic_cast(FieldBase::Ptr field)
-{
-  if (!field) 
-    return NULL;
-  std::string tgtTypeString = typeid(Field_T).name();
-  if (field->checkRTTI(tgtTypeString)) {
-    return static_cast<Field_T*>(field.get());
-  } else {
-    return NULL;
-  }
 }
 
 //----------------------------------------------------------------------------//
@@ -433,7 +375,7 @@ field_dynamic_cast(FieldBase::Ptr field)
 template <class Data_T>
 class Field : public FieldRes
 {
- public:
+public:
 
   // Typedefs ------------------------------------------------------------------
   
@@ -451,7 +393,17 @@ class Field : public FieldRes
 
   typedef Field<Data_T> class_type;
   DEFINE_FIELD_RTTI_ABSTRACT_CLASS;
-  
+
+  static const char *staticClassName()
+  {
+    return "Field";
+  }
+
+  static const char* classType()
+  {
+    return Field<Data_T>::ms_classType.name();
+  }
+
   // Constructors --------------------------------------------------------------
 
   //! Dtor
@@ -489,7 +441,12 @@ class Field : public FieldRes
   virtual std::string dataTypeString() const 
   { return DataTypeTraits<Data_T>::name(); }
 
+
 private:
+
+  // Static data members -------------------------------------------------------
+
+  static TemplatedFieldType<Field<Data_T> > ms_classType;
 
   // Typedefs ------------------------------------------------------------------
 
@@ -497,6 +454,15 @@ private:
   typedef FieldRes base;
 
 };
+
+//----------------------------------------------------------------------------//
+
+#define FIELD3D_CLASSTYPE_TEMPL_INSTANTIATION(field)                  \
+  template <typename Data_T>                                          \
+  TemplatedFieldType<field<Data_T> > field<Data_T>::ms_classType =    \
+    TemplatedFieldType<field<Data_T> >();                             \
+  
+FIELD3D_CLASSTYPE_TEMPL_INSTANTIATION(Field);
 
 //----------------------------------------------------------------------------//
 
@@ -640,6 +606,16 @@ public:
 
   typedef WritableField<Data_T> class_type;
   DEFINE_FIELD_RTTI_ABSTRACT_CLASS;
+
+  static const char *staticClassName()
+  {
+    return "WritableField";
+  }
+
+  static const char* classType()
+  {
+    return WritableField<Data_T>::ms_classType.name();
+  }
   
   // Iterators -----------------------------------------------------------------
 
@@ -678,11 +654,19 @@ public:
 
 private:
 
+  // Static data members -------------------------------------------------------
+
+  static TemplatedFieldType<WritableField<Data_T> > ms_classType;
+
   // Typedefs ------------------------------------------------------------------
 
   typedef Field<Data_T> base;
 
 };
+
+//----------------------------------------------------------------------------//
+
+FIELD3D_CLASSTYPE_TEMPL_INSTANTIATION(WritableField);
 
 //----------------------------------------------------------------------------//
 
@@ -734,7 +718,6 @@ WritableField<Data_T>::end(const Box3i &subset)
 template <class Data_T>
 class WritableField<Data_T>::iterator
 {
-
 public:
 
   // Constructors --------------------------------------------------------------
@@ -825,6 +808,16 @@ public:
 
   typedef ResizableField<Data_T> class_type;
   DEFINE_FIELD_RTTI_ABSTRACT_CLASS;
+
+  static const char *staticClassName()
+  {
+    return "ResizableField";
+  }
+  
+  static const char* classType()
+  {
+    return ResizableField<Data_T>::ms_classType.name();
+  }
   
   // Main methods --------------------------------------------------------------
 
@@ -857,6 +850,10 @@ public:
 
 protected:
 
+  // Static data members -------------------------------------------------------
+
+  static TemplatedFieldType<ResizableField<Data_T> > ms_classType;
+
   // Typedefs ------------------------------------------------------------------
 
   typedef WritableField<Data_T> base;
@@ -870,6 +867,10 @@ protected:
   { base::m_mapping->setExtents(base::m_extents); }
 
 };
+
+//----------------------------------------------------------------------------//
+
+FIELD3D_CLASSTYPE_TEMPL_INSTANTIATION(ResizableField);
 
 //----------------------------------------------------------------------------//
 

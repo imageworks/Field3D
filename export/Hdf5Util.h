@@ -122,7 +122,6 @@ public:
   }
 };
 
-
 //----------------------------------------------------------------------------//
 
 //! Scoped object - Opens attribute by index and closes it on destruction.
@@ -134,7 +133,8 @@ public:
   {
     m_id = H5Aopen_idx(location, idx);
     if (m_id < 0)
-      throw Exc::MissingAttributeException("Couldn't open attribute at index: "+boost::lexical_cast<std::string>(idx));
+      throw Exc::MissingAttributeException("Couldn't open attribute at index: " +
+                                           boost::lexical_cast<std::string>(idx));
   }
   ~H5ScopedAopenIdx()
   {
@@ -449,6 +449,22 @@ bool readAttribute(hid_t location, const std::string& attrName,
 bool readAttribute(hid_t location, const std::string& attrName, 
                   unsigned int attrSize, double &value); 
 
+//! Reads a int attribute of arbitrary size and rank
+//! \ingroup hdf5
+bool readAttribute(hid_t location, const std::string& attrName, 
+                   std::vector<unsigned int> &attrSize, int &value); 
+
+//! Reads a float attribute of arbitrary size and rank
+//! \ingroup hdf5
+bool readAttribute(hid_t location, const std::string& attrName, 
+                   std::vector<unsigned int> &attrSize, float &value); 
+
+//! Reads a double attribute of arbitrary size and rank
+//! \ingroup hdf5
+bool readAttribute(hid_t location, const std::string& attrName, 
+                   std::vector<unsigned int> &attrSize, double &value); 
+
+
 //! \}
 
 //----------------------------------------------------------------------------//
@@ -476,6 +492,27 @@ bool writeAttribute(hid_t location, const std::string& attrName,
 //! \ingroup hdf5
 bool writeAttribute(hid_t location, const std::string& attrName, 
                   unsigned int attrSize, const double &value); 
+
+//! Writes a float attribute of arbitrary size and rank
+//! \ingroup hdf5
+bool writeAttribute(hid_t location, const std::string& attrName, 
+                    std::vector<unsigned int> &attrSize, const int &value); 
+
+
+//! Writes a float attribute of arbitrary size and rank
+//! \ingroup hdf5
+bool writeAttribute(hid_t location, const std::string& attrName, 
+                    std::vector<unsigned int> &attrSize, const int &value); 
+
+//! Writes a float attribute of arbitrary size and rank
+//! \ingroup hdf5
+bool writeAttribute(hid_t location, const std::string& attrName, 
+                    std::vector<unsigned int> &attrSize, const float &value); 
+
+//! Writes a double attribute of arbitrary size and rank
+//! \ingroup hdf5
+bool writeAttribute(hid_t location, const std::string& attrName, 
+                    std::vector<unsigned int> &attrSize, const double &value); 
 
 //! \}
 

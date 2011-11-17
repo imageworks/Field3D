@@ -93,14 +93,14 @@ class FieldMetadata
 
   // Operators -----------------------------------------------------------------
 
-  void operator =(const FieldMetadata &other) { 
+  void operator = (const FieldMetadata &other) 
+  { 
     m_vecFloatMetadata = other.m_vecFloatMetadata;
     m_floatMetadata    = other.m_floatMetadata;
     m_vecIntMetadata   = other.m_vecIntMetadata;
     m_intMetadata      = other.m_intMetadata;
     m_strMetadata      = other.m_strMetadata;
   }
-
 
   // Access to metadata --------------------------------------------------------
 

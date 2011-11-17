@@ -226,6 +226,139 @@ readAttribute(hid_t location, const string& attrName,
 //----------------------------------------------------------------------------//
 
 bool 
+readAttribute(hid_t location, const string& attrName, 
+              std::vector<unsigned int> &attrSize, int &value)
+{
+  H5T_class_t typeClass;
+  int rank = attrSize.size();
+
+  if (H5Aexists(location, attrName.c_str()) < 0)
+    throw MissingAttributeException("Couldn't find attribute " + attrName);
+
+  H5ScopedAopen attr(location, attrName.c_str(), H5P_DEFAULT);
+  H5ScopedAget_space attrSpace(attr);
+  H5ScopedAget_type attrType(attr);
+
+
+  if (H5Sget_simple_extent_ndims(attrSpace) != rank) 
+    throw MissingAttributeException("Bad attribute rank for attribute " + 
+                                    attrName);
+
+  hsize_t dims[rank];
+  H5Sget_simple_extent_dims(attrSpace, dims, NULL);
+
+  for (int i=0; i < rank; i++) {
+    if (dims[i] != attrSize[i]) 
+      throw MissingAttributeException("Invalid attribute size for attribute " + 
+                                      attrName);
+  }
+  
+  typeClass = H5Tget_class(attrType);
+
+  if (typeClass != H5T_INTEGER) 
+    throw MissingAttributeException("Bad attribute type class for " + 
+                                    attrName);
+
+  H5ScopedTget_native_type nativeType(attrType, H5T_DIR_ASCEND);
+
+  if (H5Aread(attr, nativeType, &value) < 0) 
+    throw MissingAttributeException("Couldn't read attribute " + attrName);
+
+  return true;
+}
+  
+//----------------------------------------------------------------------------//
+
+bool 
+readAttribute(hid_t location, const string& attrName, 
+              std::vector<unsigned int> &attrSize, float &value)
+{
+  H5T_class_t typeClass;
+  int rank = attrSize.size();
+
+  if (H5Aexists(location, attrName.c_str()) < 0)
+    throw MissingAttributeException("Couldn't find attribute " + attrName);
+
+  H5ScopedAopen attr(location, attrName.c_str(), H5P_DEFAULT);
+  H5ScopedAget_space attrSpace(attr);
+  H5ScopedAget_type attrType(attr);
+
+
+  if (H5Sget_simple_extent_ndims(attrSpace) != rank) 
+    throw MissingAttributeException("Bad attribute rank for attribute " + 
+                                    attrName);
+
+  hsize_t dims[rank];
+  H5Sget_simple_extent_dims(attrSpace, dims, NULL);
+
+  for (int i=0; i < rank; i++) {
+    if (dims[i] != attrSize[i]) 
+      throw MissingAttributeException("Invalid attribute size for attribute " + 
+                                      attrName);
+  }
+  
+  typeClass = H5Tget_class(attrType);
+
+  if (typeClass != H5T_FLOAT)
+    throw MissingAttributeException("Bad attribute type class for " + 
+                                    attrName);
+
+  H5ScopedTget_native_type nativeType(attrType, H5T_DIR_ASCEND);
+
+  if (H5Aread(attr, nativeType, &value) < 0) 
+    throw MissingAttributeException("Couldn't read attribute " + attrName);
+
+  return true;
+}
+  
+//----------------------------------------------------------------------------//
+
+bool 
+readAttribute(hid_t location, const string& attrName, 
+              std::vector<unsigned int> &attrSize, double &value)
+{
+
+  H5T_class_t typeClass;
+  int rank = attrSize.size();
+
+  if (H5Aexists(location, attrName.c_str()) < 0)
+    throw MissingAttributeException("Couldn't find attribute " + attrName);
+
+  H5ScopedAopen attr(location, attrName.c_str(), H5P_DEFAULT);
+  H5ScopedAget_space attrSpace(attr);
+  H5ScopedAget_type attrType(attr);
+
+
+  if (H5Sget_simple_extent_ndims(attrSpace) != rank) 
+    throw MissingAttributeException("Bad attribute rank for attribute " + 
+                                    attrName);
+
+  hsize_t dims[rank];
+  H5Sget_simple_extent_dims(attrSpace, dims, NULL);
+
+  for (int i=0; i < rank; i++) {
+    if (dims[i] != attrSize[i]) 
+      throw MissingAttributeException("Invalid attribute size for attribute " + 
+                                      attrName);
+  }
+  
+  typeClass = H5Tget_class(attrType);
+
+  if (typeClass != H5T_FLOAT)
+    throw MissingAttributeException("Bad attribute type class for " + 
+                                    attrName);
+
+  H5ScopedTget_native_type nativeType(attrType, H5T_DIR_ASCEND);
+
+  if (H5Aread(attr, nativeType, &value) < 0) 
+    throw MissingAttributeException("Couldn't read attribute " + attrName);
+
+  return true;
+}
+
+//----------------------------------------------------------------------------//
+
+bool 
 writeAttribute(hid_t location, const string& attrName, const string &value)
 {
   hid_t attr = -1;
@@ -374,6 +507,151 @@ writeAttribute(hid_t location, const string& attrName,
 
   if (H5Sset_extent_simple(attrSpace, 1, dims, NULL) < 0)
     return false;
+
+  attr = H5Acreate(location, attrName.c_str(), H5T_NATIVE_DOUBLE, 
+                   attrSpace, H5P_DEFAULT, H5P_DEFAULT);
+  if (attr < 0) {
+    Msg::print(Msg::SevWarning, "Error creating attribute: " + attrName);
+    H5Aclose(attr);
+    H5Sclose(attrSpace);
+    return false;
+  }
+
+  if (H5Awrite(attr, H5T_NATIVE_DOUBLE, &value) < 0) {
+    Msg::print(Msg::SevWarning, "Error writing attribute: " + attrName);
+    H5Aclose(attr);
+    H5Sclose(attrSpace);
+    return false;
+  }
+
+  H5Aclose(attr);
+  H5Sclose(attrSpace);
+
+  return true;
+}
+
+
+//----------------------------------------------------------------------------//  
+
+bool 
+writeAttribute(hid_t location, const string& attrName,
+               std::vector<unsigned int> &attrSize, const int &value)
+{
+  hid_t attr;
+  hid_t attrSpace;
+  size_t rank = attrSize.size();
+  hsize_t current_dims[rank];
+  hsize_t max_dims[rank];
+
+  for (size_t i=0; i < rank; i++)
+    current_dims[i] = attrSize[i];
+  
+  for (size_t i=0; i < rank; i++)
+    max_dims[i] = H5S_UNLIMITED;
+
+  attrSpace = H5Screate(H5S_SIMPLE);
+  if (attrSpace < 0) 
+    return false;
+
+  if (H5Sset_extent_simple(attrSpace, rank, current_dims, max_dims) < 0) {
+    return false;
+  }
+
+  attr = H5Acreate(location, attrName.c_str(), H5T_NATIVE_INT, 
+                   attrSpace, H5P_DEFAULT, H5P_DEFAULT);
+  if (attr < 0) {
+    Msg::print(Msg::SevWarning, "Error creating attribute: " + attrName);
+    H5Aclose(attr);
+    H5Sclose(attrSpace);
+    return false;
+  }
+
+  if (H5Awrite(attr, H5T_NATIVE_INT, &value) < 0) {
+    Msg::print(Msg::SevWarning, "Error writing attribute: " + attrName);
+    H5Aclose(attr);
+    H5Sclose(attrSpace);
+    return false;
+  }
+
+  H5Aclose(attr);
+  H5Sclose(attrSpace);
+
+  return true;
+}
+  
+//----------------------------------------------------------------------------//  
+
+bool 
+writeAttribute(hid_t location, const string& attrName,
+               std::vector<unsigned int> &attrSize, const float &value)
+{
+  hid_t attr;
+  hid_t attrSpace;
+  size_t rank = attrSize.size();
+  hsize_t current_dims[rank];
+  hsize_t max_dims[rank];
+
+  for (size_t i=0; i < rank; i++)
+    current_dims[i] = attrSize[i];
+  
+  for (size_t i=0; i < rank; i++)
+    max_dims[i] = H5S_UNLIMITED;
+
+  attrSpace = H5Screate(H5S_SIMPLE);
+  if (attrSpace < 0) 
+    return false;
+
+  if (H5Sset_extent_simple(attrSpace, rank, current_dims, max_dims) < 0) {
+    return false;
+  }
+
+  attr = H5Acreate(location, attrName.c_str(), H5T_NATIVE_FLOAT, 
+                   attrSpace, H5P_DEFAULT, H5P_DEFAULT);
+  if (attr < 0) {
+    Msg::print(Msg::SevWarning, "Error creating attribute: " + attrName);
+    H5Aclose(attr);
+    H5Sclose(attrSpace);
+    return false;
+  }
+
+  if (H5Awrite(attr, H5T_NATIVE_FLOAT, &value) < 0) {
+    Msg::print(Msg::SevWarning, "Error writing attribute: " + attrName);
+    H5Aclose(attr);
+    H5Sclose(attrSpace);
+    return false;
+  }
+
+  H5Aclose(attr);
+  H5Sclose(attrSpace);
+
+  return true;
+}
+  
+//----------------------------------------------------------------------------//  
+
+bool 
+writeAttribute(hid_t location, const string& attrName,
+               std::vector<unsigned int> &attrSize, const double &value)
+{
+  hid_t attr;
+  hid_t attrSpace;
+  size_t rank = attrSize.size();
+  hsize_t current_dims[rank];
+  hsize_t max_dims[rank];
+
+  for (size_t i=0; i < rank; i++)
+    current_dims[i] = attrSize[i];
+  
+  for (size_t i=0; i < rank; i++)
+    max_dims[i] = H5S_UNLIMITED;
+
+  attrSpace = H5Screate(H5S_SIMPLE);
+  if (attrSpace < 0) 
+    return false;
+
+  if (H5Sset_extent_simple(attrSpace, rank, current_dims, max_dims) < 0) {
+    return false;
+  }
 
   attr = H5Acreate(location, attrName.c_str(), H5T_NATIVE_DOUBLE, 
                    attrSpace, H5P_DEFAULT, H5P_DEFAULT);

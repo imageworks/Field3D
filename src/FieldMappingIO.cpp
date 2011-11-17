@@ -65,9 +65,20 @@ namespace {
   const string k_nullMappingName("NullFieldMapping");
   //! \todo This is duplicated in FieldMapping.cpp. Fix.
   const string k_matrixMappingName("MatrixFieldMapping");
+  const string k_frustumMappingName("FrustumFieldMapping");
 
   const string k_nullMappingDataName("NullFieldMapping data");
+  
   const string k_matrixMappingDataName("MatrixFieldMapping data");
+  const string k_matrixMappingNumSamples("num_time_samples");
+  const string k_matrixMappingTime("time_");
+  const string k_matrixMappingMatrix("matrix_");
+
+  const string k_frustumMappingNumSamples("num_time_samples");
+  const string k_frustumMappingTime("time_");
+  const string k_frustumMappingScreenMatrix("screen_to_world_");
+  const string k_frustumMappingCameraMatrix("camera_to_world_");
+  const string k_frustumMappingZDistribution("z_distribution");
 }
 
 //----------------------------------------------------------------------------//
@@ -98,27 +109,66 @@ NullFieldMappingIO::write(hid_t mappingGroup, FieldMapping::Ptr /* nm */)
 
 //----------------------------------------------------------------------------//
 
-//! Returns the class name
 std::string NullFieldMappingIO::className() const
-{ return k_nullMappingName; }
+{ 
+  return k_nullMappingName; 
+}
 
+//----------------------------------------------------------------------------//
+// MatrixFieldMapping
 //----------------------------------------------------------------------------//
 
 FieldMapping::Ptr
 MatrixFieldMappingIO::read(hid_t mappingGroup)
 {
   M44d mtx;
-
-  if (!readAttribute(mappingGroup, k_matrixMappingDataName, 16,
-                     mtx.x[0][0])) {
-    Msg::print(Msg::SevWarning, "Couldn't read attribute " + k_matrixMappingDataName);
-    return MatrixFieldMapping::Ptr();
-  }
+  int numSamples=0;
 
   MatrixFieldMapping::Ptr mm(new MatrixFieldMapping);
+  
+  // For backward compatibility, we first try to read the non-time-varying
+  // mapping.
 
-  mm->setLocalToWorld(mtx);
+  try {
+    readAttribute(mappingGroup, k_matrixMappingDataName, 16, mtx.x[0][0]);
+    mm->setLocalToWorld(mtx);
+    return mm;
+  } 
+  catch (...) {
+    // Do nothing
+  }
 
+  // If we didn't find the non-time-varying matrix data then we attempt
+  // to read time samples
+
+  try {
+    if (!readAttribute(mappingGroup, k_matrixMappingNumSamples, 1, numSamples)) {
+      Msg::print(Msg::SevWarning, "Couldn't read attribute " + 
+                 k_matrixMappingNumSamples);
+      return FieldMapping::Ptr();
+    }
+  } catch (...) {
+    //do nothing
+  }
+
+  for (int i = 0; i < numSamples; ++i) {
+    float time;
+    string timeAttr = k_matrixMappingTime + boost::lexical_cast<string>(i);
+    string matrixAttr = k_matrixMappingMatrix + boost::lexical_cast<string>(i);
+    if (!readAttribute(mappingGroup, timeAttr, 1, time)) {
+      Msg::print(Msg::SevWarning, "Couldn't read attribute " + timeAttr);
+      return FieldMapping::Ptr();
+    }
+    std::vector<unsigned int> attrSize;
+    attrSize.assign(2,4);
+
+    if (!readAttribute(mappingGroup, matrixAttr, attrSize, mtx.x[0][0])) {
+      Msg::print(Msg::SevWarning, "Couldn't read attribute " + matrixAttr);
+      return FieldMapping::Ptr();
+    }
+    mm->setLocalToWorld(time, mtx);
+  }
+  
   return mm;
 }
 
@@ -127,15 +177,187 @@ MatrixFieldMappingIO::read(hid_t mappingGroup)
 bool
 MatrixFieldMappingIO::write(hid_t mappingGroup, FieldMapping::Ptr mapping)
 {
+  typedef MatrixFieldMapping::MatrixCurve::SampleVec SampleVec;
+
   MatrixFieldMapping::Ptr mm =
-    boost::dynamic_pointer_cast<MatrixFieldMapping>(mapping);
+    FIELD_DYNAMIC_CAST<MatrixFieldMapping>(mapping);
+
   if (!mm) {
     Msg::print(Msg::SevWarning, "Couldn't get MatrixFieldMapping from pointer");
     return false;
   }
-  if (!writeAttribute(mappingGroup, k_matrixMappingDataName, 16, 
-                    mm->localToWorld().x[0][0])) {
-    Msg::print(Msg::SevWarning, "Couldn't add attribute " + k_matrixMappingDataName);
+
+  // First write number of time samples
+
+  const SampleVec &samples = mm->localToWorldSamples();
+  int numSamples = static_cast<int>(samples.size());
+
+  if (!writeAttribute(mappingGroup, k_matrixMappingNumSamples, 1, numSamples)) {
+    Msg::print(Msg::SevWarning, "Couldn't add attribute " + 
+               k_matrixMappingNumSamples);
+    return false;
+  }
+
+  // Then write each sample
+
+  for (int i = 0; i < numSamples; ++i) {
+    string timeAttr = k_matrixMappingTime + boost::lexical_cast<string>(i);
+    string matrixAttr = k_matrixMappingMatrix + boost::lexical_cast<string>(i);
+    if (!writeAttribute(mappingGroup, timeAttr, 1, samples[i].first)) {
+      Msg::print(Msg::SevWarning, "Couldn't add attribute " + timeAttr);
+      return false;
+    }
+    std::vector<unsigned int> attrSize;
+    attrSize.assign(2,4);
+    if (!writeAttribute(mappingGroup, matrixAttr, attrSize, 
+                        samples[i].second.x[0][0])) {
+      Msg::print(Msg::SevWarning, "Couldn't add attribute " + matrixAttr);
+      return false;
+    }
+  }
+
+  return true;
+}
+
+//----------------------------------------------------------------------------//
+
+std::string MatrixFieldMappingIO::className() const
+{ 
+  return k_matrixMappingName;
+}
+
+//----------------------------------------------------------------------------//
+// FrustumFieldMapping
+//----------------------------------------------------------------------------//
+
+FieldMapping::Ptr
+FrustumFieldMappingIO::read(hid_t mappingGroup)
+{
+  float time;
+  M44d ssMtx, csMtx;
+  int numSamples=0;
+
+  FrustumFieldMapping::Ptr fm(new FrustumFieldMapping);
+  
+  // Read number of time samples
+
+  try {
+    if (!readAttribute(mappingGroup, k_frustumMappingNumSamples, 1, numSamples)) {
+      Msg::print(Msg::SevWarning, "Couldn't read attribute " + 
+                 k_frustumMappingNumSamples);
+      return FieldMapping::Ptr();
+    }
+  } catch (...) {
+    //do nothing
+  }
+
+  // Read each time sample
+
+  for (int i = 0; i < numSamples; ++i) {
+    string timeAttr = k_frustumMappingTime + boost::lexical_cast<string>(i);
+    string ssAttr = k_frustumMappingScreenMatrix + boost::lexical_cast<string>(i);
+    string csAttr = k_frustumMappingCameraMatrix + boost::lexical_cast<string>(i);
+    if (!readAttribute(mappingGroup, timeAttr, 1, time)) {
+      Msg::print(Msg::SevWarning, "Couldn't read attribute " + timeAttr);
+      return FieldMapping::Ptr();
+    }
+    std::vector<unsigned int> attrSize;
+    attrSize.assign(2,4);
+
+    if (!readAttribute(mappingGroup, ssAttr, attrSize, ssMtx.x[0][0])) {
+      Msg::print(Msg::SevWarning, "Couldn't read attribute " + ssAttr);
+      return FieldMapping::Ptr();
+    }
+    if (!readAttribute(mappingGroup, csAttr, attrSize, csMtx.x[0][0])) {
+      Msg::print(Msg::SevWarning, "Couldn't read attribute " + csAttr);
+      return FieldMapping::Ptr();
+    }
+
+    fm->setTransforms(time, ssMtx, csMtx);
+  }
+
+
+  // Read Z distribution
+
+  int distInt;
+  FrustumFieldMapping::ZDistribution dist;
+  
+  try {
+    if (!readAttribute(mappingGroup, k_frustumMappingZDistribution, 1, distInt)) {
+      Msg::print(Msg::SevWarning, "Couldn't read attribute " + 
+                 k_frustumMappingZDistribution);
+      return FieldMapping::Ptr();
+    }
+    dist = static_cast<FrustumFieldMapping::ZDistribution>(distInt); 
+  } catch (...) {
+    dist = FrustumFieldMapping::PerspectiveDistribution;
+  }
+
+  fm->setZDistribution(dist);
+
+  return fm;
+}
+
+//----------------------------------------------------------------------------//
+
+bool
+FrustumFieldMappingIO::write(hid_t mappingGroup, FieldMapping::Ptr mapping)
+{
+  typedef FrustumFieldMapping::MatrixCurve::SampleVec SampleVec;
+
+  FrustumFieldMapping::Ptr fm =
+    FIELD_DYNAMIC_CAST<FrustumFieldMapping>(mapping);
+
+  if (!fm) {
+    Msg::print(Msg::SevWarning, "Couldn't get FrustumFieldMapping from pointer");
+    return false;
+  }
+
+  // First write number of time samples
+
+  const SampleVec &ssSamples = fm->screenToWorldSamples();
+  const SampleVec &csSamples = fm->cameraToWorldSamples();
+  int numSamples = static_cast<int>(ssSamples.size());
+
+  if (!writeAttribute(mappingGroup, k_frustumMappingNumSamples, 1, numSamples)) {
+    Msg::print(Msg::SevWarning, "Couldn't add attribute " + 
+               k_frustumMappingNumSamples);
+    return false;
+  }
+
+  // Then write each sample
+
+  for (int i = 0; i < numSamples; ++i) {
+    string timeAttr = k_frustumMappingTime + boost::lexical_cast<string>(i);
+    string ssAttr = k_frustumMappingScreenMatrix + boost::lexical_cast<string>(i);
+    string csAttr = k_frustumMappingCameraMatrix + boost::lexical_cast<string>(i);
+    if (!writeAttribute(mappingGroup, timeAttr, 1, ssSamples[i].first)) {
+      Msg::print(Msg::SevWarning, "Couldn't add attribute " + timeAttr);
+      return false;
+    }
+
+    std::vector<unsigned int> attrSize;
+    attrSize.assign(2,4);
+
+    if (!writeAttribute(mappingGroup, ssAttr,attrSize,
+                        ssSamples[i].second.x[0][0])) {
+      Msg::print(Msg::SevWarning, "Couldn't add attribute " + ssAttr);
+      return false;
+    }
+    if (!writeAttribute(mappingGroup, csAttr, attrSize,
+                        csSamples[i].second.x[0][0])) {
+      Msg::print(Msg::SevWarning, "Couldn't add attribute " + csAttr);
+      return false;
+    }
+  }
+
+  // Write distribution type
+
+  int dist = static_cast<int>(fm->zDistribution());
+
+  if (!writeAttribute(mappingGroup, k_frustumMappingZDistribution, 1, dist)) {
+    Msg::print(Msg::SevWarning, "Couldn't add attribute " + 
+               k_frustumMappingNumSamples);
     return false;
   }
 
@@ -144,9 +366,10 @@ MatrixFieldMappingIO::write(hid_t mappingGroup, FieldMapping::Ptr mapping)
 
 //----------------------------------------------------------------------------//
 
-//! Returns the class name
-std::string MatrixFieldMappingIO::className() const
-{ return k_matrixMappingName; }
+std::string FrustumFieldMappingIO::className() const
+{ 
+  return k_frustumMappingName;
+}
 
 //----------------------------------------------------------------------------//
 

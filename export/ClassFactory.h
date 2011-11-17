@@ -124,7 +124,6 @@ public:
 
   //! }
 
-
   //! Access point for the singleton instance.
   static ClassFactory& singleton();
 
@@ -155,12 +154,11 @@ private:
   //! 
   NameVec m_fieldMappingNames;
 
-
-  //! Map of create functions for FieldMapping IO classes.  The key is the class name.
+  //! Map of create functions for FieldMapping IO classes.  
+  //! The key is the class name.
   FieldMappingIOFuncMap m_mappingIOs;
   //! 
   NameVec m_fieldMappingIONames;
-
 
   //! Pointer to static instance
   static ClassFactory *ms_instance;

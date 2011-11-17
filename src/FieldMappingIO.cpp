@@ -131,7 +131,7 @@ bool
 MatrixFieldMappingIO::write(hid_t mappingGroup, FieldMapping::Ptr mapping)
 {
   MatrixFieldMapping::Ptr mm =
-    boost::dynamic_pointer_cast<MatrixFieldMapping>(mapping);
+    field_dynamic_cast<MatrixFieldMapping>(mapping);
   if (!mm) {
     Msg::print(Msg::SevWarning, "Couldn't get MatrixFieldMapping from pointer");
     return false;

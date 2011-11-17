@@ -55,9 +55,35 @@
 #include <boost/thread/mutex.hpp>
 #endif
 
+#include <string.h>
+#include "Traits.h"
 #include "ns.h"
 
 FIELD3D_NAMESPACE_OPEN
+
+//----------------------------------------------------------------------------//
+// Field RTTI Replacement
+//----------------------------------------------------------------------------//
+
+#define DEFINE_CHECK_RTTI_CALL                    \
+  virtual bool checkRTTI(const char *typenameStr) \
+  { return matchRTTI(typenameStr); }              \
+  
+#define DEFINE_MATCH_RTTI_CALL                        \
+  bool matchRTTI(const char *typenameStr)             \
+  {                                                   \
+    if (strcmp(typenameStr,classType()) == 0) {       \
+      return true;                                    \
+    }                                                 \
+    return base::matchRTTI(typenameStr);              \
+  }                                                   \
+
+#define DEFINE_FIELD_RTTI_CONCRETE_CLASS        \
+  DEFINE_CHECK_RTTI_CALL                        \
+  DEFINE_MATCH_RTTI_CALL                        \
+
+#define DEFINE_FIELD_RTTI_ABSTRACT_CLASS        \
+  DEFINE_MATCH_RTTI_CALL                        \
 
 //----------------------------------------------------------------------------//
 
@@ -93,6 +119,8 @@ public:
 
   //! \}
 
+  // Reference counting --------------------------------------------------------
+
   //! Used by boost::intrusive_pointer
   size_t refcnt() 
   { return m_counter; }
@@ -116,8 +144,42 @@ public:
     // since we use intrusive_pointer no need
     // to delete the object ourselves.
   }
+  
+  // RTTI replacement ----------------------------------------------------------
+
+  /*! \note A note on why the RTTI replacement is needed:
+     RTTI calls fail once the object crosses the dso boundary. We revert
+     to using simple string checks which is more expensive but at least works
+     once the dso is used in Houdini, etc.
+     Use field_dynamic_cast<> for any RefBase subclass instead of 
+     dynamic_cast<>.
+  */
+
+  //! \name RTTI replacement
+  //! \{
+
+  //! This function is only implemented by concrete classes and triggers
+  //! the actual RTTI check through matchRTTI();
+  virtual bool checkRTTI(const char *typenameStr) = 0;
+  
+  //! Performs a check to see if the given typename string matches this class'
+  //! This needs to be implemented in -all- subclasses, even abstract ones.
+  bool matchRTTI(const char *typenameStr)
+  {
+    if (strcmp(classType(), typenameStr) == 0)
+      return true;
+    return false;
+  }
+
+  static const char *classType()
+  {
+    return "RefBase";
+  }
+
+  //! \}
 
 private:
+
   //! For boost intrusive pointer
 #ifdef FIELD3D_USE_ATOMIC_COUNT
   mutable boost::detail::atomic_count m_counter;
@@ -149,6 +211,32 @@ intrusive_ptr_release(RefBase* r)
   if (r->refcnt() == 0)
     delete r;
 }
+
+//----------------------------------------------------------------------------//
+// field_dynamic_cast
+//----------------------------------------------------------------------------//
+
+//! Dynamic cast that uses string-comparison in order to be safe even
+//! after an object crosses a shared library boundary.
+//! \ingroup field
+template <class Field_T>
+typename Field_T::Ptr
+field_dynamic_cast(RefBase::Ptr field)
+{
+  if (!field) 
+    return NULL;
+
+  const char *tgtTypeString =  Field_T::classType();
+  
+  if (field->checkRTTI(tgtTypeString)) {
+    return static_cast<Field_T*>(field.get());
+  } else {
+    return NULL;
+  }
+}
+
+//#define FIELD_DYNAMIC_CAST boost::dynamic_pointer_cast
+#define FIELD_DYNAMIC_CAST field_dynamic_cast
 
 //----------------------------------------------------------------------------//
 

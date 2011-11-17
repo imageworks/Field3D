@@ -87,7 +87,7 @@ void ClassFactory::registerField(CreateFieldFnPtr createFunc)
   string simpleClassName = instance->className();
   string dataTypeName = instance->dataTypeString();
   string className = simpleClassName + "<" + dataTypeName + ">";
-
+  
   FieldFuncMap::const_iterator i = m_fields.find(className);
   if (i != m_fields.end())
     nameExists = true;  
@@ -97,14 +97,13 @@ void ClassFactory::registerField(CreateFieldFnPtr createFunc)
     // if the simple (untemplated) class name hasn't been registered
     // yet, add it to the list and print a message
     if (find(m_fieldNames.begin(), m_fieldNames.end(),
-             simpleClassName) == m_fieldNames.end()) {
-      m_fieldNames.push_back(simpleClassName);
+             className) == m_fieldNames.end()) {
+      m_fieldNames.push_back(className);
       char *debugEnvVar = getenv("FIELD3D_DEBUG");
       if (debugEnvVar) {
-        Msg::print("Registered Field class " + simpleClassName);
+        Msg::print("Registered Field class " + className);
       }
     }
-
   } 
 
 }
@@ -116,7 +115,7 @@ ClassFactory::createField(const std::string &className) const
 {
   FieldFuncMap::const_iterator i = m_fields.find(className);
   if (i != m_fields.end())
-    return i->second();
+   return i->second();
   else
     return FieldRes::Ptr();
 }
@@ -156,7 +155,6 @@ void ClassFactory::registerFieldIO(CreateFieldIOFnPtr createFunc)
         Msg::print("Registered FieldIO class " + className);
       }
     }
-
   } 
 
 }
@@ -166,6 +164,7 @@ void ClassFactory::registerFieldIO(CreateFieldIOFnPtr createFunc)
 FieldIO::Ptr 
 ClassFactory::createFieldIO(const std::string &className) const
 {
+  FieldIOFuncMap::const_iterator m = m_fieldIOs.begin();
   FieldIOFuncMap::const_iterator i = m_fieldIOs.find(className);
   if (i != m_fieldIOs.end())
     return i->second();

@@ -45,9 +45,8 @@ for converting templatization into strings and enums.
 #ifndef _INCLUDED_Field3D_Traits_H_
 #define _INCLUDED_Field3D_Traits_H_
 
-#include <string>
-
 #include <assert.h>
+#include <string>
 
 #include <hdf5.h>
 
@@ -66,6 +65,8 @@ FIELD3D_NAMESPACE_OPEN
 
 enum DataTypeEnum {
   DataTypeHalf=0,
+  DataTypeUnsignedChar,
+  DataTypeInt,
   DataTypeFloat,
   DataTypeDouble,
   DataTypeVecHalf,
@@ -75,85 +76,79 @@ enum DataTypeEnum {
 };
 
 //----------------------------------------------------------------------------//
-// Data Structures
+// FieldTraits
+//----------------------------------------------------------------------------//
+
+/*! \class FieldTraits
+  \ingroup template_util
+  Traits class that lets us answer how many components are in a given data type
+*/
+
+template <class Data_T>
+class FieldTraits
+{
+public:
+  //! Dimensions of the given data type. i.e. 3 for V3f, 1 for float
+  static int dataDims();
+};
+
+//----------------------------------------------------------------------------//
+// DataTypeTraits
 //----------------------------------------------------------------------------//
 
 template <typename T>
 struct DataTypeTraits {
-  static std::string name() {
-    assert(false && "Unsupported type in DataTypeTraits::name()");
-    Msg::print(Msg::SevWarning, "Unsupported type in DataTypeTraits::name()");
-    return std::string("ERROR in DataTypeTraits::name()");
+  static std::string name();
+  static DataTypeEnum typeEnum();
+  static hid_t h5type();
+  static int h5bits();
+};
+
+//----------------------------------------------------------------------------//
+// TemplatedFieldType
+//----------------------------------------------------------------------------//
+
+//! Used to return a string for the name of a templated field
+template <class Field_T>
+struct TemplatedFieldType
+{
+  const char *name()
+  {
+    return m_name.c_str();
   }
-  static DataTypeEnum typeEnum() {
-    assert(false && "Unsupported type in DataTypeTraits::typeEnum()");
-    Msg::print(Msg::SevWarning,
-               "Unsupported type in DataTypeTraits::typeEnum()");
-    return DataTypeUnknown;
+  TemplatedFieldType()
+  {
+    m_name = Field_T::staticClassName();
+    m_name +=
+      "<" +
+      DataTypeTraits<typename Field_T::value_type>::name() +
+      ">";
   }
-  static hid_t h5type() {
-    assert(false && "Unsupported type in DataTypeTraits::h5type()");
-    Msg::print(Msg::SevWarning,
-               "Unsupported type in DataTypeTraits::h5type()");
-    return 0;
-  }
-  static int h5bits() {
-    assert(false && "Unsupported type in DataTypeTraits::h5bits()");
-    Msg::print(Msg::SevWarning,
-               "Unsupported type in DataTypeTraits::h5bits()");
-    return 0;
-  }
+private:
+  std::string m_name;
 };
 
 //----------------------------------------------------------------------------//
 // Template specializations
 //----------------------------------------------------------------------------//
 
-template<>
-inline std::string DataTypeTraits<half>::name()
-{
-  return std::string("half");
-}
+#define FIELD3D_DECL_DATATYPENAME(typeName)               \
+  template<>                                              \
+  inline std::string DataTypeTraits<typeName>::name()     \
+  {                                                       \
+    return std::string(#typeName);                        \
+  }                                                       \
 
 //----------------------------------------------------------------------------//
 
-template<>
-inline std::string DataTypeTraits<float>::name()
-{
-  return std::string("float");
-}
-
-//----------------------------------------------------------------------------//
-
-template<>
-inline std::string DataTypeTraits<double>::name()
-{
-  return std::string("double");
-}
-
-//----------------------------------------------------------------------------//
-
-template<>
-inline std::string DataTypeTraits<V3h>::name()
-{
-  return std::string("V3h");
-}
-
-//----------------------------------------------------------------------------//
-
-template<>
-inline std::string DataTypeTraits<V3f>::name()
-{
-  return std::string("V3f");
-}
-
-//----------------------------------------------------------------------------//
-
-template<>
-inline std::string DataTypeTraits<V3d>::name()
-{
-  return std::string("V3d");
-}
+FIELD3D_DECL_DATATYPENAME(unsigned char)
+FIELD3D_DECL_DATATYPENAME(int)
+FIELD3D_DECL_DATATYPENAME(float)
+FIELD3D_DECL_DATATYPENAME(half)
+FIELD3D_DECL_DATATYPENAME(double)
+FIELD3D_DECL_DATATYPENAME(V3h)
+FIELD3D_DECL_DATATYPENAME(V3f)
+FIELD3D_DECL_DATATYPENAME(V3d)
 
 //----------------------------------------------------------------------------//
 
@@ -161,6 +156,22 @@ template<>
 inline DataTypeEnum DataTypeTraits<half>::typeEnum()
 {
   return DataTypeHalf;
+}
+
+//----------------------------------------------------------------------------//
+
+template<>
+inline DataTypeEnum DataTypeTraits<unsigned char>::typeEnum()
+{
+  return DataTypeUnsignedChar;
+}
+
+//----------------------------------------------------------------------------//
+
+template<>
+inline DataTypeEnum DataTypeTraits<int>::typeEnum()
+{
+  return DataTypeInt;
 }
 
 //----------------------------------------------------------------------------//
@@ -236,6 +247,22 @@ inline hid_t DataTypeTraits<char>::h5type()
 //----------------------------------------------------------------------------//
 
 template <>
+inline hid_t DataTypeTraits<unsigned char>::h5type()
+{
+  return H5T_NATIVE_UCHAR;
+}
+
+//----------------------------------------------------------------------------//
+
+template <>
+inline hid_t DataTypeTraits<int>::h5type()
+{
+  return H5T_NATIVE_INT;
+}
+
+//----------------------------------------------------------------------------//
+
+template <>
 inline hid_t DataTypeTraits<V3h>::h5type()
 {
   return H5T_NATIVE_SHORT;
@@ -306,7 +333,7 @@ inline int DataTypeTraits<V3d>::h5bits()
 }
 
 //----------------------------------------------------------------------------//
-
+  
 FIELD3D_NAMESPACE_HEADER_CLOSE
 
 //----------------------------------------------------------------------------//

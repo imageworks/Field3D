@@ -45,6 +45,7 @@
 #include <iostream>
 #include <vector>
 
+#include "Field.h"
 #include "FieldMapping.h"
 #include "Types.h"
 
@@ -67,6 +68,10 @@ FIELD3D_NAMESPACE_OPEN
 //----------------------------------------------------------------------------//
 
 namespace {
+  
+  // Strings ---
+
+  const string k_mappingName("FieldMapping");
   const string k_nullMappingName("NullFieldMapping");
   const string k_matrixMappingName("MatrixFieldMapping");
   const string k_frustumMappingName("FrustumFieldMapping");
@@ -97,6 +102,14 @@ FieldMapping::FieldMapping(const Box3i &extents)
 FieldMapping::~FieldMapping()
 { 
   /* Empty */ 
+}
+
+//----------------------------------------------------------------------------//
+
+
+std::string FieldMapping::className() const
+{
+  return  std::string(classType());
 }
 
 //----------------------------------------------------------------------------//
@@ -148,7 +161,7 @@ void FieldMapping::voxelToLocal(const V3d &vsP, V3d &lsP) const
 
 std::string NullFieldMapping::className() const
 {
-  return k_nullMappingName;
+  return std::string(classType());
 }
 
 //----------------------------------------------------------------------------//
@@ -214,7 +227,7 @@ void MatrixFieldMapping::extentsChanged()
 
 std::string MatrixFieldMapping::className() const
 {
-  return k_matrixMappingName;
+  return std::string(classType());
 }
 
 //----------------------------------------------------------------------------//

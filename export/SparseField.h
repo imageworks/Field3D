@@ -170,6 +170,21 @@ public:
   typedef LinearGenericFieldInterp<SparseField<Data_T> > LinearInterp;
   typedef CubicGenericFieldInterp<SparseField<Data_T> > CubicInterp;
 
+  // RTTI replacement ----------------------------------------------------------
+
+  typedef SparseField<Data_T> class_type;
+  DEFINE_FIELD_RTTI_CONCRETE_CLASS;
+
+  static const char *staticClassName()
+  {
+    return "SparseField";
+  }
+  
+  static const char *classType()
+  {
+    return SparseField<Data_T>::ms_classType.name();
+  }
+
   // Constructors --------------------------------------------------------------
 
   //! \name Constructors & destructor
@@ -186,8 +201,8 @@ public:
 
   //! Assignment operator.  For cache-managed fields, it creates a new
   //! file reference, and for non-managed fields, it copies the data
-  SparseField & operator=(const SparseField &o);
-
+  SparseField& operator=(const SparseField &o);
+  
   // \}
 
   // Main methods --------------------------------------------------------------
@@ -261,12 +276,7 @@ public:
   virtual Data_T value(int i, int j, int k) const;
   virtual long long int memSize() const;
   //! \}
-
-  // RTTI replacement ----------------------------------------------------------
-
-  typedef SparseField<Data_T> class_type;
-  DEFINE_FIELD_RTTI_CONCRETE_CLASS;
-
+  
   // From WritableField base class ---------------------------------------------
 
   //! \name From WritableField
@@ -286,10 +296,10 @@ public:
   //! \name From FieldBase
   //! \{
   virtual std::string className() const
-    { return std::string("SparseField"); }
+  { return staticClassName(); }
 
   virtual FieldBase::Ptr clone() const
-    { return Ptr(new SparseField(*this)); }
+  { return Ptr(new SparseField(*this)); }
 
   //! \}
   
@@ -346,7 +356,7 @@ public:
   //! Internal function to setup the Reference's block pointers, for
   //! use with dynamic reading.
   void setupReferenceBlocks();
-
+  
  protected:
 
   friend class SparseFieldIO;
@@ -400,6 +410,12 @@ public:
 
 private:
 
+  // Static data members -------------------------------------------------------
+
+  static TemplatedFieldType<SparseField<Data_T> > ms_classType;
+
+  // Utility methods -----------------------------------------------------------
+
   //! Copies internal data, including blocks, from another SparseField,
   //! used by copy constructor and operator=
   void copySparseField(const SparseField &o);
@@ -409,6 +425,12 @@ private:
   void copyBlockStates(const SparseField<Data_T> &o);
 
 };
+
+//----------------------------------------------------------------------------//
+// Static member instantiations
+//----------------------------------------------------------------------------//
+
+FIELD3D_CLASSTYPE_TEMPL_INSTANTIATION(SparseField);
 
 //----------------------------------------------------------------------------//
 // Typedefs

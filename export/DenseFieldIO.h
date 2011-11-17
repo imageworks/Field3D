@@ -84,6 +84,16 @@ public:
   
   typedef boost::intrusive_ptr<DenseFieldIO> Ptr;
 
+  // RTTI replacement ----------------------------------------------------------
+
+  typedef DenseFieldIO class_type;
+  DEFINE_FIELD_RTTI_CONCRETE_CLASS;
+
+  static const char* classType()
+  {
+    return "DenseFieldIO";
+  }
+
   // Constructors --------------------------------------------------------------
 
   //! Ctor
@@ -94,7 +104,6 @@ public:
   //! Dtor
   virtual ~DenseFieldIO() 
   { /* Empty */ }
-
 
   static FieldIO::Ptr create()
   { return Ptr(new DenseFieldIO); }
@@ -115,8 +124,8 @@ public:
 
   //! Returns the class name
   virtual std::string className() const
-  { return std::string("DenseField"); }
-
+  { return "DenseField"; }
+  
 private:
 
   // Internal methods ----------------------------------------------------------
@@ -144,6 +153,11 @@ private:
   static const std::string k_dataWindowStr;
   static const std::string k_componentsStr;
   static const std::string k_dataStr;
+
+  // Typedefs ------------------------------------------------------------------
+
+  //! Convenience typedef for referring to base class
+  typedef FieldIO base;
 
 };
 

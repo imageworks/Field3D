@@ -55,7 +55,6 @@
 #include "Field.h"
 #include "ClassFactory.h"
 
-
 //----------------------------------------------------------------------------//
 
 using namespace std;
@@ -81,6 +80,7 @@ namespace {
   // Strings used only in this file --------------------------------------------
 
   const std::string k_mappingStr("mapping");
+  const std::string k_partitionName("partition");  
   const std::string k_versionAttrName("version_number");
   const std::string k_classNameAttrName("class_name");
   const std::string k_mappingTypeAttrName("mapping_type");
@@ -201,6 +201,13 @@ namespace {
 
 //----------------------------------------------------------------------------//
 // Partition implementations
+//----------------------------------------------------------------------------//
+
+std::string Partition::className() const
+{
+  return k_partitionName;
+}
+
 //----------------------------------------------------------------------------//
 
 void 
@@ -1092,7 +1099,6 @@ readGroupMembership(GroupMembershipMap &gpMembershipMap)
   return true;
 }
 
-
 //----------------------------------------------------------------------------//
 // Field3DFile-related callback functions
 //----------------------------------------------------------------------------//
@@ -1501,6 +1507,23 @@ Field3DOutputFile::writeGroupMembership()
   }
   
   return true;
+}
+
+//----------------------------------------------------------------------------//
+
+std::string
+Field3DOutputFile::incrementPartitionName(std::string &partitionName)
+{
+  std::string myPartitionName = removeUniqueId(partitionName);
+  int nextIdx = -1;
+  if (m_partitionCount.find(myPartitionName) != m_partitionCount.end()) {
+    nextIdx = ++m_partitionCount[myPartitionName];
+  } else {
+    nextIdx = 0;
+    m_partitionCount[myPartitionName] = 0;
+  }
+
+  return makeIntPartitionName(myPartitionName, nextIdx);
 }
 
 //----------------------------------------------------------------------------//

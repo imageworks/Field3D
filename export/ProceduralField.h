@@ -129,6 +129,21 @@ public:
   typedef ProceduralFieldLookup<Data_T> LinearInterp;
   typedef ProceduralFieldLookup<Data_T> CubicInterp;
 
+  // RTTI replacement ----------------------------------------------------------
+
+  typedef ProceduralField<Data_T> class_type;
+  DEFINE_FIELD_RTTI_ABSTRACT_CLASS
+
+  static const char *staticClassName()
+  {
+    return "ProceduralField";
+  }
+
+  static const char *classType()
+  {
+    return ProceduralField<Data_T>::ms_classType.name();
+  }
+
   // Constructors --------------------------------------------------------------
 
   //! Destructor
@@ -138,6 +153,11 @@ public:
   // To be implemented by subclasses -------------------------------------------
 
   virtual Data_T lsSample(const V3d &lsP) const = 0;
+
+  // From FieldBase ------------------------------------------------------------
+
+  virtual std::string className() const
+  { return staticClassName(); }
 
   // From Field ----------------------------------------------------------------
 
@@ -151,20 +171,18 @@ public:
   //! scalar (half, float, or double), or sampleVecIntMetadata() if
   //! the field is vector (V3h, V3f, V3d)
   Data_T typedIntMetadata(const std::string &name, 
-                                const Data_T& defaultVal) const;
+                          const Data_T& defaultVal) const;
   //! Calls either sampleFloatMetadata() if the ProceduralField is
   //! scalar (half, float, or double), or sampleVecFloatMetadata() if
   //! the field is vector (V3h, V3f, V3d)
   Data_T typedFloatMetadata(const std::string &name,
-                                  const Data_T& defaultVal) const;
+                            const Data_T& defaultVal) const;
 
-  // RTTI replacement ----------------------------------------------------------
+private:
 
-  typedef ProceduralField<Data_T> class_type;
-  DEFINE_FIELD_RTTI_ABSTRACT_CLASS
+  // Static data members -------------------------------------------------------
 
-  virtual std::string className() const
-    { return std::string("ProceduralField"); }
+  static TemplatedFieldType<ProceduralField<Data_T> > ms_classType;
 
   // Typedefs ------------------------------------------------------------------
 
@@ -182,6 +200,12 @@ typedef ProceduralField<double> ProceduralFieldd;
 typedef ProceduralField<V3h>    ProceduralField3h;
 typedef ProceduralField<V3f>    ProceduralField3f;
 typedef ProceduralField<V3d>    ProceduralField3d;
+
+//----------------------------------------------------------------------------//
+// Static member instantiation
+//----------------------------------------------------------------------------//
+
+FIELD3D_CLASSTYPE_TEMPL_INSTANTIATION(ProceduralField);
 
 //----------------------------------------------------------------------------//
 // Template specializations

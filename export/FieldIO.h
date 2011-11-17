@@ -88,11 +88,23 @@ public:
   // Typedefs ------------------------------------------------------------------
 
   typedef boost::intrusive_ptr<FieldIO> Ptr;
+  
+  // RTTI replacement ----------------------------------------------------------
 
+  typedef FieldIO class_type;
+  DEFINE_FIELD_RTTI_ABSTRACT_CLASS;
+
+  static const char * classType()
+  {
+    return "FieldIO";
+  }
+  
   // Ctors, dtor ---------------------------------------------------------------
 
   //! Ctor
-  FieldIO() : RefBase() {}
+  FieldIO() 
+    : RefBase() 
+  { }
   
   //! Dtor
   virtual ~FieldIO() {}
@@ -116,12 +128,14 @@ public:
 
   // Strings used when reading/writing -----------------------------------------
 
- private:
+private:
 
+  // Typedefs ------------------------------------------------------------------
+
+  //! Convenience typedef for referring to base class
+  typedef RefBase base;  
 
 };
-
-
 
 //----------------------------------------------------------------------------//
 

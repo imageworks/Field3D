@@ -84,6 +84,16 @@ public:
   
   typedef boost::intrusive_ptr<MACFieldIO> Ptr;
 
+  // RTTI replacement ----------------------------------------------------------
+
+  typedef MACFieldIO class_type;
+  DEFINE_FIELD_RTTI_CONCRETE_CLASS;
+
+  static const char *classType()
+  {
+    return "MACFieldIO";
+  }
+    
   // Constructors --------------------------------------------------------------
 
   //! Ctor
@@ -113,7 +123,7 @@ public:
 
   //! Returns the class name
   virtual std::string className() const
-  { return std::string("MACField"); }
+  { return "MACField"; }
 
 private:
 
@@ -144,6 +154,10 @@ private:
   static const std::string k_vDataStr;
   static const std::string k_wDataStr;
 
+  // Typedefs ------------------------------------------------------------------
+
+  //! Convenience typedef for referring to base class
+  typedef FieldIO base;    
 };
  
 //----------------------------------------------------------------------------//

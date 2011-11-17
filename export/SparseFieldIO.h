@@ -85,6 +85,16 @@ public:
   
   typedef boost::intrusive_ptr<SparseFieldIO> Ptr;
 
+  // RTTI replacement ----------------------------------------------------------
+
+  typedef SparseFieldIO class_type;
+  DEFINE_FIELD_RTTI_CONCRETE_CLASS;
+
+  const char *classType() const
+  {
+    return "SparseFieldIO";
+  }
+  
   // Constructors --------------------------------------------------------------
 
   //! Ctor
@@ -115,7 +125,7 @@ public:
 
   //! Returns the class name
   virtual std::string className() const
-  { return std::string("SparseField"); }
+  { return "SparseField"; }
 
 private:
 
@@ -146,7 +156,11 @@ private:
   static const std::string k_bitsPerComponentStr;
   static const std::string k_numOccupiedBlocksStr;
   static const std::string k_dataStr;
+  
+  // Typedefs ------------------------------------------------------------------
 
+  //! Convenience typedef for referring to base class
+  typedef FieldIO base;  
 };
 
 //----------------------------------------------------------------------------//

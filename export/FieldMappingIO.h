@@ -69,13 +69,27 @@ public:
 
   typedef boost::intrusive_ptr<FieldMappingIO> Ptr;
 
+  // RTTI replacement ----------------------------------------------------------
+
+  typedef FieldMappingIO class_type;
+  DEFINE_FIELD_RTTI_ABSTRACT_CLASS;
+    
+  //! RTTI replacement
+  static const char *classType()
+  {
+    return "FieldMappingIO";
+  }
+
   // Ctors, dtor ---------------------------------------------------------------
 
   //! Ctor
-  FieldMappingIO() : RefBase() {}
+  FieldMappingIO() 
+    : RefBase() 
+  { }
   
   //! Dtor
-  virtual ~FieldMappingIO() {}
+  virtual ~FieldMappingIO() 
+  { }
 
   // Methods to be implemented by subclasses -----------------------------------
 
@@ -91,10 +105,13 @@ public:
   //! Returns the class name. This is used when registering the class in the
   //! ClassFactory.
   virtual std::string className() const = 0;
+  
+private:
 
- private:
+  // Typedefs ------------------------------------------------------------------
 
-
+  //! Convenience typedef for referring to base class
+  typedef RefBase base;  
 };
 
 //----------------------------------------------------------------------------//
@@ -116,6 +133,16 @@ public:
   // Typedefs ------------------------------------------------------------------
   
   typedef boost::intrusive_ptr<NullFieldMappingIO> Ptr;
+
+  // RTTI replacement ----------------------------------------------------------
+
+  typedef NullFieldMappingIO class_type;
+  DEFINE_FIELD_RTTI_CONCRETE_CLASS;
+    
+  static const char *classType()
+  {
+    return "NullFieldMappingIO";
+  }
 
   // Constructors --------------------------------------------------------------
 
@@ -143,6 +170,11 @@ public:
 
 private:
 
+  // Typedefs ------------------------------------------------------------------
+
+  //! Convenience typedef for referring to base class
+  typedef FieldMappingIO base;  
+
 };
 
 //----------------------------------------------------------------------------//
@@ -164,6 +196,16 @@ public:
   // Typedefs ------------------------------------------------------------------
   
   typedef boost::intrusive_ptr<MatrixFieldMappingIO> Ptr;
+
+  // RTTI replacement ----------------------------------------------------------
+
+  typedef MatrixFieldMappingIO class_type;
+  DEFINE_FIELD_RTTI_CONCRETE_CLASS;
+    
+  static const char *classType()
+  {
+    return "MatrixFieldMappingIO";
+  }
 
   // Constructors --------------------------------------------------------------
 
@@ -190,8 +232,78 @@ public:
   virtual std::string className() const;
 
 private:
+  
+  // Typedefs ------------------------------------------------------------------
+
+  //! Convenience typedef for referring to base class
+  typedef FieldMappingIO base;  
 
 };
+
+//----------------------------------------------------------------------------//
+// FrustumFieldMappingIO
+//----------------------------------------------------------------------------//
+
+/*! \class FrustumFieldMappingIO
+  \ingroup file_int
+  Handles IO for a FrustumFieldMapping object
+*/
+
+//----------------------------------------------------------------------------//
+
+class FrustumFieldMappingIO : public FieldMappingIO 
+{
+
+public:
+
+  // Typedefs ------------------------------------------------------------------
+  
+  typedef boost::intrusive_ptr<FrustumFieldMappingIO> Ptr;
+
+  // RTTI replacement ----------------------------------------------------------
+
+  typedef FrustumFieldMappingIO class_type;
+  DEFINE_FIELD_RTTI_CONCRETE_CLASS;
+    
+  static const char *classType()
+  {
+    return "FrustumFieldMappingIO";
+  }
+
+  // Constructors --------------------------------------------------------------
+
+  //! Ctor
+  FrustumFieldMappingIO() 
+   : FieldMappingIO()
+  { }
+
+  static FieldMappingIO::Ptr create()
+  { return Ptr(new FrustumFieldMappingIO); }
+
+  // From FieldMappingIO -------------------------------------------------------
+
+  //! Reads the field mapping and tries to create a FrustumFieldMapping
+  //! object from it.
+  //! \returns Null pointer if no object was read
+  virtual FieldMapping::Ptr read(hid_t mappingGroup);
+
+  //! Writes the given field mapping to disk.
+  //! \return true if successful, otherwise false
+  virtual bool write(hid_t mappingGroup, FieldMapping::Ptr mapping);
+
+  //! Returns the class name
+  virtual std::string className() const;
+
+private:
+  
+  // Typedefs ------------------------------------------------------------------
+
+  //! Convenience typedef for referring to base class
+  typedef FieldMappingIO base;  
+
+};
+
+//----------------------------------------------------------------------------//
 
 FIELD3D_NAMESPACE_HEADER_CLOSE
 

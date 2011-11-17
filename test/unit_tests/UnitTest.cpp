@@ -42,6 +42,8 @@
 
 #include <boost/timer.hpp>
 
+#include <OpenEXR/ImathFrustum.h>
+
 #include "Field3D/DenseField.h"
 #include "Field3D/EmptyField.h"
 #include "Field3D/Field3DFile.h"
@@ -108,10 +110,8 @@ void testBasicField()
   typedef Field_T<FIELD3D_VEC3_T<Data_T> > VField;
   typedef FIELD3D_VEC3_T<Data_T> Vec3_T;
 
-  SField dummy;
-  string TName(DataTypeTraits<Data_T>::name());
-  Msg::print("Basic Field tests for type " + dummy.className() + 
-            "<" + TName + ">");
+  Msg::print("Basic Field tests for type " + 
+             string(SField::classType()));
 
   string currentTest;
 
@@ -462,8 +462,8 @@ void testBasicField()
     sField.setMapping(mapping);
     V3d voxelSize(1.0/(end-start+1));
     V3d voxelSize2(1.0/(2*end-2*start+1));
-    BOOST_CHECK_EQUAL((voxelSize-sField.mapping()->
-                         wsVoxelSize(0,0,0)).length()<1e-5, true);
+    double size = (voxelSize - sField.mapping()->wsVoxelSize(0,0,0)).length();
+    BOOST_CHECK_EQUAL(size < 1e-5, true);
     MatrixFieldMapping before;
     before = *mapping;
     sField.setSize(extents2);
@@ -540,10 +540,9 @@ void testEmptyField()
 {
   typedef FIELD3D_VEC3_T<Data_T> Vec3_T;
 
-  EmptyField<Data_T> dummy;
-  string TName(DataTypeTraits<Data_T>::name());
-  Msg::print("Basic Field tests for type " + dummy.className() + 
-            "<" + TName + ">");
+  Msg::print("Basic Field tests for type " + 
+             string(EmptyField<Data_T>::classType())); 
+
 
   string currentTest;
 
@@ -660,10 +659,8 @@ void testFieldMapping()
 {
   typedef FIELD3D_VEC3_T<Data_T> Vec3_T;
 
-  DenseField<Data_T> dummy;
-  string TName(DataTypeTraits<Data_T>::name());
-  Msg::print("FieldMapping tests for type " + dummy.className() + 
-            "<" + TName + ">");
+  Msg::print("FieldMapping tests for type " + 
+             string(DenseField<Data_T>::classType()));
 
   string currentTest;
 
@@ -697,6 +694,108 @@ void testFieldMapping()
 
   }
 
+  currentTest = "Checking time-varying MatrixFieldMapping";
+
+  {
+    Msg::print(currentTest);
+    ScopedPrintTimer t;
+    
+    M44d sample1;
+    sample1.setTranslation(V3f(2.0));
+    M44d sample2;
+    sample2.setTranslation(V3f(4.0));
+    MatrixFieldMapping::Ptr mapping(new MatrixFieldMapping);
+    mapping->setLocalToWorld(0.0, sample1);
+    mapping->setLocalToWorld(1.0, sample2);
+
+    BOOST_CHECK_EQUAL(mapping->localToWorldSamples().size(), 2);
+    BOOST_CHECK_EQUAL(mapping->localToWorldSamples()[0].first, 0.0);
+    BOOST_CHECK_EQUAL(mapping->localToWorldSamples()[1].first, 1.0);
+  }
+
+  currentTest = "Checking MatrixFieldMapping isIdentical()";
+
+  {
+    Msg::print(currentTest);
+    ScopedPrintTimer t;
+    
+    M44d sample1, sample2;
+    sample1.setTranslation(V3f(2.0));
+    sample2.setTranslation(V3f(4.0));
+    MatrixFieldMapping::Ptr mapping1(new MatrixFieldMapping),
+      mapping2(new MatrixFieldMapping);
+    BOOST_CHECK_EQUAL(mapping1->isIdentical(mapping2), true);
+    mapping1->setLocalToWorld(0.0, sample1);
+    mapping1->setLocalToWorld(1.0, sample2);
+    mapping2->setLocalToWorld(0.0, sample1);
+    BOOST_CHECK_EQUAL(mapping1->isIdentical(mapping2), false);
+    mapping2->makeIdentity();
+    mapping2->setLocalToWorld(0.1, sample1);
+    mapping2->setLocalToWorld(1.0, sample2);
+    BOOST_CHECK_EQUAL(mapping1->isIdentical(mapping2), false);
+    mapping2->makeIdentity();
+    mapping2->setLocalToWorld(0.0, sample1);
+    mapping2->setLocalToWorld(1.0, sample1);
+    BOOST_CHECK_EQUAL(mapping1->isIdentical(mapping2), false);
+    mapping2->makeIdentity();
+    mapping2->setLocalToWorld(0.0, sample1);
+    mapping2->setLocalToWorld(1.0, sample2);
+    BOOST_CHECK_EQUAL(mapping1->isIdentical(mapping2), true);
+  }
+
+}
+
+//----------------------------------------------------------------------------//
+
+void testFrustumMapping()
+{
+  Msg::print("FrustumMapping tests");
+  ScopedPrintTimer timer;
+
+  int intRes = 64;
+  float floatRes = static_cast<float>(intRes);
+
+  DenseField<float>::Ptr field(new DenseField<float>);
+  field->setSize(V3i(intRes));
+
+  FrustumFieldMapping::Ptr fm(new FrustumFieldMapping);
+  field->setMapping(fm);
+  fm = field_dynamic_cast<FrustumFieldMapping>(field->mapping());
+
+  M44d identity;
+  identity.makeIdentity();
+
+  BOOST_CHECK_EQUAL(fm->cameraToWorld(), identity);
+  BOOST_CHECK(fm->screenToWorldSamples().size() == 1);
+  BOOST_CHECK(fm->cameraToWorldSamples().size() == 1);
+  BOOST_CHECK(fm->nearPlaneSamples().size() == 1);
+  BOOST_CHECK(fm->farPlaneSamples().size() == 1);
+  
+  V3d wsP(0.0, 0.0, -1.5);
+  V3d vsP, lsP;
+  
+  fm->worldToVoxel(wsP, vsP);
+  fm->worldToLocal(wsP, lsP);
+
+  BOOST_CHECK_EQUAL(vsP.x, floatRes / 2.0);
+  BOOST_CHECK_EQUAL(vsP.y, floatRes / 2.0);
+  BOOST_CHECK(vsP.z > 0.0);
+  BOOST_CHECK(vsP.z < floatRes);
+
+  BOOST_CHECK_EQUAL(lsP.x, 0.5);
+  BOOST_CHECK_EQUAL(lsP.y, 0.5);
+  BOOST_CHECK(lsP.z > 0.0);
+  BOOST_CHECK(lsP.z < 1.0);
+
+  // Check uniform slice distribution
+
+  fm->setZDistribution(FrustumFieldMapping::UniformDistribution);
+  field->setMapping(fm);
+  fm = field_dynamic_cast<FrustumFieldMapping>(field->mapping());
+
+  wsP.setValue(0.0, 0.0, -1.5);
+  fm->worldToLocal(wsP, lsP);
+  BOOST_CHECK_EQUAL(lsP.z, 0.5);
 }
 
 //----------------------------------------------------------------------------//
@@ -708,10 +807,8 @@ void testLinearInterp()
   typedef Field_T<Data_T> SField;
   typedef Field_T<Vec3_T> VField;
 
-  SField dummy;
-  string TName(DataTypeTraits<Data_T>::name());
-  Msg::print("Linear interpolation tests for type " + dummy.className() + 
-            "<" + TName + ">");
+  Msg::print("Linear interpolation tests for type " +
+             string(SField::classType()));
 
   string currentTest = "Simple linear inter test";
 
@@ -741,10 +838,8 @@ void testFastLinearInterp()
   typedef Field_T<Data_T> SField;
   typedef Field_T<Vec3_T> VField;
 
-  SField dummy;
-  string TName(DataTypeTraits<Data_T>::name());
-  Msg::print("Linear fast interpolation tests for type " + dummy.className() + 
-            "<" + TName + ">");
+  Msg::print("Linear fast interpolation tests for type " + 
+             string(SField::classType()));
 
   string currentTest = "Simple linear inter test";
 
@@ -774,10 +869,8 @@ void testCubicInterp()
   typedef Field_T<Data_T> SField;
   typedef Field_T<Vec3_T> VField;
 
-  SField dummy;
-  string TName(DataTypeTraits<Data_T>::name());
-  Msg::print("Cubic interpolation tests for type " + dummy.className() + 
-            "<" + TName + ">");
+  Msg::print("Cubic interpolation tests for type " + 
+             string(SField::classType()));
 
   string currentTest = "Simple Cubic inter test";
 
@@ -809,10 +902,8 @@ void testFastCubicInterp()
   typedef Field_T<Data_T> SField;
   typedef Field_T<Vec3_T> VField;
 
-  SField dummy;
-  string TName(DataTypeTraits<Data_T>::name());
-  Msg::print("Cubic fast interpolation tests for type " + dummy.className() + 
-            "<" + TName + ">");
+  Msg::print("Cubic fast interpolation tests for type " + 
+             string(SField::classType()));
 
   string currentTest = "Simple Cubic inter test";
 
@@ -844,10 +935,8 @@ void testField3DFile()
   typedef Field_T<Data_T> SField;
   typedef Field_T<Vec3_T> VField;
 
-  SField dummy;
-  string TName(DataTypeTraits<Data_T>::name());
-  Msg::print("Field3DFile tests for type " + dummy.className() + 
-            "<" + TName + ">");
+  Msg::print("Field3DFile tests for type " + 
+             string(SField::classType()));
 
   string currentTest;
 
@@ -868,7 +957,7 @@ void testField3DFile()
   {
     Msg::print(currentTest);
     ScopedPrintTimer t;
-    string filename("/tmp/test_" + dummy.className() + "." + TName + ".f3d");
+    string filename("/tmp/test_" + string(SField::classType()) + ".f3d");
     Box3i extents(V3i(0), V3i(160));
     Box3i dataWindow(V3i(20, 10, 0), V3i(100, 100, 100));
 
@@ -980,10 +1069,12 @@ void testField3DFile()
                               densityName) != names.end();
     names.clear();
     iFile.getVectorLayerNames(names, field2Name);
+
     bool velInFile = find(names.begin(), names.end(),
                           velName) != names.end();
     bool tempInFile = find(names.begin(), names.end(),
                            tempName) != names.end();
+
     BOOST_CHECK_EQUAL(densityInFile, true);
     BOOST_CHECK_EQUAL(velInFile, true);    
     BOOST_CHECK_EQUAL(tempInFile, false);
@@ -1076,15 +1167,13 @@ void testLayerFetching()
   typedef Field_T<Data_T> SField;
   typedef Field_T<Vec3_T> VField;
 
-  SField dummy;
-  string TName(DataTypeTraits<Data_T>::name());
-  Msg::print("Testing layer fetching for " + dummy.className() + 
-            "<" + TName + ">");
+  Msg::print("Testing layer fetching for " + 
+             string(SField::classType()));
 
   ScopedPrintTimer t;    
 
-  string filename("/tmp/testLayerFetching_" + dummy.className() + "." + 
-                  TName + ".f3d");
+  string filename("/tmp/testLayerFetching_" + 
+                  string(SField::classType()) + ".f3d");
   Box3i extents(V3i(0), V3i(160));
   Box3i dataWindow(V3i(20, 10, 50), V3i(100, 100, 100));
 
@@ -1179,15 +1268,13 @@ void testReadAsDifferentType()
   typedef Field_T<Data_T> SField;
   typedef Field_T<Vec3_T> VField;
 
-  SField dummy;
-  string TName(DataTypeTraits<Data_T>::name());
-  Msg::print("Testing on-the-fly conversion for " + dummy.className() + 
-            "<" + TName + ">");
+  Msg::print("Testing on-the-fly conversion for " +
+             string(SField::classType()));
 
   ScopedPrintTimer t;    
 
-  string filename("/tmp/testReadAsDifferentType_" + dummy.className() + 
-                  "." + TName + ".f3d");
+  string filename("/tmp/testReadAsDifferentType_" + 
+                  string(SField::classType()) + ".f3d");
   Box3i extents(V3i(0), V3i(160));
   Box3i dataWindow(V3i(20, 10, 50), V3i(100, 100, 100));
 
@@ -1661,7 +1748,6 @@ void testEmptyMACFieldToDisk()
 template <class Data_T>
 void testSparseFieldBlockAccess()
 {
-  // SparseField<Data_T> dummy;
   string TName(DataTypeTraits<Data_T>::name());
   Msg::print("Testing SparseField<" + TName + "> block iterator");
   {
@@ -1711,13 +1797,11 @@ void testDuplicatePartitions()
   typedef Field_T<Data_T> SField;
   typedef Field_T<Vec3_T> VField;
 
-  SField dummy;
-  string TName(DataTypeTraits<Data_T>::name());
-  Msg::print("Testing duplicate partition names for " + dummy.className() + 
-            "<" + TName + ">");
+  Msg::print("Testing duplicate partition names for " + 
+             string(SField::classType()));
 
-  string filename("/tmp/testDuplicatePartitions_" + dummy.className() + 
-                  "." + TName + ".f3d");
+  string filename("/tmp/testDuplicatePartitions_" +
+                  string(SField::classType()) + ".f3d");
 
   Box3i extents(V3i(0), V3i(160));
   Box3i dataWindow(V3i(20, 10, 50), V3i(100, 100, 100));
@@ -1805,10 +1889,124 @@ void testDuplicatePartitions()
 
 //----------------------------------------------------------------------------//
 
+void testTimeVaryingMatrixFieldMapping()
+{
+  Msg::print("Testing time varying MatrixFieldMapping");
+
+  // Create matrix mapping with multiple time samples ---
+
+  MatrixFieldMapping::Ptr mm(new MatrixFieldMapping);
+
+  M44d sample0, sample1, sample2, sample3;
+  sample0.setTranslation(V3f(1.0));
+  sample1.setTranslation(V3f(2.0));
+  sample2.setTranslation(V3f(3.0));
+  sample3.setTranslation(V3f(4.0));
+  
+  mm->setLocalToWorld(-0.5, sample0);
+  mm->setLocalToWorld(-0.1, sample1);
+  mm->setLocalToWorld(0.1, sample2);
+  mm->setLocalToWorld(0.5, sample3);
+
+  // Dummy field. All zeroes.
+  DenseField<float>::Ptr field(new DenseField<float>);
+  field->name = "test";
+  field->attribute = "attr";
+  field->setSize(V3i(64));
+  field->setMapping(mm);
+  mm = field_dynamic_cast<MatrixFieldMapping>(field->mapping());
+  BOOST_CHECK(mm);
+
+  // Write to disk
+  Field3DOutputFile out;
+  string filename("/tmp/testTimeVaryingMatrixFieldMapping.f3d"); 
+  out.create(filename);
+  out.writeScalarLayer<float>(field);
+
+  // Read from disk
+  Field3DInputFile in;
+  in.open(filename);
+  Field<float>::Vec fields = in.readScalarLayers<float>();
+  BOOST_CHECK_EQUAL(fields.size(), 1);
+  
+  // Grab mapping
+  FieldMapping::Ptr fileMapping = fields[0]->mapping();
+  MatrixFieldMapping::Ptr fileMM = field_dynamic_cast<MatrixFieldMapping>(fileMapping);
+  BOOST_CHECK(fileMM);
+  
+  // Check that mappings are identical
+  BOOST_CHECK_EQUAL(mm->isIdentical(fileMM, 1e-6), true);
+}
+
+//----------------------------------------------------------------------------//
+
+void testTimeVaryingFrustumFieldMapping()
+{
+  Msg::print("Testing time varying FrustumFieldMapping");
+
+  // Create frustum mapping with multiple time samples ---
+
+  FrustumFieldMapping::Ptr fm(new FrustumFieldMapping);
+
+  Imath::Frustum<double> frustum(0.1, 10.0, 45.0, 0.0, 1.0);
+  M44d csToWs0, csToWs1, csToWs2, csToWs3;
+  csToWs0.setTranslation(V3d(0.0, 1.0, 0.0));
+  csToWs1.setTranslation(V3d(0.0, 2.0, 0.0));
+  csToWs2.setTranslation(V3d(0.0, 1.0, 0.0));
+  csToWs3.setTranslation(V3d(0.0, -1.0, 0.0));
+  M44d ssToCs = frustum.projectionMatrix().inverse();
+  M44d ssToWs0 = ssToCs * csToWs0;
+  M44d ssToWs1 = ssToCs * csToWs1;
+  M44d ssToWs2 = ssToCs * csToWs2;
+  M44d ssToWs3 = ssToCs * csToWs3;
+
+  fm->setTransforms(0.0, ssToWs0, csToWs0);
+  fm->setTransforms(0.1, ssToWs1, csToWs1);
+  fm->setTransforms(0.5, ssToWs2, csToWs2);
+  fm->setTransforms(1.0, ssToWs3, csToWs3);
+
+  // Dummy field. All zeroes.
+  DenseField<float>::Ptr field(new DenseField<float>);
+  field->name = "test";
+  field->attribute = "attr";
+  field->setSize(V3i(64));
+  field->setMapping(fm);
+  fm = field_dynamic_cast<FrustumFieldMapping>(field->mapping());
+  BOOST_CHECK(fm);
+
+  // Write to disk
+  Field3DOutputFile out;
+  string filename("/tmp/testTimeVaryingFrustumFieldMapping.f3d"); 
+  out.create(filename);
+  out.writeScalarLayer<float>(field);
+
+  // Read from disk
+  Field3DInputFile in;
+  in.open(filename);
+  Field<float>::Vec fields = in.readScalarLayers<float>();
+  BOOST_CHECK_EQUAL(fields.size(), 1);
+  
+  // Grab mapping
+  FieldMapping::Ptr fileMapping = fields[0]->mapping();
+  FrustumFieldMapping::Ptr fileFM = 
+    field_dynamic_cast<FrustumFieldMapping>(fileMapping);
+  BOOST_CHECK(fileFM);
+  
+  // Check that mappings are identical
+  BOOST_CHECK_EQUAL(fm->isIdentical(fileFM, 1e-6), true);
+
+  // Check that mappings differ from a default instance
+  FrustumFieldMapping::Ptr defaultMapping(new FrustumFieldMapping);
+  BOOST_CHECK_EQUAL(defaultMapping->isIdentical(fm, 1e-6), false);
+  BOOST_CHECK_EQUAL(defaultMapping->isIdentical(fileFM, 1e-6), false);
+}
+
+//----------------------------------------------------------------------------//
+
 #define DO_BASIC_TESTS         1
 #define DO_INTERP_TESTS        1
 #define DO_CUBIC_INTERP_TESTS  1
-#define DO_BASIC_FILE_TESTS    1
+#define DO_BASIC_FILE_TESTS    1 
 #define DO_ADVANCED_FILE_TESTS 1
 #define DO_SPARSE_BLOCK_TESTS  1
 #define DO_MAC_TESTS           1
@@ -1846,6 +2044,8 @@ init_unit_test_suite(int argc, char* argv[])
   test->add(BOOST_TEST_CASE((&testFieldMapping<float>)));
   test->add(BOOST_TEST_CASE((&testFieldMapping<double>)));
 
+  test->add(BOOST_TEST_CASE((&testFrustumMapping)));
+
 #endif
 
 #if DO_INTERP_TESTS
@@ -1864,8 +2064,8 @@ init_unit_test_suite(int argc, char* argv[])
   test->add(BOOST_TEST_CASE((&testFastLinearInterp<DenseField, double>)));
   test->add(BOOST_TEST_CASE((&testFastLinearInterp<SparseField, double>)));
 
-
 #endif
+
 #if DO_CUBIC_INTERP_TESTS
 
   test->add(BOOST_TEST_CASE((&testCubicInterp<DenseField, half>)));
@@ -1881,7 +2081,6 @@ init_unit_test_suite(int argc, char* argv[])
   test->add(BOOST_TEST_CASE((&testFastCubicInterp<SparseField, float>)));
   test->add(BOOST_TEST_CASE((&testFastCubicInterp<DenseField, double>)));
   test->add(BOOST_TEST_CASE((&testFastCubicInterp<SparseField, double>)));
-
 
 #endif
 
@@ -1928,6 +2127,9 @@ init_unit_test_suite(int argc, char* argv[])
   test->add(BOOST_TEST_CASE((&testDuplicatePartitions<SparseField, float>)));
   test->add(BOOST_TEST_CASE((&testDuplicatePartitions<DenseField, double>)));
   test->add(BOOST_TEST_CASE((&testDuplicatePartitions<SparseField, double>)));
+
+  test->add(BOOST_TEST_CASE((&testTimeVaryingMatrixFieldMapping)));
+  test->add(BOOST_TEST_CASE((&testTimeVaryingFrustumFieldMapping)));
 
 #endif
 

@@ -75,7 +75,6 @@ FieldBase::~FieldBase()
   // Empty
 }
 
-
 //----------------------------------------------------------------------------//
 // FieldTraits template specializations
 //----------------------------------------------------------------------------//
@@ -114,6 +113,14 @@ int FieldTraits<int>::dataDims()
 
 template <>
 int FieldTraits<char>::dataDims()
+{
+  return 1;
+}
+
+//----------------------------------------------------------------------------//
+
+template <>
+int FieldTraits<unsigned char>::dataDims()
 {
   return 1;
 }

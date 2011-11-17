@@ -449,6 +449,22 @@ bool readAttribute(hid_t location, const std::string& attrName,
 bool readAttribute(hid_t location, const std::string& attrName, 
                   unsigned int attrSize, double &value); 
 
+//! Reads a int attribute of arbitrary size and rank
+//! \ingroup hdf5
+bool readAttribute(hid_t location, const std::string& attrName, 
+                   std::vector<unsigned int> &attrSize, int &value); 
+
+//! Reads a float attribute of arbitrary size and rank
+//! \ingroup hdf5
+bool readAttribute(hid_t location, const std::string& attrName, 
+                   std::vector<unsigned int> &attrSize, float &value); 
+
+//! Reads a double attribute of arbitrary size and rank
+//! \ingroup hdf5
+bool readAttribute(hid_t location, const std::string& attrName, 
+                   std::vector<unsigned int> &attrSize, double &value); 
+
+
 //! \}
 
 //----------------------------------------------------------------------------//
@@ -476,6 +492,27 @@ bool writeAttribute(hid_t location, const std::string& attrName,
 //! \ingroup hdf5
 bool writeAttribute(hid_t location, const std::string& attrName, 
                   unsigned int attrSize, const double &value); 
+
+//! Writes a float attribute of arbitrary size and rank
+//! \ingroup hdf5
+bool writeAttribute(hid_t location, const std::string& attrName, 
+                    std::vector<unsigned int> &attrSize, const int &value); 
+
+
+//! Writes a float attribute of arbitrary size and rank
+//! \ingroup hdf5
+bool writeAttribute(hid_t location, const std::string& attrName, 
+                    std::vector<unsigned int> &attrSize, const int &value); 
+
+//! Writes a float attribute of arbitrary size and rank
+//! \ingroup hdf5
+bool writeAttribute(hid_t location, const std::string& attrName, 
+                    std::vector<unsigned int> &attrSize, const float &value); 
+
+//! Writes a double attribute of arbitrary size and rank
+//! \ingroup hdf5
+bool writeAttribute(hid_t location, const std::string& attrName, 
+                    std::vector<unsigned int> &attrSize, const double &value); 
 
 //! \}
 

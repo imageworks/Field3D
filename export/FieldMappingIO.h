@@ -240,6 +240,71 @@ private:
 
 };
 
+//----------------------------------------------------------------------------//
+// FrustumFieldMappingIO
+//----------------------------------------------------------------------------//
+
+/*! \class FrustumFieldMappingIO
+  \ingroup file_int
+  Handles IO for a FrustumFieldMapping object
+*/
+
+//----------------------------------------------------------------------------//
+
+class FrustumFieldMappingIO : public FieldMappingIO 
+{
+
+public:
+
+  // Typedefs ------------------------------------------------------------------
+  
+  typedef boost::intrusive_ptr<FrustumFieldMappingIO> Ptr;
+
+  // RTTI replacement ----------------------------------------------------------
+
+  typedef FrustumFieldMappingIO class_type;
+  DEFINE_FIELD_RTTI_CONCRETE_CLASS;
+    
+  static const char *classType()
+  {
+    return "FrustumFieldMappingIO";
+  }
+
+  // Constructors --------------------------------------------------------------
+
+  //! Ctor
+  FrustumFieldMappingIO() 
+   : FieldMappingIO()
+  { }
+
+  static FieldMappingIO::Ptr create()
+  { return Ptr(new FrustumFieldMappingIO); }
+
+  // From FieldMappingIO -------------------------------------------------------
+
+  //! Reads the field mapping and tries to create a FrustumFieldMapping
+  //! object from it.
+  //! \returns Null pointer if no object was read
+  virtual FieldMapping::Ptr read(hid_t mappingGroup);
+
+  //! Writes the given field mapping to disk.
+  //! \return true if successful, otherwise false
+  virtual bool write(hid_t mappingGroup, FieldMapping::Ptr mapping);
+
+  //! Returns the class name
+  virtual std::string className() const;
+
+private:
+  
+  // Typedefs ------------------------------------------------------------------
+
+  //! Convenience typedef for referring to base class
+  typedef FieldMappingIO base;  
+
+};
+
+//----------------------------------------------------------------------------//
+
 FIELD3D_NAMESPACE_HEADER_CLOSE
 
 //----------------------------------------------------------------------------//

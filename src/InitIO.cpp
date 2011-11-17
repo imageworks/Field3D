@@ -64,6 +64,7 @@ void initIO()
 
   factory.registerFieldMappingIO(NullFieldMappingIO::create);
   factory.registerFieldMappingIO(MatrixFieldMappingIO::create);
+  factory.registerFieldMappingIO(FrustumFieldMappingIO::create);
 }
 
 //----------------------------------------------------------------------------//

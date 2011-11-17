@@ -606,7 +606,7 @@ MACField<Data_T>::MACField()
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-void MACField<Data_T>::clear(const Data_T &value)
+inline void MACField<Data_T>::clear(const Data_T &value)
 {
   std::fill(m_u.begin(), m_u.end(), value.x);
   std::fill(m_v.begin(), m_v.end(), value.y);
@@ -683,7 +683,7 @@ void MACField<Data_T>::sizeChanged()
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-const typename MACField<Data_T>::real_t& 
+inline const typename MACField<Data_T>::real_t& 
 MACField<Data_T>::u(int i, int j, int k) const
 {
   assert (i >= base::m_dataWindow.min.x);
@@ -702,7 +702,7 @@ MACField<Data_T>::u(int i, int j, int k) const
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-typename MACField<Data_T>::real_t& 
+inline typename MACField<Data_T>::real_t& 
 MACField<Data_T>::u(int i, int j, int k)
 {
   assert (i >= base::m_dataWindow.min.x);
@@ -721,7 +721,7 @@ MACField<Data_T>::u(int i, int j, int k)
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-const typename MACField<Data_T>::real_t& 
+inline const typename MACField<Data_T>::real_t& 
 MACField<Data_T>::v(int i, int j, int k) const
 {
   assert (i >= base::m_dataWindow.min.x);
@@ -740,7 +740,7 @@ MACField<Data_T>::v(int i, int j, int k) const
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-typename MACField<Data_T>::real_t& 
+inline typename MACField<Data_T>::real_t& 
 MACField<Data_T>::v(int i, int j, int k)
 {
   assert (i >= base::m_dataWindow.min.x);
@@ -759,7 +759,7 @@ MACField<Data_T>::v(int i, int j, int k)
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-const typename MACField<Data_T>::real_t& 
+inline const typename MACField<Data_T>::real_t& 
 MACField<Data_T>::w(int i, int j, int k) const
 {
   assert (i >= base::m_dataWindow.min.x);
@@ -778,7 +778,7 @@ MACField<Data_T>::w(int i, int j, int k) const
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-typename MACField<Data_T>::real_t& 
+inline typename MACField<Data_T>::real_t& 
 MACField<Data_T>::w(int i, int j, int k)
 {
   assert (i >= base::m_dataWindow.min.x);
@@ -905,7 +905,7 @@ MACField<Data_T>::end_comp(MACComponent comp, const Box3i &subset)
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-const typename MACField<Data_T>::real_t*
+inline const typename MACField<Data_T>::real_t*
 MACField<Data_T>::uPtr(int i, int j, int k) const
 {
   // Add crop window offset
@@ -918,7 +918,7 @@ MACField<Data_T>::uPtr(int i, int j, int k) const
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-typename MACField<Data_T>::real_t*
+inline typename MACField<Data_T>::real_t*
 MACField<Data_T>::uPtr(int i, int j, int k)
 {
   // Add crop window offset
@@ -931,7 +931,7 @@ MACField<Data_T>::uPtr(int i, int j, int k)
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-const typename MACField<Data_T>::real_t* 
+inline const typename MACField<Data_T>::real_t* 
 MACField<Data_T>::vPtr(int i, int j, int k) const
 {
   // Add crop window offset
@@ -944,7 +944,7 @@ MACField<Data_T>::vPtr(int i, int j, int k) const
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-typename MACField<Data_T>::real_t* 
+inline typename MACField<Data_T>::real_t* 
 MACField<Data_T>::vPtr(int i, int j, int k)
 {
   // Add crop window offset
@@ -957,7 +957,7 @@ MACField<Data_T>::vPtr(int i, int j, int k)
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-const typename MACField<Data_T>::real_t* 
+inline const typename MACField<Data_T>::real_t* 
 MACField<Data_T>::wPtr(int i, int j, int k) const
 {
   // Add crop window offset
@@ -970,7 +970,7 @@ MACField<Data_T>::wPtr(int i, int j, int k) const
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-typename MACField<Data_T>::real_t* 
+inline typename MACField<Data_T>::real_t* 
 MACField<Data_T>::wPtr(int i, int j, int k)
 {
   // Add crop window offset

@@ -1161,7 +1161,8 @@ void SparseField<Data_T>::clear(const Data_T &value)
   setupBlocks();
   // Then just fill in the default values
   typename std::vector<Block>::iterator i;
-  for (i = m_blocks.begin(); i != m_blocks.end(); ++i) {
+  typename std::vector<Block>::iterator end;
+  for (i = m_blocks.begin(), end = m_blocks.end(); i != end; ++i) {
     i->emptyValue = value;
   }
 }
@@ -1544,10 +1545,11 @@ void SparseField<Data_T>::setupBlocks()
                          static_cast<int>(blockRes.z));
   m_blockRes = intBlockRes;
   m_blockXYSize = m_blockRes.x * m_blockRes.y;
-  //! \todo clear() won't resize. Do the swap trick.
-  m_blocks.clear();
+  // clear() won't deallocate data. Do the swap trick.
+  //m_blocks.clear();
+  std::vector<Block>().swap(m_blocks);
+  
   m_blocks.resize(intBlockRes.x * intBlockRes.y * intBlockRes.z);
-
 }
 
 //----------------------------------------------------------------------------//
@@ -1594,6 +1596,7 @@ template <class Data_T>
 void SparseField<Data_T>::deallocBlock(Block &block, const Data_T &emptyValue)
 {
   block.isAllocated = false;
+  //! Block::clear() deallocates the data
   block.clear();
   block.emptyValue = emptyValue;
 }

@@ -687,10 +687,19 @@ int Reference<Data_T>::totalLoadedBlocks() const
   std::vector<int>::const_iterator li = blockLoaded.begin();
   std::vector<int>::const_iterator end = loadCounts.end();
   int numBlocks = 0;
-  for (; i != end; ++i, ++li)
-    if (*i || *li)
-      numBlocks++;
 
+  if (blockLoaded.size() == 0) {
+    for (; i != end; ++i)
+      if (*i)
+        numBlocks++;
+  } else {
+    assert(loadCounts.size() == blockLoaded.size());
+
+    for (; i != end; ++i, ++li)
+      if (*i || *li)
+        numBlocks++;
+  }
+  
   return numBlocks;
 }
 

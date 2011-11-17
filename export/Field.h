@@ -270,7 +270,7 @@ public:
   { return m_mapping; }
 
   //! Returns true is the indicies are in bounds of the data window
-  bool isInBounds(int i, int j, int k);
+  bool isInBounds(int i, int j, int k) const;
 
   // To be implemented by subclasses -------------------------------------------
 
@@ -346,7 +346,7 @@ inline void FieldRes::setMapping(FieldMapping::Ptr mapping)
 
 //----------------------------------------------------------------------------//
 
-inline bool FieldRes::isInBounds(int i, int j, int k) 
+inline bool FieldRes::isInBounds(int i, int j, int k) const
 {
   // Check bounds
   if (i < m_dataWindow.min.x || i > m_dataWindow.max.x ||

@@ -44,7 +44,7 @@
 #ifndef _INCLUDED_Field3D_REF_COUNT_H_
 #define _INCLUDED_Field3D_REF_COUNT_H_
 
-//#define FIELD3D_USE_ATOMIC_COUNT
+#define FIELD3D_USE_ATOMIC_COUNT
 
 //----------------------------------------------------------------------------//
 #include <boost/intrusive_ptr.hpp> 

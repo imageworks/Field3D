@@ -691,6 +691,15 @@ public:
   //! membership to disk.
   bool writeGroupMembership();
 
+  //! increment the partition or make it zero if there's not an integer suffix
+  std::string incrementPartitionName(std::string &pname);
+
+  //!  create newPartition given the input config
+  template <class Data_T>
+    File::Partition::Ptr
+    createNewPartition(const std::string &partitionName,
+                       const std::string &layerName,
+                       typename Field<Data_T>::Ptr field);                          
  private:
   
   // Convenience methods -------------------------------------------------------
@@ -1298,6 +1307,70 @@ Field3DInputFile::readVectorLayer(const std::string &intPartitionName,
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
+File::Partition::Ptr
+Field3DOutputFile::createNewPartition(const std::string &partitionName,
+                                      const std::string &layerName,
+                                      typename Field<Data_T>::Ptr field)
+{
+  using namespace Hdf5Util;
+  using namespace Exc;
+  
+  File::Partition::Ptr newPart(new File::Partition);
+
+  newPart->name = partitionName;
+
+  H5ScopedGcreate partGroup(m_file, newPart->name.c_str());
+  if (partGroup.id() < 0) {
+    Msg::print(Msg::SevWarning, 
+               "Error creating partition: " + newPart->name);
+    return File::Partition::Ptr();
+  } 
+    
+  m_partitions.push_back(newPart);
+
+  // Pick up new pointer
+  File::Partition::Ptr  part = partition(partitionName);
+  
+  // Add mapping group to the partition
+  //! \todo We should probably remove the group on disk if we can't write
+  //! the mapping
+  try {
+    if (!writeMapping(partGroup.id(), field->mapping())) {
+      Msg::print(Msg::SevWarning, 
+                 "writeMapping returned false for an unknown reason ");
+      return File::Partition::Ptr();
+    }
+  }
+  catch (WriteMappingException &e) {
+    Msg::print(Msg::SevWarning, "Couldn't write mapping for partition: " 
+               + partitionName);
+    return File::Partition::Ptr();
+  }
+  catch (...) {
+    Msg::print(Msg::SevWarning, 
+               "Unknown error when writing mapping for partition: " 
+               + partitionName);
+    return File::Partition::Ptr();    
+  }
+
+  // Set the mapping of the partition. Since all layers share their 
+  // partition's mapping, we can just pick this first one. All subsequent
+  // additions to the same partition are checked to have the same mapping
+  part->mapping = field->mapping();
+
+  // Tag node as partition
+  // Create a version attribute on the root node
+  if (!writeAttribute(partGroup.id(), "is_field3d_partition", "1")) {
+    Msg::print(Msg::SevWarning, "Adding partition string.");
+    return File::Partition::Ptr();    
+  }
+
+  return part;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
 bool 
 Field3DOutputFile::writeLayer(const std::string &userPartitionName, 
                               const std::string &layerName, 
@@ -1327,81 +1400,37 @@ Field3DOutputFile::writeLayer(const std::string &userPartitionName,
   File::Partition::Ptr part = partition(partitionName);
 
   if (!part) {
-
-    File::Partition::Ptr newPart(new File::Partition);
-
-    newPart->name = partitionName;
-
-    H5ScopedGcreate partGroup(m_file, newPart->name.c_str());
-    if (partGroup.id() < 0) {
-      Msg::print(Msg::SevWarning, 
-                 "Error creating partition: " + newPart->name);
+    part = createNewPartition<Data_T>(partitionName,layerName,field);
+    if (!part)
       return false;
-    } 
-    
-    m_partitions.push_back(newPart);
-
-    // Pick up new pointer
-    part = partition(partitionName);
-
-    // Add mapping group to the partition
-    //! \todo We should probably remove the group on disk if we can't write
-    //! the mapping
-    try {
-      if (!writeMapping(partGroup.id(), field->mapping())) {
-        Msg::print(Msg::SevWarning, 
-                  "writeMapping returned false for an unknown reason ");
-        return false;
-      }
-    }
-    catch (WriteMappingException &e) {
-      Msg::print(Msg::SevWarning, "Couldn't write mapping for partition: " 
-                + partitionName);
-      return false;
-    }
-    catch (...) {
-      Msg::print(Msg::SevWarning, 
-                 "Unknown error when writing mapping for partition: " 
-                 + partitionName);
-      return false;
-    }
-
-    // Set the mapping of the partition. Since all layers share their 
-    // partition's mapping, we can just pick this first one. All subsequent
-    // additions to the same partition are checked to have the same mapping
-    part->mapping = field->mapping();
-
-    // Tag node as partition
-    // Create a version attribute on the root node
-    if (!writeAttribute(partGroup.id(), "is_field3d_partition", "1")) {
-      Msg::print(Msg::SevWarning, "Adding partition string.");
-      return false;
-    }    
-
   } else {
 
+    if (!field->mapping()) {
+      Msg::print(Msg::SevWarning, 
+                 "Couldn't add layer \"" + layerName + "\" to partition \""
+                 + partitionName + "\" because the layer's mapping is null.");
+      return false;    
+    }
+    
     // If the partition already existed, we need to make sure that the layer
     // doesn't also exist
     if (!isVectorLayer) {
       if (part->scalarLayer(layerName)) {
-        Msg::print(Msg::SevWarning, 
-                  "Trying to add layer that already exists in file. Ignoring");
-        return false;
+        //need to create a new partition and then add the layer to that
+        std::string newPartitionName = incrementPartitionName(partitionName);
+        part = createNewPartition<Data_T>(newPartitionName,layerName,field);
+        if (!part)
+          return false;
       }
     } else {
       if (part->vectorLayer(layerName)) {
-        Msg::print(Msg::SevWarning, 
-                  "Trying to add layer that already exists in file. Ignoring");
-        return false;
+        //need to create a new partition and then add the layer to that
+        std::string newPartitionName = incrementPartitionName(partitionName);
+        part = createNewPartition<Data_T>(newPartitionName,layerName,field);
+        if (!part)
+          return false;
       }
     }
-  }
-
-  if (!field->mapping()) {
-    Msg::print(Msg::SevWarning, 
-              "Couldn't add layer \"" + layerName + "\" to partition \""
-              + partitionName + "\" because the layer's mapping is null.");
-    return false;    
   }
 
   if (!part->mapping) {

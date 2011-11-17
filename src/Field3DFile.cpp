@@ -1510,6 +1510,23 @@ Field3DOutputFile::writeGroupMembership()
 }
 
 //----------------------------------------------------------------------------//
+
+std::string
+Field3DOutputFile::incrementPartitionName(std::string &partitionName)
+{
+  std::string myPartitionName = removeUniqueId(partitionName);
+  int nextIdx = -1;
+  if (m_partitionCount.find(myPartitionName) != m_partitionCount.end()) {
+    nextIdx = ++m_partitionCount[myPartitionName];
+  } else {
+    nextIdx = 0;
+    m_partitionCount[myPartitionName] = 0;
+  }
+
+  return makeIntPartitionName(myPartitionName, nextIdx);
+}
+
+//----------------------------------------------------------------------------//
 // Debug
 //----------------------------------------------------------------------------//
 

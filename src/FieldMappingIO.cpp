@@ -98,10 +98,13 @@ NullFieldMappingIO::write(hid_t mappingGroup, FieldMapping::Ptr /* nm */)
 
 //----------------------------------------------------------------------------//
 
-//! Returns the class name
 std::string NullFieldMappingIO::className() const
-{ return k_nullMappingName; }
+{ 
+  return k_nullMappingName; 
+}
 
+//----------------------------------------------------------------------------//
+// MatrixFieldMapping
 //----------------------------------------------------------------------------//
 
 FieldMapping::Ptr
@@ -146,7 +149,9 @@ MatrixFieldMappingIO::write(hid_t mappingGroup, FieldMapping::Ptr mapping)
 
 //! Returns the class name
 std::string MatrixFieldMappingIO::className() const
-{ return k_matrixMappingName; }
+{ 
+  return k_matrixMappingName;
+}
 
 //----------------------------------------------------------------------------//
 

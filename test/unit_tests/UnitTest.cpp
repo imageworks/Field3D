@@ -110,8 +110,7 @@ void testBasicField()
 
   SField dummy;
   string TName(DataTypeTraits<Data_T>::name());
-  Msg::print("Basic Field tests for type " + dummy.className() + 
-            "<" + TName + ">");
+  Msg::print("Basic Field tests for type " + dummy.className());
 
   string currentTest;
 
@@ -542,8 +541,8 @@ void testEmptyField()
 
   EmptyField<Data_T> dummy;
   string TName(DataTypeTraits<Data_T>::name());
-  Msg::print("Basic Field tests for type " + dummy.className() + 
-            "<" + TName + ">");
+  Msg::print("Basic Field tests for type " + dummy.className()); 
+
 
   string currentTest;
 
@@ -662,8 +661,8 @@ void testFieldMapping()
 
   DenseField<Data_T> dummy;
   string TName(DataTypeTraits<Data_T>::name());
-  Msg::print("FieldMapping tests for type " + dummy.className() + 
-            "<" + TName + ">");
+  Msg::print("FieldMapping tests for type " + dummy.className());
+
 
   string currentTest;
 
@@ -710,8 +709,8 @@ void testLinearInterp()
 
   SField dummy;
   string TName(DataTypeTraits<Data_T>::name());
-  Msg::print("Linear interpolation tests for type " + dummy.className() + 
-            "<" + TName + ">");
+  Msg::print("Linear interpolation tests for type " + dummy.className());
+
 
   string currentTest = "Simple linear inter test";
 
@@ -743,8 +742,8 @@ void testFastLinearInterp()
 
   SField dummy;
   string TName(DataTypeTraits<Data_T>::name());
-  Msg::print("Linear fast interpolation tests for type " + dummy.className() + 
-            "<" + TName + ">");
+  Msg::print("Linear fast interpolation tests for type " + dummy.className());
+
 
   string currentTest = "Simple linear inter test";
 
@@ -776,8 +775,8 @@ void testCubicInterp()
 
   SField dummy;
   string TName(DataTypeTraits<Data_T>::name());
-  Msg::print("Cubic interpolation tests for type " + dummy.className() + 
-            "<" + TName + ">");
+  Msg::print("Cubic interpolation tests for type " + dummy.className());
+
 
   string currentTest = "Simple Cubic inter test";
 
@@ -811,8 +810,7 @@ void testFastCubicInterp()
 
   SField dummy;
   string TName(DataTypeTraits<Data_T>::name());
-  Msg::print("Cubic fast interpolation tests for type " + dummy.className() + 
-            "<" + TName + ">");
+  Msg::print("Cubic fast interpolation tests for type " + dummy.className());
 
   string currentTest = "Simple Cubic inter test";
 
@@ -846,8 +844,7 @@ void testField3DFile()
 
   SField dummy;
   string TName(DataTypeTraits<Data_T>::name());
-  Msg::print("Field3DFile tests for type " + dummy.className() + 
-            "<" + TName + ">");
+  Msg::print("Field3DFile tests for type " + dummy.className());
 
   string currentTest;
 
@@ -868,7 +865,7 @@ void testField3DFile()
   {
     Msg::print(currentTest);
     ScopedPrintTimer t;
-    string filename("/tmp/test_" + dummy.className() + "." + TName + ".f3d");
+    string filename("/tmp/test_" + dummy.className() + ".f3d");
     Box3i extents(V3i(0), V3i(160));
     Box3i dataWindow(V3i(20, 10, 0), V3i(100, 100, 100));
 
@@ -980,10 +977,12 @@ void testField3DFile()
                               densityName) != names.end();
     names.clear();
     iFile.getVectorLayerNames(names, field2Name);
+
     bool velInFile = find(names.begin(), names.end(),
                           velName) != names.end();
     bool tempInFile = find(names.begin(), names.end(),
                            tempName) != names.end();
+
     BOOST_CHECK_EQUAL(densityInFile, true);
     BOOST_CHECK_EQUAL(velInFile, true);    
     BOOST_CHECK_EQUAL(tempInFile, false);
@@ -1808,7 +1807,7 @@ void testDuplicatePartitions()
 #define DO_BASIC_TESTS         1
 #define DO_INTERP_TESTS        1
 #define DO_CUBIC_INTERP_TESTS  1
-#define DO_BASIC_FILE_TESTS    1
+#define DO_BASIC_FILE_TESTS    1 
 #define DO_ADVANCED_FILE_TESTS 1
 #define DO_SPARSE_BLOCK_TESTS  1
 #define DO_MAC_TESTS           1
@@ -1864,8 +1863,8 @@ init_unit_test_suite(int argc, char* argv[])
   test->add(BOOST_TEST_CASE((&testFastLinearInterp<DenseField, double>)));
   test->add(BOOST_TEST_CASE((&testFastLinearInterp<SparseField, double>)));
 
-
 #endif
+
 #if DO_CUBIC_INTERP_TESTS
 
   test->add(BOOST_TEST_CASE((&testCubicInterp<DenseField, half>)));
@@ -1881,7 +1880,6 @@ init_unit_test_suite(int argc, char* argv[])
   test->add(BOOST_TEST_CASE((&testFastCubicInterp<SparseField, float>)));
   test->add(BOOST_TEST_CASE((&testFastCubicInterp<DenseField, double>)));
   test->add(BOOST_TEST_CASE((&testFastCubicInterp<SparseField, double>)));
-
 
 #endif
 

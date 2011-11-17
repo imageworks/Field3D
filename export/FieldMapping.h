@@ -71,8 +71,10 @@ FIELD3D_NAMESPACE_OPEN
   Local coordinates (ls) are defined as [0,1] over the FieldData object's
   -extents- (not data window). Thus, if the extents.min isn't at origin, 
   the coordinate system stays the same as if it was. 
+
   Voxel coordinates (vs) are defined as [0,size-1] over the FieldData object's
   -extents- (not data window).
+
   \note The center of a voxel at (i,j) in integer coordinates is (i+0.5,j+0.5) 
   in continuous coordinates.
 */
@@ -86,6 +88,16 @@ class FieldMapping : public RefBase
   // Typedefs ------------------------------------------------------------------
 
   typedef boost::intrusive_ptr<FieldMapping> Ptr;
+
+  // RTTI replacement ----------------------------------------------------------
+
+  typedef FieldMapping class_type;
+  DEFINE_FIELD_RTTI_ABSTRACT_CLASS;
+  
+  static const char* classType()
+  {
+    return "FieldMapping";
+  }
 
   // Ctors, dtor ---------------------------------------------------------------
 
@@ -116,7 +128,6 @@ class FieldMapping : public RefBase
   //! Returns the resolution
   const V3d& resolution() const
   { return m_res; }
-
   
   // To be implemented by subclasses -------------------------------------------
 
@@ -162,6 +173,7 @@ class FieldMapping : public RefBase
   
   //! Returns the FieldMapping type name. Used when writing/reading from disk
   virtual std::string className() const = 0;
+
   //! Whether the mapping is identical to another mapping
   virtual bool isIdentical(FieldMapping::Ptr other, 
                            double tolerance = 0.0) const = 0;
@@ -184,8 +196,8 @@ class FieldMapping : public RefBase
   void voxelToLocal(const V3d &vsP, V3d &lsP) const;
 
   //! \}
- 
- protected:
+  
+protected:
 
   //! The integer voxel-space origin of the underlying Field object.
   //! Is equal to field.extents.min
@@ -194,8 +206,14 @@ class FieldMapping : public RefBase
   //! Is equal to field.extents.max - field.extents.min + 1
   V3d m_res;
 
-};
+private:
 
+  // Typedefs ------------------------------------------------------------------
+
+  //! Convenience typedef for referring to base class
+  typedef RefBase base;  
+
+};
 
 //----------------------------------------------------------------------------//
 // NullFieldMapping
@@ -219,7 +237,17 @@ public:
 
   //! Convenience typedef
   typedef boost::intrusive_ptr<NullFieldMapping> Ptr;
+
+  // RTTI replacement ----------------------------------------------------------
+
+  typedef NullFieldMapping class_type;
+  DEFINE_FIELD_RTTI_CONCRETE_CLASS;
   
+  static const char* classType()
+  {
+    return "NullFieldMapping";
+  }
+
   // Ctors, dtor ---------------------------------------------------------------
 
   //! \name Constructors & destructor
@@ -279,6 +307,13 @@ public:
   virtual FieldMapping::Ptr clone() const;
 
   //! \}
+  
+private:
+
+  // Typedefs ------------------------------------------------------------------
+
+  //! Convenience typedef for referring to base class
+  typedef FieldMapping base;  
 
 };
 
@@ -306,6 +341,16 @@ public:
 
   //! Convenience typedef
   typedef boost::intrusive_ptr<MatrixFieldMapping> Ptr;
+
+  // RTTI replacement ----------------------------------------------------------
+
+  typedef MatrixFieldMapping class_type;
+  DEFINE_FIELD_RTTI_CONCRETE_CLASS;
+  
+  static const char* classType ()
+  {
+    return "MatrixFieldMapping";
+  }
 
   // Ctors, dtor ---------------------------------------------------------------
 
@@ -401,6 +446,7 @@ public:
   virtual void extentsChanged();
 
   virtual std::string className() const;
+
   virtual bool isIdentical(FieldMapping::Ptr other, 
                            double tolerance = 0.0) const;
 
@@ -410,7 +456,7 @@ public:
   virtual FieldMapping::Ptr clone() const;
 
   //! \}
-
+  
 private:
 
   //! Updates the local to world transformation matrix
@@ -430,6 +476,11 @@ private:
   //! Precomputed world-space voxel size. Calculations may assume orthogonal
   //! transformation for efficiency
   V3d m_wsVoxelSize;
+
+  // Typedefs ------------------------------------------------------------------
+
+  //! Convenience typedef for referring to base class
+  typedef FieldMapping base;  
 };
 
 //----------------------------------------------------------------------------//

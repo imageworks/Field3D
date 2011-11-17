@@ -122,7 +122,6 @@ public:
   }
 };
 
-
 //----------------------------------------------------------------------------//
 
 //! Scoped object - Opens attribute by index and closes it on destruction.
@@ -134,7 +133,8 @@ public:
   {
     m_id = H5Aopen_idx(location, idx);
     if (m_id < 0)
-      throw Exc::MissingAttributeException("Couldn't open attribute at index: "+boost::lexical_cast<std::string>(idx));
+      throw Exc::MissingAttributeException("Couldn't open attribute at index: " +
+                                           boost::lexical_cast<std::string>(idx));
   }
   ~H5ScopedAopenIdx()
   {

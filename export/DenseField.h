@@ -65,7 +65,6 @@ class LinearGenericFieldInterp;
 template <class Field_T>
 class CubicGenericFieldInterp; 
 
-
 //----------------------------------------------------------------------------//
 // DenseField
 //----------------------------------------------------------------------------//
@@ -123,6 +122,16 @@ public:
   typedef DenseField<Data_T> class_type;
   DEFINE_FIELD_RTTI_CONCRETE_CLASS
 
+  static const char *staticClassName()
+  {
+    return "DenseField";
+  }
+
+  static const char *classType()
+  {
+    return DenseField<Data_T>::ms_classType.name();
+  } 
+    
   // From WritableField base class ---------------------------------------------
 
   //! \name From WritableField
@@ -181,17 +190,18 @@ public:
 
   //! \name From FieldBase
   //! \{
-  virtual std::string className() const
-  { return std::string("DenseField"); }
 
+  virtual std::string className() const
+  { return staticClassName(); }
+  
   virtual FieldBase::Ptr clone() const
   { return Ptr(new DenseField(*this)); }
 
   //! \}
 
- protected:
+protected:
 
-  // From ResizableField class ---------------------------------------------
+  // From ResizableField class -------------------------------------------------
 
   virtual void sizeChanged();
 
@@ -204,7 +214,11 @@ public:
   //! Field storage
   std::vector<Data_T> m_data;
 
- private:
+private:
+
+  // Static data members -------------------------------------------------------
+
+  static TemplatedFieldType<DenseField<Data_T> > ms_classType;
 
   // Direct access to memory for iterators -------------------------------------
 
@@ -611,6 +625,12 @@ inline const Data_T* DenseField<Data_T>::ptr(int i, int j, int k) const
   // Access data
   return &m_data[i + j * m_memSize.x + k * m_memSizeXY];
 }
+
+//----------------------------------------------------------------------------//
+// Static data member instantiation
+//----------------------------------------------------------------------------//
+
+FIELD3D_CLASSTYPE_TEMPL_INSTANTIATION(DenseField);
 
 //----------------------------------------------------------------------------//
 

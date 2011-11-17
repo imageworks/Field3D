@@ -51,6 +51,7 @@
 #include "MACField.h"
 #include "ProceduralField.h"
 #include "RefCount.h"
+
 //----------------------------------------------------------------------------//
 
 #include "ns.h"
@@ -70,12 +71,55 @@ FIELD3D_NAMESPACE_OPEN
 template <class Data_T>
 class FieldInterp : public RefBase
 {
- public:
+public:
+  
+  // Typedefs ------------------------------------------------------------------
+
+  typedef Data_T value_type;
   typedef boost::intrusive_ptr<FieldInterp> Ptr;
+
+  // RTTI replacement ----------------------------------------------------------
+
+  typedef FieldInterp class_type;
+  DEFINE_FIELD_RTTI_ABSTRACT_CLASS;
+
+  static const char *staticClassName()
+  {
+    return "FieldInterp";
+  }
+  
+  static const char* classType()
+  {
+    return ms_classType.name();
+  }
+
+  // Ctor, dtor ----------------------------------------------------------------
+
   virtual ~FieldInterp() 
   { }
+
+  // Main methods --------------------------------------------------------------    
+
   virtual Data_T sample(const Field<Data_T> &data, const V3d &vsP) const = 0;
+  
+private:
+
+  // Static data members -------------------------------------------------------
+
+  static TemplatedFieldType<FieldInterp<Data_T> > ms_classType;
+
+  // Typedefs ------------------------------------------------------------------
+
+  //! Convenience typedef for referring to base class
+  typedef RefBase base;    
+
 };
+
+//----------------------------------------------------------------------------//
+// Static member instantiation
+//----------------------------------------------------------------------------//
+
+FIELD3D_CLASSTYPE_TEMPL_INSTANTIATION(FieldInterp);
 
 //----------------------------------------------------------------------------//
 // LinearFieldInterp
@@ -92,9 +136,49 @@ template <class Data_T>
 class LinearFieldInterp : public FieldInterp<Data_T>
 {
  public:
+ 
+  // Typedefs ------------------------------------------------------------------
+
+  typedef Data_T value_type;
   typedef boost::intrusive_ptr<LinearFieldInterp> Ptr;
+
+  // RTTI replacement ----------------------------------------------------------
+
+  typedef LinearFieldInterp class_type;
+  DEFINE_FIELD_RTTI_CONCRETE_CLASS;
+
+  static const char *staticClassName()
+  {
+    return "LinearFieldInterp";
+  }
+
+  static const char* classType()
+  {
+    return ms_classType.name();
+  }
+
+  // From FieldInterp ----------------------------------------------------------
+
   virtual Data_T sample(const Field<Data_T> &data, const V3d &vsP) const;
+  
+private:
+
+  // Static data members -------------------------------------------------------
+
+  static TemplatedFieldType<LinearFieldInterp<Data_T> > ms_classType;
+  
+  // Typedefs ------------------------------------------------------------------
+
+  //! Convenience typedef for referring to base class
+  typedef FieldInterp<Data_T> base;    
+
 };
+
+//----------------------------------------------------------------------------//
+// Static data member instantiation
+//----------------------------------------------------------------------------//
+
+FIELD3D_CLASSTYPE_TEMPL_INSTANTIATION(LinearFieldInterp);
 
 //----------------------------------------------------------------------------//
 // CubicFieldInterp
@@ -111,9 +195,48 @@ template <class Data_T>
 class CubicFieldInterp : public FieldInterp<Data_T>
 {
  public:
+  
+  // Typedefs ------------------------------------------------------------------
+
+  typedef Data_T value_type;
   typedef boost::intrusive_ptr<CubicFieldInterp> Ptr;
+
+  // RTTI replacement ----------------------------------------------------------
+
+  typedef CubicFieldInterp class_type;
+  DEFINE_FIELD_RTTI_CONCRETE_CLASS;
+
+  static const char *staticClassName()
+  {
+    return "CubicFieldInterp";
+  }
+
+  static const char* classType()
+  {
+    return ms_classType.name();
+  }
+  
+  // From FieldInterp ----------------------------------------------------------
+  
   virtual Data_T sample(const Field<Data_T> &data, const V3d &vsP) const;
+
+private:
+
+  // Static data members -------------------------------------------------------
+
+  static TemplatedFieldType<CubicFieldInterp<Data_T> > ms_classType;
+  
+  // Typedefs ------------------------------------------------------------------
+
+  //! Convenience typedef for referring to base class
+  typedef FieldInterp<Data_T> base;    
 };
+
+//----------------------------------------------------------------------------//
+// Static data member instantiation
+//----------------------------------------------------------------------------//
+
+FIELD3D_CLASSTYPE_TEMPL_INSTANTIATION(CubicFieldInterp);
 
 //----------------------------------------------------------------------------//
 // LinearGenericFieldInterp
@@ -129,10 +252,50 @@ class CubicFieldInterp : public FieldInterp<Data_T>
 template <class Field_T>
 class LinearGenericFieldInterp : public RefBase
 {
- public:
+public:
+  
+  // Typedefs ------------------------------------------------------------------
+
+  typedef typename Field_T::value_type value_type;  
   typedef boost::intrusive_ptr<LinearGenericFieldInterp> Ptr;
-  typename Field_T::value_type sample(const Field_T &data, const V3d &vsP) const;
+  
+  // RTTI replacement ----------------------------------------------------------
+
+  typedef LinearGenericFieldInterp class_type;
+  DEFINE_FIELD_RTTI_CONCRETE_CLASS;
+
+  static const char *staticClassName()
+  {
+    return "LinearGenericFieldInterp";
+  }
+  
+  static const char* classType()
+  {
+    return ms_classType.name();
+  }
+
+  // Main methods --------------------------------------------------------------
+
+  value_type sample(const Field_T &data, const V3d &vsP) const;
+
+private:
+
+  // Static data members -------------------------------------------------------
+
+  static TemplatedFieldType<LinearGenericFieldInterp<Field_T> > ms_classType;
+  
+  // Typedefs ------------------------------------------------------------------
+
+  //! Convenience typedef for referring to base class
+  typedef RefBase base;    
+
 };
+
+//----------------------------------------------------------------------------//
+// Static data member instantiation
+//----------------------------------------------------------------------------//
+
+FIELD3D_CLASSTYPE_TEMPL_INSTANTIATION(LinearGenericFieldInterp);
 
 //----------------------------------------------------------------------------//
 // LinearMACFieldInterp
@@ -148,12 +311,54 @@ class LinearGenericFieldInterp : public RefBase
 template <class Data_T>
 class LinearMACFieldInterp : public RefBase
 {
- public:
+public:
+  
+  // Typedefs ------------------------------------------------------------------
 
+  typedef Data_T value_type;  
   typedef boost::intrusive_ptr<LinearMACFieldInterp> Ptr;
 
+  // RTTI replacement ----------------------------------------------------------
+
+  typedef LinearMACFieldInterp class_type;
+  DEFINE_FIELD_RTTI_CONCRETE_CLASS;
+
+  static const char *staticClassName()
+  {
+    return "LinearMACFieldInterp";
+  }
+  
+  //! classType for RTTI replacement
+  static const char* classType()
+  {
+    return ms_classType.name();
+  }
+  
+  // Main methods --------------------------------------------------------------
+  
   Data_T sample(const MACField<Data_T> &data, const V3d &vsP) const;
+
+  double sample(const MACField<Data_T> &data,
+                const MACComponent &comp, 
+                const V3d &vsP) const;
+                
+private:
+
+  // Static data members -------------------------------------------------------
+
+  static TemplatedFieldType<LinearMACFieldInterp<Data_T> > ms_classType;
+
+  // Typedefs ------------------------------------------------------------------
+
+  //! Convenience typedef for referring to base class
+  typedef RefBase base;    
 };
+
+//----------------------------------------------------------------------------//
+// Static data member instantiation
+//----------------------------------------------------------------------------//
+
+FIELD3D_CLASSTYPE_TEMPL_INSTANTIATION(LinearMACFieldInterp);
 
 //----------------------------------------------------------------------------//
 // CubicGenericFieldInterp
@@ -170,9 +375,49 @@ template <class Field_T>
 class CubicGenericFieldInterp : public RefBase
 {
 public:
+  
+  // Typedefs ------------------------------------------------------------------
+
+  typedef typename Field_T::value_type value_type;
   typedef boost::intrusive_ptr<CubicGenericFieldInterp> Ptr;
-  typename Field_T::value_type sample(const Field_T &data, const V3d &vsP) const;
+  
+  // RTTI replacement ----------------------------------------------------------
+
+  typedef CubicGenericFieldInterp class_type;
+  DEFINE_FIELD_RTTI_CONCRETE_CLASS;
+
+  static const char *staticClassName()
+  {
+    return "CubicGenericFieldInterp";
+  }
+
+  static const char* classType()
+  {
+    return ms_classType.name();    
+  }
+
+  // Main methods --------------------------------------------------------------
+
+  value_type sample(const Field_T &data, const V3d &vsP) const;
+
+  
+private:
+
+  // Static data members -------------------------------------------------------
+
+  static TemplatedFieldType<CubicGenericFieldInterp<Field_T> > ms_classType;
+
+  // Typedefs ------------------------------------------------------------------
+
+  //! Convenience typedef for referring to base class
+  typedef RefBase base;    
 };
+
+//----------------------------------------------------------------------------//
+// Static data member instantiation
+//----------------------------------------------------------------------------//
+
+FIELD3D_CLASSTYPE_TEMPL_INSTANTIATION(CubicGenericFieldInterp);
 
 //----------------------------------------------------------------------------//
 // CubicMACFieldInterp
@@ -189,9 +434,48 @@ template <class Data_T>
 class CubicMACFieldInterp : public RefBase
 {
 public:
+
+  // Typedefs ------------------------------------------------------------------
+
+  typedef Data_T value_type;  
   typedef boost::intrusive_ptr<CubicMACFieldInterp> Ptr;
+
+  // RTTI replacement ----------------------------------------------------------
+
+  typedef CubicMACFieldInterp class_type;
+  DEFINE_FIELD_RTTI_CONCRETE_CLASS;
+
+  static const char *staticClassName()
+  {
+    return "CubicMACFieldInterp";
+  }
+
+  static const char* classType()
+  {
+    return CubicMACFieldInterp<Data_T>::ms_classType.name();
+  }
+
+  // Main methods --------------------------------------------------------------
+  
   Data_T sample(const MACField<Data_T> &data, const V3d &vsP) const;
+
+private:
+
+  // Static data members -------------------------------------------------------
+
+  static TemplatedFieldType<CubicMACFieldInterp<Data_T> > ms_classType;
+
+  // Typedefs ------------------------------------------------------------------
+
+  //! Convenience typedef for referring to base class
+  typedef RefBase base;    
 };
+
+//----------------------------------------------------------------------------//
+// Static data member instantiation
+//----------------------------------------------------------------------------//
+
+FIELD3D_CLASSTYPE_TEMPL_INSTANTIATION(CubicMACFieldInterp);
 
 //----------------------------------------------------------------------------//
 // ProceduralFieldLookup
@@ -209,10 +493,49 @@ template <class Data_T>
 class ProceduralFieldLookup : public RefBase
 {
 public:
+
+  // Typedefs ------------------------------------------------------------------
+
+  typedef Data_T value_type;
   typedef boost::intrusive_ptr<ProceduralFieldLookup> Ptr;
-  Data_T sample(const ProceduralField<Data_T> &data,
-                const V3d &vsP) const;
+
+  // RTTI replacement ----------------------------------------------------------
+
+  typedef ProceduralFieldLookup class_type;
+  DEFINE_FIELD_RTTI_CONCRETE_CLASS;
+
+  static const char *staticClassName()
+  {
+    return "ProceduralFieldLookup";
+  }
+
+  static const char* classType()
+  {
+    return ProceduralFieldLookup<Data_T>::ms_classType.name();
+  }
+  
+  // Main methods --------------------------------------------------------------
+
+  Data_T sample(const ProceduralField<Data_T> &data, const V3d &vsP) const;
+
+private:
+
+  // Static data members -------------------------------------------------------
+
+  static TemplatedFieldType<ProceduralFieldLookup<Data_T> > ms_classType;
+
+  // Typedefs ------------------------------------------------------------------
+
+  //! Convenience typedef for referring to base class
+  typedef RefBase base;
+
 };
+
+//----------------------------------------------------------------------------//
+// Static data member instantiation
+//----------------------------------------------------------------------------//
+
+FIELD3D_CLASSTYPE_TEMPL_INSTANTIATION(ProceduralFieldLookup);
 
 //----------------------------------------------------------------------------//
 // Interpolation functions
@@ -612,6 +935,147 @@ Data_T LinearMACFieldInterp<Data_T>::sample(const MACField<Data_T> &data,
   return ret;
 }
 
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+double LinearMACFieldInterp<Data_T>::sample(const MACField<Data_T> &data,
+                                            const MACComponent &comp, 
+                                            const V3d &vsP) const
+{
+  // Pixel centers are at .5 coordinates
+  // NOTE: Don't use contToDisc for this, we're looking for sample
+  // point locations, not coordinate shifts.
+                                              
+  const Box3i &dataWindow = data.dataWindow();
+
+  double ret = 0.0;
+  FIELD3D_VEC3_T<double> p;
+  V3i c1, c2;
+  FIELD3D_VEC3_T<double> f1;
+  FIELD3D_VEC3_T<double> f2;
+
+  switch(comp) {
+    // U component ---
+    case MACCompU:
+    {
+      p.setValue<>(vsP.x, vsP.y-0.5, vsP.z-0.5);
+
+      // Lower left corner
+      c1.x = static_cast<int>(floor(p.x));
+      c1.y = static_cast<int>(floor(p.y));
+      c1.z = static_cast<int>(floor(p.z));
+
+      // Upper right corner
+      c2.x = c1.x + 1;
+      c2.y = c1.y + 1;
+      c2.z = c1.z + 1;
+
+      // C1 fractions
+      f1.setValue(static_cast<FIELD3D_VEC3_T<double> >(c2) - p);
+      // C2 fraction
+      f2.setValue(static_cast<FIELD3D_VEC3_T<double> >(1.0) - f1);
+
+      // Clamp the coordinates
+      c1.x = std::min(dataWindow.max.x + 1, std::max(dataWindow.min.x, c1.x));
+      c1.y = std::min(dataWindow.max.y, std::max(dataWindow.min.y, c1.y));
+      c1.z = std::min(dataWindow.max.z, std::max(dataWindow.min.z, c1.z));
+      c2.x = std::min(dataWindow.max.x + 1, std::max(dataWindow.min.x, c2.x));
+      c2.y = std::min(dataWindow.max.y, std::max(dataWindow.min.y, c2.y));
+      c2.z = std::min(dataWindow.max.z, std::max(dataWindow.min.z, c2.z));
+
+      ret = (f1.x * (f1.y * (f1.z * data.u(c1.x, c1.y, c1.z) +
+                             f2.z * data.u(c1.x, c1.y, c2.z)) +
+                     f2.y * (f1.z * data.u(c1.x, c2.y, c1.z) +
+                             f2.z * data.u(c1.x, c2.y, c2.z))) +
+             f2.x * (f1.y * (f1.z * data.u(c2.x, c1.y, c1.z) +
+                             f2.z * data.u(c2.x, c1.y, c2.z)) +
+                     f2.y * (f1.z * data.u(c2.x, c2.y, c1.z) +
+                             f2.z * data.u(c2.x, c2.y, c2.z))));
+      break;
+    }
+    // Y component ---
+    case MACCompV:
+    {
+      p.setValue(vsP.x-0.5, vsP.y, vsP.z-0.5);
+
+      // Lower left corner
+      c1.x = static_cast<int>(floor(p.x ));
+      c1.y = static_cast<int>(floor(p.y ));
+      c1.z = static_cast<int>(floor(p.z ));
+
+      // Upper right corner
+      c2.x = c1.x + 1;
+      c2.y = c1.y + 1;
+      c2.z = c1.z + 1;
+
+      // C1 fractions
+      f1.setValue(static_cast<FIELD3D_VEC3_T<double> >(c2) - p);
+      // C2 fraction
+      f2.setValue(static_cast<FIELD3D_VEC3_T<double> >(1.0) - f1);
+
+      // Clamp the coordinates
+      c1.x = std::min(dataWindow.max.x, std::max(dataWindow.min.x, c1.x));
+      c1.y = std::min(dataWindow.max.y + 1, std::max(dataWindow.min.y, c1.y));
+      c1.z = std::min(dataWindow.max.z, std::max(dataWindow.min.z, c1.z));
+      c2.x = std::min(dataWindow.max.x, std::max(dataWindow.min.x, c2.x));
+      c2.y = std::min(dataWindow.max.y + 1, std::max(dataWindow.min.y, c2.y));
+      c2.z = std::min(dataWindow.max.z, std::max(dataWindow.min.z, c2.z));
+
+      ret = (f1.x * (f1.y * (f1.z * data.v(c1.x, c1.y, c1.z) +
+                             f2.z * data.v(c1.x, c1.y, c2.z)) +
+                     f2.y * (f1.z * data.v(c1.x, c2.y, c1.z) +
+                             f2.z * data.v(c1.x, c2.y, c2.z))) +
+             f2.x * (f1.y * (f1.z * data.v(c2.x, c1.y, c1.z) +
+                             f2.z * data.v(c2.x, c1.y, c2.z)) +
+                     f2.y * (f1.z * data.v(c2.x, c2.y, c1.z) +
+                             f2.z * data.v(c2.x, c2.y, c2.z))));
+      break;
+    }
+    // W component ---
+    case MACCompW:
+    {  
+      p.setValue(vsP.x-0.5, vsP.y-0.5, vsP.z);
+
+      // Lower left corner
+      c1.x = static_cast<int>(floor(p.x ));
+      c1.y = static_cast<int>(floor(p.y ));
+      c1.z = static_cast<int>(floor(p.z ));
+
+      // Upper right corner
+      c2.x = c1.x + 1;
+      c2.y = c1.y + 1;
+      c2.z = c1.z + 1;
+
+      // C1 fractions
+      f1.setValue(static_cast<FIELD3D_VEC3_T<double> >(c2) - p);
+      // C2 fraction
+      f2.setValue(static_cast<FIELD3D_VEC3_T<double> >(1.0) - f1);
+
+      // Clamp the coordinates
+      c1.x = std::min(dataWindow.max.x, std::max(dataWindow.min.x, c1.x));
+      c1.y = std::min(dataWindow.max.y, std::max(dataWindow.min.y, c1.y));
+      c1.z = std::min(dataWindow.max.z + 1, std::max(dataWindow.min.z, c1.z));
+      c2.x = std::min(dataWindow.max.x, std::max(dataWindow.min.x, c2.x));
+      c2.y = std::min(dataWindow.max.y, std::max(dataWindow.min.y, c2.y));
+      c2.z = std::min(dataWindow.max.z + 1, std::max(dataWindow.min.z, c2.z));
+
+      ret = (f1.x * (f1.y * (f1.z * data.w(c1.x, c1.y, c1.z) +
+                             f2.z * data.w(c1.x, c1.y, c2.z)) +
+                     f2.y * (f1.z * data.w(c1.x, c2.y, c1.z) +
+                             f2.z * data.w(c1.x, c2.y, c2.z))) +
+             f2.x * (f1.y * (f1.z * data.w(c2.x, c1.y, c1.z) +
+                             f2.z * data.w(c2.x, c1.y, c2.z)) +
+                     f2.y * (f1.z * data.w(c2.x, c2.y, c1.z) +
+                             f2.z * data.w(c2.x, c2.y, c2.z))));
+      break;
+    }
+    default:
+      break;
+  }
+
+  return ret;
+}
+                                            
 //----------------------------------------------------------------------------//
 
 template <class Field_T>

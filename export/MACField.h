@@ -107,6 +107,21 @@ public:
   typedef LinearMACFieldInterp<Data_T> LinearInterp;
   typedef CubicMACFieldInterp<Data_T> CubicInterp;
 
+  // RTTI replacement ----------------------------------------------------------
+
+  typedef MACField<Data_T> class_type;
+  DEFINE_FIELD_RTTI_CONCRETE_CLASS;
+
+  static const char *staticClassName()
+  {
+    return "MACField";
+  }
+
+  static const char* classType()
+  {
+    return MACField<Data_T>::ms_classType.name();
+  }
+  
   // Constructors --------------------------------------------------------------
 
   //! \name Constructors & destructor
@@ -132,11 +147,6 @@ public:
   virtual long long int memSize() const;
 
   //! \}
-
-  // RTTI replacement ----------------------------------------------------------
-
-  typedef MACField<Data_T> class_type;
-  DEFINE_FIELD_RTTI_CONCRETE_CLASS;
 
   // From WritableField base class ---------------------------------------------
 
@@ -255,8 +265,9 @@ public:
 
   //! \name From FieldBase
   //! \{
+
   virtual std::string className() const
-  { return std::string("MACField"); }
+  { return staticClassName(); }
 
   virtual FieldBase::Ptr clone() const
   { return Ptr(new MACField(*this)); }
@@ -315,13 +326,23 @@ public:
   //! Dummy storage of a temp value that lvalue() can write to
   mutable Data_T m_dummy;
 
- private:
+private:
+
+  // Static data members -------------------------------------------------------
+
+  static TemplatedFieldType<MACField<Data_T> > ms_classType;
 
   // Typedefs ------------------------------------------------------------------
 
   typedef ResizableField<Data_T> base;
 
 };
+
+//----------------------------------------------------------------------------//
+// Static member instantiation
+//----------------------------------------------------------------------------//
+
+FIELD3D_CLASSTYPE_TEMPL_INSTANTIATION(MACField);
 
 //----------------------------------------------------------------------------//
 // Typedefs

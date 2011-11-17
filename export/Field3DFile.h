@@ -149,11 +149,32 @@ public:
   typedef boost::intrusive_ptr<Partition> Ptr;
   typedef boost::intrusive_ptr<const Partition> CPtr;
 
+  // RTTI replacement ----------------------------------------------------------
+
+  typedef Partition class_type;
+  DEFINE_FIELD_RTTI_CONCRETE_CLASS;   
+  
+  static const char *classType()
+  {
+    return "Partition";
+  }
+
   // Ctors, dtor ---------------------------------------------------------------
 
   //! Ctor
-  Partition() : RefBase() {}
+  Partition() 
+    : RefBase() 
+  { }
 
+  // From RefBase --------------------------------------------------------------
+
+  //! \name From RefBase
+  //! \{
+
+  virtual std::string className() const;
+  
+  //! \}
+  
   // Main methods --------------------------------------------------------------
 
   //! Adds a scalar layer
@@ -187,8 +208,12 @@ private:
   //! The vector-valued layers belonging to this partition
   VectorLayerList m_vectorLayers;
 
-};
+  // Typedefs ------------------------------------------------------------------
 
+  //! Convenience typedef for referring to base class
+  typedef RefBase base;
+
+};
 
 } // namespace File
 
@@ -530,7 +555,6 @@ public:
 
   //! Read the group membership for the partitions
   bool readGroupMembership(GroupMembershipMap &gpMembershipMap);
-
 
 private:
 
@@ -915,10 +939,9 @@ Field3DInputFile::readLayer(const std::string &intPartitionName,
               layerName);
     return nullPtr;
   }
-  
 
   // Construct the field and load the data
- 
+
   typename Field<Data_T>::Ptr field;
   field = readField<Data_T>(className, layerGroup.id(), m_filename, layerPath);
 
@@ -941,7 +964,7 @@ Field3DInputFile::readLayer(const std::string &intPartitionName,
   field->name = removeUniqueId(intPartitionName);
   field->attribute = layerName;
   field->setMapping(part->mapping);
-  
+
   return field;
 }
 
@@ -1533,13 +1556,13 @@ readField(const std::string &className, hid_t layerGroup,
 
   DataTypeEnum typeEnum = DataTypeTraits<Data_T>::typeEnum();
   FieldBase::Ptr field = io->read(layerGroup, filename, layerPath, typeEnum);
-  
+
   if (!field) {
     // We don't need to print a message, because it could just be that
     // a layer of the specified data type and name couldn't be found
     return FieldPtr();
   }
-
+  
   FieldPtr result = field_dynamic_cast<Field<Data_T> >(field);
 
   if (result)

@@ -102,7 +102,7 @@ def isDebugBuild():
 # ------------------------------------------------------------------------------
 
 def architectureStr():
-    if ARGUMENTS.get('do64', 0):
+    if ARGUMENTS.get('do64', 1):
         return arch64
     else:
         return arch32

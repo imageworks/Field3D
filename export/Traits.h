@@ -98,7 +98,10 @@ public:
 
 template <typename T>
 struct DataTypeTraits {
-  static std::string name();
+  static std::string name()
+  {
+    return typeid(T).name();
+  }
   static DataTypeEnum typeEnum();
   static hid_t h5type();
   static int h5bits();

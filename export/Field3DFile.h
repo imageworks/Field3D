@@ -506,7 +506,9 @@ public:
   //! \name Reading proxy data from disk
   //! \{
 
-  //! Retrieves a proxy version (EmptyField) of each layer 
+  //! Retrieves a proxy version (EmptyField) of each layer .
+  //! \note Although the call is templated, all fields are read, regardless
+  //! of bit depth.
   //! \param name If a string is passed in, only layers of that name will
   //! be read from disk.
   template <class Data_T>
@@ -516,6 +518,8 @@ public:
                  bool isVectorLayer) const;
 
   //! Retrieves a proxy version (EmptyField) of each scalar layer 
+  //! \note Although the call is templated, all fields are read, regardless
+  //! of bit depth.
   //! \param name If a string is passed in, only layers of that name will
   //! be read from disk.
   template <class Data_T>
@@ -523,6 +527,8 @@ public:
   readProxyScalarLayers(const std::string &name = std::string("")) const;
 
   //! Retrieves a proxy version (EmptyField) of each vector layer 
+  //! \note Although the call is templated, all fields are read, regardless
+  //! of bit depth.
   //! \param name If a string is passed in, only layers of that name will
   //! be read from disk.
   template <class Data_T>

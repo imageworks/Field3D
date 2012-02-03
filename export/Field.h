@@ -925,7 +925,7 @@ template <class Data_T>
 void ResizableField<Data_T>::copyFrom(typename Field<Data_T>::Ptr other)
 {
   // Set mapping
-  setMapping(other->mapping());
+  FieldRes::setMapping(other->mapping());
   // Set size to match
   setSize(other->extents(), other->dataWindow());
 

@@ -465,51 +465,6 @@ private:
 FIELD3D_CLASSTYPE_TEMPL_INSTANTIATION(Field);
 
 //----------------------------------------------------------------------------//
-
-template <class Data_T> 
-typename Field<Data_T>::const_iterator 
-Field<Data_T>::cbegin() const
-{
-  if (FieldRes::dataResolution() == V3i(0))
-    return cend();
-  return const_iterator(*this, m_dataWindow, m_dataWindow.min);
-}
-
-//----------------------------------------------------------------------------//
-
-template <class Data_T> 
-typename Field<Data_T>::const_iterator
-Field<Data_T>::cbegin(const Box3i &subset) const
-{
-  if (subset.isEmpty())
-    return cend(subset);
-  return const_iterator(*this, subset, subset.min);
-}
-
-//----------------------------------------------------------------------------//
-
-template <class Data_T>
-typename Field<Data_T>::const_iterator 
-Field<Data_T>::cend() const
-{ 
-  return const_iterator(*this, m_dataWindow, 
-                        V3i(m_dataWindow.min.x, 
-                            m_dataWindow.min.y,
-                            m_dataWindow.max.z + 1));
-}
-
-//----------------------------------------------------------------------------//
-
-template <class Data_T>
-typename Field<Data_T>::const_iterator 
-Field<Data_T>::cend(const Box3i &subset) const
-{ 
-  return const_iterator(*this, subset, V3i(subset.min.x, 
-                                           subset.min.y,
-                                           subset.max.z + 1));
-}
-
-//----------------------------------------------------------------------------//
 // Field::const_iterator
 //----------------------------------------------------------------------------//
 
@@ -579,6 +534,51 @@ private:
   const Field<Data_T> &m_field;
 
 };
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T> 
+typename Field<Data_T>::const_iterator 
+Field<Data_T>::cbegin() const
+{
+  if (FieldRes::dataResolution() == V3i(0))
+    return cend();
+  return const_iterator(*this, m_dataWindow, m_dataWindow.min);
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T> 
+typename Field<Data_T>::const_iterator
+Field<Data_T>::cbegin(const Box3i &subset) const
+{
+  if (subset.isEmpty())
+    return cend(subset);
+  return const_iterator(*this, subset, subset.min);
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+typename Field<Data_T>::const_iterator 
+Field<Data_T>::cend() const
+{ 
+  return const_iterator(*this, m_dataWindow, 
+                        V3i(m_dataWindow.min.x, 
+                            m_dataWindow.min.y,
+                            m_dataWindow.max.z + 1));
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+typename Field<Data_T>::const_iterator 
+Field<Data_T>::cend(const Box3i &subset) const
+{ 
+  return const_iterator(*this, subset, V3i(subset.min.x, 
+                                           subset.min.y,
+                                           subset.max.z + 1));
+}
 
 //----------------------------------------------------------------------------//
 // WritableField
@@ -669,49 +669,6 @@ private:
 FIELD3D_CLASSTYPE_TEMPL_INSTANTIATION(WritableField);
 
 //----------------------------------------------------------------------------//
-
-template <class Data_T>
-inline typename WritableField<Data_T>::iterator 
-WritableField<Data_T>::begin()
-{
-  if (FieldRes::dataResolution() == V3i(0))
-    return end();
-  return iterator(*this, Field<Data_T>::m_dataWindow, 
-                  Field<Data_T>::m_dataWindow.min);
-}
-
-//----------------------------------------------------------------------------//
-
-template <class Data_T>
-inline typename WritableField<Data_T>::iterator 
-WritableField<Data_T>::begin(const Box3i &subset)
-{
-  if (subset.isEmpty())
-    return end(subset);
-  return iterator(*this, subset, subset.min);
-}
-
-//----------------------------------------------------------------------------//
-
-template <class Data_T>
-inline typename WritableField<Data_T>::iterator 
-WritableField<Data_T>::end()
-{ return iterator(*this, Field<Data_T>::m_dataWindow, 
-                  V3i(Field<Data_T>::m_dataWindow.min.x, 
-                      Field<Data_T>::m_dataWindow.min.y,
-                      Field<Data_T>::m_dataWindow.max.z + 1));
-}
-
-//----------------------------------------------------------------------------//
-
-template <class Data_T>
-inline typename WritableField<Data_T>::iterator 
-WritableField<Data_T>::end(const Box3i &subset)
-{ return iterator(*this, subset, 
-                  V3i(subset.min.x, subset.min.y, subset.max.z + 1));
-}
-
-//----------------------------------------------------------------------------//
 // WritableField::iterator
 //----------------------------------------------------------------------------//
 
@@ -719,6 +676,14 @@ template <class Data_T>
 class WritableField<Data_T>::iterator
 {
 public:
+#ifdef WIN32
+  typedef std::forward_iterator_tag iterator_category;
+  typedef Data_T value_type;
+  typedef ptrdiff_t difference_type;
+  typedef ptrdiff_t distance_type;
+  typedef Data_T *pointer;
+  typedef Data_T& reference;
+#endif
 
   // Constructors --------------------------------------------------------------
 
@@ -779,6 +744,49 @@ private:
   WritableField<Data_T> &m_field;
 
 };
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+inline typename WritableField<Data_T>::iterator 
+WritableField<Data_T>::begin()
+{
+  if (FieldRes::dataResolution() == V3i(0))
+    return end();
+  return iterator(*this, Field<Data_T>::m_dataWindow, 
+                  Field<Data_T>::m_dataWindow.min);
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+inline typename WritableField<Data_T>::iterator 
+WritableField<Data_T>::begin(const Box3i &subset)
+{
+  if (subset.isEmpty())
+    return end(subset);
+  return iterator(*this, subset, subset.min);
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+inline typename WritableField<Data_T>::iterator 
+WritableField<Data_T>::end()
+{ return iterator(*this, Field<Data_T>::m_dataWindow, 
+                  V3i(Field<Data_T>::m_dataWindow.min.x, 
+                      Field<Data_T>::m_dataWindow.min.y,
+                      Field<Data_T>::m_dataWindow.max.z + 1));
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+inline typename WritableField<Data_T>::iterator 
+WritableField<Data_T>::end(const Box3i &subset)
+{ return iterator(*this, subset, 
+                  V3i(subset.min.x, subset.min.y, subset.max.z + 1));
+}
 
 //----------------------------------------------------------------------------//
 // ResizableField

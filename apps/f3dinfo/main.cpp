@@ -40,8 +40,7 @@
 #include <map>
 #include <string>
 
-#include <fnmatch.h>
-
+#include <boost/regex.hpp>
 #include <boost/program_options.hpp>
 #include <boost/foreach.hpp>
 
@@ -116,21 +115,33 @@ Options parseOptions(int argc, char **argv)
   po::options_description desc("Available options");
 
   desc.add_options()
-    ("help", "Display help")
+    ("help,h", "Display help")
     ("input-file", po::value<vector<string> >(), "Input files")
     ("name,n", po::value<vector<string> >(), "Load field(s) by name")
     ("attribute,a", po::value<vector<string> >(), "Load field(s) by attribute")
     ;
   
   po::variables_map vm;
-  po::store(po::parse_command_line(argc, argv, desc), vm);
-  po::notify(vm);    
+  try {
+    po::store(po::parse_command_line(argc, argv, desc), vm);
+  } catch(...) {
+    cerr << "Unknown command line option.\n";
+    cout << desc << endl;
+    exit(1);
+  }
+  po::notify(vm);
   
   po::positional_options_description p;
   p.add("input-file", -1);
   
-  po::store(po::command_line_parser(argc, argv).
-            options(desc).positional(p).run(), vm);
+  try {
+    po::store(po::command_line_parser(argc, argv).
+              options(desc).positional(p).run(), vm);
+  } catch(...) {
+    cerr << "Unknown command line option.\n";
+    cout << desc << endl;
+    exit(1);
+  }
   po::notify(vm);
   
   if (vm.count("help")) {
@@ -235,7 +246,9 @@ bool matchString(const std::string &str, const vector<string> &patterns)
   }
   // Check all patterns
   BOOST_FOREACH (const string &pattern, patterns) {
-    if (fnmatch(pattern.c_str(), str.c_str(), 0) != FNM_NOMATCH) {
+    boost::regex  re(pattern, boost::regex::normal | boost::regex::no_except);
+
+    if (boost::regex_match(str, re)) {
       return true;
     }
   }

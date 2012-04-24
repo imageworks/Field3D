@@ -43,7 +43,9 @@
 //----------------------------------------------------------------------------//
 
 #include <sys/stat.h>
+#ifndef WIN32
 #include <unistd.h>
+#endif
 
 #include <hdf5.h>
 #include <H5Epublic.h>
@@ -608,7 +610,7 @@ bool Field3DInputFile::open(const string &filename)
         }
       }
     }
-    catch (MissingAttributeException &e) {
+    catch (MissingAttributeException &) {
       //Msg::print(Msg::SevWarning, "Missing version_number attribute");
     }
 
@@ -670,7 +672,7 @@ bool Field3DInputFile::open(const string &filename)
               + string(e.what()));
     success = false;    
   }
-  catch (BadFileHierarchyException &e) {
+  catch (BadFileHierarchyException &) {
     Msg::print(Msg::SevWarning, 
                "In file: " + filename + " - Bad file hierarchy. ");
     success = false;    
@@ -1178,7 +1180,7 @@ herr_t parseLayers(hid_t loc_id, const char *itemName,
                                       itemName);
                                    
     }
-    catch (MissingAttributeException &e) {
+    catch (MissingAttributeException &) {
       
     }
     return 0;

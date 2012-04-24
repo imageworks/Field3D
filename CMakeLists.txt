@@ -76,7 +76,7 @@ IF ( WIN32 )
     )
 ENDIF ( WIN32 )
 
-ADD_LIBRARY ( Field3D 
+ADD_LIBRARY ( Field3D SHARED
   src/ClassFactory.cpp
   src/DenseFieldIO.cpp
   src/Field3DFile.cpp
@@ -93,19 +93,7 @@ ADD_LIBRARY ( Field3D
   src/SparseFile.cpp
 )
 
-SET_TARGET_PROPERTIES ( Field3D
-  PROPERTIES SOVERSION 1.3
-)
-
-IF ( WIN32 )
-  SET_TARGET_PROPERTIES( Field3D PROPERTIES COMPILE_DEFINITIONS EXPORT_FIELD3D )
-  SET_TARGET_PROPERTIES( Field3D PROPERTIES COMPILE_FLAGS -EHsc )
-  SET_TARGET_PROPERTIES( Field3D PROPERTIES COMPILE_FLAGS -MD )
-  SET_TARGET_PROPERTIES( Field3D PROPERTIES COMPILE_FLAGS -wd4251 )
-ENDIF ( WIN32 )
-
 SET ( Field3D_Target_Link_Libraries
-  Field3D
   ${HDF5_LIBRARIES}
   ${Boost_LIBRARIES}
   )
@@ -122,9 +110,21 @@ IF ( WIN32 )
       optimized ${lib}
       debug ${lib}_d )
   ENDFOREACH()
-  
-  message( "${Field3D_Target_Link_Libraries}" )
 ENDIF (WIN32)
+
+TARGET_LINK_LIBRARIES ( Field3D ${Field3D_Target_Link_Libraries} )
+
+SET_TARGET_PROPERTIES ( Field3D PROPERTIES VERSION 1.3.2)
+SET_TARGET_PROPERTIES ( Field3D PROPERTIES SOVERSION 1.3)
+
+IF ( WIN32 )
+  SET_TARGET_PROPERTIES( Field3D PROPERTIES ENABLE_EXPORTS ON )
+  SET_TARGET_PROPERTIES( Field3D PROPERTIES COMPILE_DEFINITIONS FIELD3D_EXPORT )
+  SET_TARGET_PROPERTIES( Field3D PROPERTIES COMPILE_FLAGS -EHsc )
+  SET_TARGET_PROPERTIES( Field3D PROPERTIES COMPILE_FLAGS -MD )
+  SET_TARGET_PROPERTIES( Field3D PROPERTIES COMPILE_FLAGS -wd4251 )
+ENDIF ( WIN32 )
+
 
 
 # field3d - unitTest
@@ -132,7 +132,7 @@ ADD_EXECUTABLE ( unitTest
   test/unit_tests/UnitTest.cpp
   )
 
-TARGET_LINK_LIBRARIES ( unitTest ${Field3D_Target_Link_Libraries} )
+TARGET_LINK_LIBRARIES ( unitTest Field3D )
 
 IF ( WIN32 )
   SET_TARGET_PROPERTIES( unitTest PROPERTIES COMPILE_FLAGS -bigobj )
@@ -143,35 +143,35 @@ ADD_EXECUTABLE ( f3dinfo
   apps/f3dinfo/main.cpp
   )
 
-TARGET_LINK_LIBRARIES ( f3dinfo ${Field3D_Target_Link_Libraries} )
+TARGET_LINK_LIBRARIES ( f3dinfo Field3D )
 
 # field3d - sparse_field_io
 ADD_EXECUTABLE ( sparse_field_io
   apps/sample_code/sparse_field_io/main.cpp
   )
 
-TARGET_LINK_LIBRARIES ( sparse_field_io ${Field3D_Target_Link_Libraries} )
+TARGET_LINK_LIBRARIES ( sparse_field_io Field3D )
 
 # field3d - read
 ADD_EXECUTABLE ( read
   apps/sample_code/read/main.cpp
   )
 
-TARGET_LINK_LIBRARIES ( read ${Field3D_Target_Link_Libraries} )
+TARGET_LINK_LIBRARIES ( read Field3D )
 
 # field3d - mixed_types
 ADD_EXECUTABLE ( mixed_types
   apps/sample_code/mixed_types/main.cpp
   )
 
-TARGET_LINK_LIBRARIES ( mixed_types ${Field3D_Target_Link_Libraries} )
+TARGET_LINK_LIBRARIES ( mixed_types Field3D )
 
 # field3d - create_and_write
 ADD_EXECUTABLE ( create_and_write
   apps/sample_code/create_and_write/main.cpp
   )
 
-TARGET_LINK_LIBRARIES ( create_and_write ${Field3D_Target_Link_Libraries} )
+TARGET_LINK_LIBRARIES ( create_and_write Field3D )
 
 IF (DOXYGEN_FOUND)
   ADD_CUSTOM_TARGET ( doc

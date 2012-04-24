@@ -70,7 +70,7 @@ namespace Msg {
 
   //! Sends the string to the assigned output, prefixing the message with
   //! the severity
-  void print(Severity severity, const std::string &message);
+  FIELD3D_API void print(Severity severity, const std::string &message);
 
   //! Sends the string to the assigned output
   inline void print(const std::string &message)

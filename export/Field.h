@@ -88,7 +88,7 @@ DECLARE_FIELD3D_GENERIC_EXCEPTION(ResizeException, Exception)
   for the metadata map
 */
 
-class FieldBase : public RefBase
+class FIELD3D_API FieldBase : public RefBase
 {
 public:
 

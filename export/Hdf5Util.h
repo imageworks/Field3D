@@ -431,39 +431,41 @@ void readSimpleData(hid_t location, const std::string &name,
 
 //! Reads a string attribute
 //! \ingroup hdf5
-bool readAttribute(hid_t location, const std::string& attrName, 
-                  std::string& value); 
+FIELD3D_API bool readAttribute(hid_t location, const std::string& attrName, 
+                               std::string& value); 
 
 //! Reads an int attribute of arbitrary size
 //! \ingroup hdf5
-bool readAttribute(hid_t location, const std::string& attrName, 
-                  unsigned int attrSize, int &value); 
+FIELD3D_API bool readAttribute(hid_t location, const std::string& attrName, 
+                               unsigned int attrSize, int &value); 
 
 //! Reads a float attribute of arbitrary size
 //! \ingroup hdf5
-bool readAttribute(hid_t location, const std::string& attrName, 
-                  unsigned int attrSize, float &value); 
+FIELD3D_API bool readAttribute(hid_t location, const std::string& attrName, 
+                               unsigned int attrSize, float &value); 
 
 //! Reads a double attribute of arbitrary size
 //! \ingroup hdf5
-bool readAttribute(hid_t location, const std::string& attrName, 
-                  unsigned int attrSize, double &value); 
+FIELD3D_API bool readAttribute(hid_t location, const std::string& attrName, 
+                               unsigned int attrSize, double &value); 
 
 //! Reads a int attribute of arbitrary size and rank
 //! \ingroup hdf5
-bool readAttribute(hid_t location, const std::string& attrName, 
-                   std::vector<unsigned int> &attrSize, int &value); 
+FIELD3D_API bool readAttribute(hid_t location, const std::string& attrName, 
+                                std::vector<unsigned int> &attrSize, 
+                                int &value); 
 
 //! Reads a float attribute of arbitrary size and rank
 //! \ingroup hdf5
-bool readAttribute(hid_t location, const std::string& attrName, 
-                   std::vector<unsigned int> &attrSize, float &value); 
+FIELD3D_API bool readAttribute(hid_t location, const std::string& attrName, 
+                               std::vector<unsigned int> &attrSize, 
+                               float &value); 
 
 //! Reads a double attribute of arbitrary size and rank
 //! \ingroup hdf5
-bool readAttribute(hid_t location, const std::string& attrName, 
-                   std::vector<unsigned int> &attrSize, double &value); 
-
+FIELD3D_API bool readAttribute(hid_t location, const std::string& attrName, 
+                               std::vector<unsigned int> &attrSize, 
+                               double &value); 
 
 //! \}
 
@@ -475,44 +477,47 @@ bool readAttribute(hid_t location, const std::string& attrName,
 
 //! Writes a string attribute
 //! \ingroup hdf5
-bool writeAttribute(hid_t location, const std::string& attrName, 
-                  const std::string& value); 
+FIELD3D_API bool writeAttribute(hid_t location, const std::string& attrName, 
+                                const std::string& value); 
 
 //! Writes an int attribute of arbitrary size
 //! \ingroup hdf5
-bool writeAttribute(hid_t location, const std::string& attrName, 
-                  unsigned int attrSize, const int &value); 
+FIELD3D_API bool writeAttribute(hid_t location, const std::string& attrName, 
+                                unsigned int attrSize, const int &value); 
 
 //! Writes a float attribute of arbitrary size
 //! \ingroup hdf5
-bool writeAttribute(hid_t location, const std::string& attrName, 
-                  unsigned int attrSize, const float &value); 
+FIELD3D_API bool writeAttribute(hid_t location, const std::string& attrName, 
+                                unsigned int attrSize, const float &value); 
 
 //! Writes a double attribute of arbitrary size
 //! \ingroup hdf5
-bool writeAttribute(hid_t location, const std::string& attrName, 
-                  unsigned int attrSize, const double &value); 
+FIELD3D_API bool writeAttribute(hid_t location, const std::string& attrName, 
+                                unsigned int attrSize, const double &value); 
 
 //! Writes a float attribute of arbitrary size and rank
 //! \ingroup hdf5
-bool writeAttribute(hid_t location, const std::string& attrName, 
-                    std::vector<unsigned int> &attrSize, const int &value); 
-
-
-//! Writes a float attribute of arbitrary size and rank
-//! \ingroup hdf5
-bool writeAttribute(hid_t location, const std::string& attrName, 
-                    std::vector<unsigned int> &attrSize, const int &value); 
+FIELD3D_API bool writeAttribute(hid_t location, const std::string& attrName, 
+                                std::vector<unsigned int> &attrSize, 
+                                const int &value); 
 
 //! Writes a float attribute of arbitrary size and rank
 //! \ingroup hdf5
-bool writeAttribute(hid_t location, const std::string& attrName, 
-                    std::vector<unsigned int> &attrSize, const float &value); 
+FIELD3D_API bool writeAttribute(hid_t location, const std::string& attrName, 
+                                std::vector<unsigned int> &attrSize, 
+                                const int &value); 
+
+//! Writes a float attribute of arbitrary size and rank
+//! \ingroup hdf5
+FIELD3D_API bool writeAttribute(hid_t location, const std::string& attrName, 
+                                std::vector<unsigned int> &attrSize, 
+                                const float &value); 
 
 //! Writes a double attribute of arbitrary size and rank
 //! \ingroup hdf5
-bool writeAttribute(hid_t location, const std::string& attrName, 
-                    std::vector<unsigned int> &attrSize, const double &value); 
+FIELD3D_API bool writeAttribute(hid_t location, const std::string& attrName, 
+                                std::vector<unsigned int> &attrSize, 
+                                const double &value); 
 
 //! \}
 
@@ -520,7 +525,7 @@ bool writeAttribute(hid_t location, const std::string& attrName,
 
 //! Checks whether gzip is available in the current hdf5 library
 //! \ingroup hdf5
-bool checkHdf5Gzip();
+FIELD3D_API bool checkHdf5Gzip();
 
 //----------------------------------------------------------------------------//
 // Templated functions and classes

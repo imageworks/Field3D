@@ -313,7 +313,7 @@ public:
 
 //----------------------------------------------------------------------------//
 
-class SparseFileManager
+class FIELD3D_API SparseFileManager
 {
 
 public:

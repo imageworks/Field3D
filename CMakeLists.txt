@@ -39,7 +39,9 @@ set( CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJECT_SOURCE_DIR}/cmake )
 
 FIND_PACKAGE (Doxygen)
 FIND_PACKAGE (HDF5)
-FIND_PACKAGE (Boost COMPONENTS thread program_options)
+# f3dinfo relies on program_options but don't include it, since
+# it causes link errors if its included in the list of boost libraries.
+FIND_PACKAGE (Boost COMPONENTS regex thread)
 FIND_PACKAGE (ILMBase)
 
 OPTION (INSTALL_DOCS "Automatically install documentation." ON)
@@ -64,6 +66,15 @@ LINK_DIRECTORIES ( ${ILMBASE_LIBRARY_DIRS} )
 IF ( LINUX )
   ADD_DEFINITIONS ( -fPIC -m64 -DLINUX -DREQUIRE_IOSTREAM -Wno-invalid-offsetof )
 ENDIF ( LINUX )
+IF ( WIN32 )
+  ADD_DEFINITIONS ( 
+    -DOPENEXR_DLL 
+    -D_HDF5USEDLL_ 
+    -DHDF5CPP_USEDLL 
+    -D_HAS_ITERATOR_DEBUGGING=0 
+    -D_CRT_SECURE_NO_WARNINGS=1
+    )
+ENDIF ( WIN32 )
 
 ADD_LIBRARY ( Field3D 
   src/ClassFactory.cpp
@@ -86,17 +97,35 @@ SET_TARGET_PROPERTIES ( Field3D
   PROPERTIES SOVERSION 1.3
 )
 
+IF ( WIN32 )
+  SET_TARGET_PROPERTIES( Field3D PROPERTIES COMPILE_DEFINITIONS EXPORT_FIELD3D )
+  SET_TARGET_PROPERTIES( Field3D PROPERTIES COMPILE_FLAGS -EHsc )
+  SET_TARGET_PROPERTIES( Field3D PROPERTIES COMPILE_FLAGS -MD )
+  SET_TARGET_PROPERTIES( Field3D PROPERTIES COMPILE_FLAGS -wd4251 )
+ENDIF ( WIN32 )
+
 SET ( Field3D_Target_Link_Libraries
   Field3D
   ${HDF5_LIBRARIES}
-  z
-  Iex
-  Half
-  IlmThread
-  Imath
-  dl
   ${Boost_LIBRARIES}
   )
+
+IF ( LINUX )
+  LIST ( APPEND 
+    Iex Half IlmThread Imath
+    dl z )
+ENDIF ( LINUX )
+IF ( WIN32 )
+  # Add OpenEXR and zlib release/debug
+  FOREACH ( lib Iex Half IlmThread Imath zdll )
+    LIST ( APPEND Field3D_Target_Link_Libraries 
+      optimized ${lib}
+      debug ${lib}_d )
+  ENDFOREACH()
+  
+  message( "${Field3D_Target_Link_Libraries}" )
+ENDIF (WIN32)
+
 
 # field3d - unitTest
 ADD_EXECUTABLE ( unitTest
@@ -104,6 +133,10 @@ ADD_EXECUTABLE ( unitTest
   )
 
 TARGET_LINK_LIBRARIES ( unitTest ${Field3D_Target_Link_Libraries} )
+
+IF ( WIN32 )
+  SET_TARGET_PROPERTIES( unitTest PROPERTIES COMPILE_FLAGS -bigobj )
+ENDIF ( WIN32 )
 
 # field3d - f3dinfo
 ADD_EXECUTABLE ( f3dinfo

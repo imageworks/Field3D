@@ -122,7 +122,7 @@ static int filter(std::string &name, const char *suffix)
 
 //----------------------------------------------------------------------------//
 
-static bool getDirSos(std::vector<std::string> &sos, std::string &dir) 
+bool getDirSos(std::vector<std::string> &sos, std::string &dir) 
 {
 #ifdef WIN32
   const char *ds = dir.c_str();

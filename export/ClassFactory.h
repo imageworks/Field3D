@@ -67,7 +67,7 @@ FIELD3D_NAMESPACE_OPEN
   
 //----------------------------------------------------------------------------//
   
-class ClassFactory
+class FIELD3D_API ClassFactory
 {
     
 public:

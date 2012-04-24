@@ -83,7 +83,7 @@ FIELD3D_NAMESPACE_OPEN
 
 //----------------------------------------------------------------------------//
 
-class FieldMapping : public RefBase
+class FIELD3D_API FieldMapping : public RefBase
 {
  public:
 
@@ -215,7 +215,7 @@ private:
 
 //----------------------------------------------------------------------------//
 
-class NullFieldMapping : public FieldMapping
+class FIELD3D_API NullFieldMapping : public FieldMapping
 {
 public:
 
@@ -313,7 +313,7 @@ private:
 
 //----------------------------------------------------------------------------//
 
-class MatrixFieldMapping : public FieldMapping
+class FIELD3D_API MatrixFieldMapping : public FieldMapping
 {
 public:
 
@@ -533,7 +533,7 @@ private:
 
 //----------------------------------------------------------------------------//
 
-class FrustumFieldMapping : public FieldMapping
+class FIELD3D_API FrustumFieldMapping : public FieldMapping
 {
 public:
 

@@ -49,6 +49,10 @@
 #include "FieldMapping.h"
 #include "Types.h"
 
+#ifdef WIN32
+#define isnan(__x__) _isnan(__x__) 
+#endif
+
 //----------------------------------------------------------------------------//
 
 using namespace boost;

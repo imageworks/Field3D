@@ -39,7 +39,16 @@ set( CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJECT_SOURCE_DIR}/cmake )
 
 FIND_PACKAGE (Doxygen)
 FIND_PACKAGE (HDF5)
-FIND_PACKAGE (Boost COMPONENTS thread program_options)
+IF ( CMAKE_HOST_WIN32 )
+# f3dinfo relies on program_options but don't include it, since
+# for some reason, unlike all the other boost components, a link is
+# forced via a pragma.
+FIND_PACKAGE (Boost COMPONENTS regex thread)
+ELSE ()
+FIND_PACKAGE (Boost COMPONENTS regex thread program_options)
+FIND_PACKAGE (MPI)
+ENDIF ()
+
 FIND_PACKAGE (ILMBase)
 
 OPTION (INSTALL_DOCS "Automatically install documentation." ON)
@@ -61,11 +70,20 @@ LINK_DIRECTORIES ( ${Boost_LIBRARY_DIRS} )
 LINK_DIRECTORIES ( ${HDF5_LIBRARY_DIRS} )
 LINK_DIRECTORIES ( ${ILMBASE_LIBRARY_DIRS} )
 
-IF ( LINUX )
-  ADD_DEFINITIONS ( -fPIC -m64 -DLINUX -DREQUIRE_IOSTREAM -Wno-invalid-offsetof )
-ENDIF ( LINUX )
+IF ( CMAKE_HOST_UNIX )
+  ADD_DEFINITIONS ( -fPIC -DREQUIRE_IOSTREAM -Wno-invalid-offsetof )
+ENDIF ( )
+IF ( CMAKE_HOST_WIN32 )
+  ADD_DEFINITIONS ( 
+    -DOPENEXR_DLL 
+    -D_HDF5USEDLL_ 
+    -DHDF5CPP_USEDLL 
+    -D_HAS_ITERATOR_DEBUGGING=0 
+    -D_CRT_SECURE_NO_WARNINGS=1
+    )
+ENDIF ( )
 
-ADD_LIBRARY ( Field3D 
+ADD_LIBRARY ( Field3D SHARED
   src/ClassFactory.cpp
   src/DenseFieldIO.cpp
   src/Field3DFile.cpp
@@ -82,63 +100,93 @@ ADD_LIBRARY ( Field3D
   src/SparseFile.cpp
 )
 
-SET_TARGET_PROPERTIES ( Field3D
-  PROPERTIES SOVERSION 1.3
-)
-
-SET ( Field3D_Target_Link_Libraries
-  Field3D
+SET ( Field3D_Libraries_Shared
   ${HDF5_LIBRARIES}
-  z
-  Iex
-  Half
-  IlmThread
-  Imath
-  dl
   ${Boost_LIBRARIES}
   )
+
+IF ( CMAKE_HOST_UNIX )
+  LIST ( APPEND Field3D_Libraries_Shared
+    ${MPI_LIBRARIES}
+    Iex Half IlmThread Imath
+    pthread dl z )
+  SET ( Field3D_DSO_Libraries ${Field3D_Libraries_Shared} )
+  SET ( Field3D_BIN_Libraries Field3D ${Field3D_Libraries_Shared} )
+ENDIF ( )
+IF ( CMAKE_HOST_WIN32 )
+  # Add OpenEXR and zlib release/debug
+  FOREACH ( lib Iex Half IlmThread Imath zdll )
+    LIST ( APPEND Field3D_Libraries_Shared
+      optimized ${lib}
+      debug ${lib}_d )
+  ENDFOREACH()
+  SET ( Field3D_DSO_Libraries ${Field3D_Libraries_Shared} )
+  SET ( Field3D_BIN_Libraries Field3D )
+ENDIF ()
+
+MESSAGE( ${Field3D_DSO_Libraries} )
+MESSAGE( ${Field3D_BIN_Libraries} )
+
+TARGET_LINK_LIBRARIES ( Field3D ${Field3D_DSO_Libraries} )
+
+SET_TARGET_PROPERTIES ( Field3D PROPERTIES VERSION 1.3.2)
+SET_TARGET_PROPERTIES ( Field3D PROPERTIES SOVERSION 1.3)
+
+IF ( CMAKE_HOST_WIN32 )
+  SET_TARGET_PROPERTIES( Field3D PROPERTIES ENABLE_EXPORTS ON )
+  SET_TARGET_PROPERTIES( Field3D PROPERTIES COMPILE_DEFINITIONS FIELD3D_EXPORT )
+  SET_TARGET_PROPERTIES( Field3D PROPERTIES COMPILE_FLAGS -EHsc )
+  SET_TARGET_PROPERTIES( Field3D PROPERTIES COMPILE_FLAGS -MD )
+  SET_TARGET_PROPERTIES( Field3D PROPERTIES COMPILE_FLAGS -wd4251 )
+ENDIF ( )
+
+
 
 # field3d - unitTest
 ADD_EXECUTABLE ( unitTest
   test/unit_tests/UnitTest.cpp
   )
 
-TARGET_LINK_LIBRARIES ( unitTest ${Field3D_Target_Link_Libraries} )
+TARGET_LINK_LIBRARIES ( unitTest ${Field3D_BIN_Libraries} )
+
+IF ( CMAKE_HOST_WIN32 )
+  SET_TARGET_PROPERTIES( unitTest PROPERTIES COMPILE_FLAGS -bigobj )
+ENDIF ( )
 
 # field3d - f3dinfo
 ADD_EXECUTABLE ( f3dinfo
   apps/f3dinfo/main.cpp
   )
 
-TARGET_LINK_LIBRARIES ( f3dinfo ${Field3D_Target_Link_Libraries} )
+TARGET_LINK_LIBRARIES ( f3dinfo ${Field3D_BIN_Libraries} )
 
 # field3d - sparse_field_io
 ADD_EXECUTABLE ( sparse_field_io
   apps/sample_code/sparse_field_io/main.cpp
   )
 
-TARGET_LINK_LIBRARIES ( sparse_field_io ${Field3D_Target_Link_Libraries} )
+TARGET_LINK_LIBRARIES ( sparse_field_io Field3D )
 
 # field3d - read
 ADD_EXECUTABLE ( read
   apps/sample_code/read/main.cpp
   )
 
-TARGET_LINK_LIBRARIES ( read ${Field3D_Target_Link_Libraries} )
+TARGET_LINK_LIBRARIES ( read ${Field3D_BIN_Libraries} )
 
 # field3d - mixed_types
 ADD_EXECUTABLE ( mixed_types
   apps/sample_code/mixed_types/main.cpp
   )
 
-TARGET_LINK_LIBRARIES ( mixed_types ${Field3D_Target_Link_Libraries} )
+TARGET_LINK_LIBRARIES ( mixed_types ${Field3D_BIN_Libraries} )
 
 # field3d - create_and_write
 ADD_EXECUTABLE ( create_and_write
   apps/sample_code/create_and_write/main.cpp
   )
 
-TARGET_LINK_LIBRARIES ( create_and_write ${Field3D_Target_Link_Libraries} )
+TARGET_LINK_LIBRARIES ( create_and_write ${Field3D_BIN_Libraries} )
 
 IF (DOXYGEN_FOUND)
   ADD_CUSTOM_TARGET ( doc

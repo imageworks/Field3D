@@ -102,6 +102,30 @@ namespace {
 }
 
 //----------------------------------------------------------------------------//
+std::string
+getTempFile(const std::string &file)
+{
+#ifdef WIN32
+  std::string tempDir = ::getenv("TMP");
+  if (*tempDir.rbegin() != '/' && *tempDir.rbegin() != '\\')
+    tempDir += '/';
+#else
+  std::string tempDir = "/tmp/";
+#endif
+  
+  // Make sure the path is valid.
+  std::string valid_file(file);
+  size_t  s = 0;
+  for (size_t i = 0; i < valid_file.size(); i++)
+  {
+    if (!isalnum(valid_file[i]) && valid_file[i] != '.')
+      valid_file[i] = '_';
+  }
+
+  return tempDir + valid_file;
+}
+
+//----------------------------------------------------------------------------//
 
 template <template <typename T> class Field_T, class Data_T>
 void testBasicField()
@@ -957,7 +981,7 @@ void testField3DFile()
   {
     Msg::print(currentTest);
     ScopedPrintTimer t;
-    string filename("/tmp/test_" + string(SField::classType()) + ".f3d");
+    string filename(getTempFile("test_" + string(SField::classType()) + ".f3d"));
     Box3i extents(V3i(0), V3i(160));
     Box3i dataWindow(V3i(20, 10, 0), V3i(100, 100, 100));
 
@@ -1133,7 +1157,7 @@ void testEmptySparseFieldToDisk()
 
   ScopedPrintTimer t;    
 
-  string filename("/tmp/test_empty_sparse.f3d");
+  string filename(getTempFile("test_empty_sparse.f3d"));
   Box3i extents(V3i(0), V3i(160));
   Box3i dataWindow(V3i(20, 10, 0), V3i(200, 200, 200));
   
@@ -1172,8 +1196,8 @@ void testLayerFetching()
 
   ScopedPrintTimer t;    
 
-  string filename("/tmp/testLayerFetching_" + 
-                  string(SField::classType()) + ".f3d");
+  string filename(getTempFile("testLayerFetching_" + 
+                  string(SField::classType()) + ".f3d"));
   Box3i extents(V3i(0), V3i(160));
   Box3i dataWindow(V3i(20, 10, 50), V3i(100, 100, 100));
 
@@ -1273,8 +1297,8 @@ void testReadAsDifferentType()
 
   ScopedPrintTimer t;    
 
-  string filename("/tmp/testReadAsDifferentType_" + 
-                  string(SField::classType()) + ".f3d");
+  string filename(getTempFile("testReadAsDifferentType_" + 
+                  string(SField::classType()) + ".f3d"));
   Box3i extents(V3i(0), V3i(160));
   Box3i dataWindow(V3i(20, 10, 50), V3i(100, 100, 100));
 
@@ -1426,7 +1450,7 @@ void testBasicFileOpen()
   Msg::print("Testing basic Field3DFile open/close");
   {
     Field3DInputFile in;
-    in.open("/tmp/test_DenseField.float.f3d");
+    in.open(getTempFile("test_DenseField.float.f3d"));
     in.close();
   }
 }
@@ -1718,7 +1742,7 @@ void testEmptyMACFieldToDisk()
 
   ScopedPrintTimer t;    
 
-  string filename("/tmp/test_empty_mac.f3d");
+  string filename(getTempFile("test_empty_mac.f3d"));
   Box3i extents(V3i(0), V3i(160));
   Box3i dataWindow(V3i(20, 10, 0), V3i(200, 200, 200));
   
@@ -1800,8 +1824,8 @@ void testDuplicatePartitions()
   Msg::print("Testing duplicate partition names for " + 
              string(SField::classType()));
 
-  string filename("/tmp/testDuplicatePartitions_" +
-                  string(SField::classType()) + ".f3d");
+  string filename(getTempFile("testDuplicatePartitions_" +
+                  string(SField::classType()) + ".f3d"));
 
   Box3i extents(V3i(0), V3i(160));
   Box3i dataWindow(V3i(20, 10, 50), V3i(100, 100, 100));
@@ -1919,7 +1943,7 @@ void testTimeVaryingMatrixFieldMapping()
 
   // Write to disk
   Field3DOutputFile out;
-  string filename("/tmp/testTimeVaryingMatrixFieldMapping.f3d"); 
+  string filename(getTempFile("testTimeVaryingMatrixFieldMapping.f3d")); 
   out.create(filename);
   out.writeScalarLayer<float>(field);
 
@@ -1976,7 +2000,7 @@ void testTimeVaryingFrustumFieldMapping()
 
   // Write to disk
   Field3DOutputFile out;
-  string filename("/tmp/testTimeVaryingFrustumFieldMapping.f3d"); 
+  string filename(getTempFile("testTimeVaryingFrustumFieldMapping.f3d")); 
   out.create(filename);
   out.writeScalarLayer<float>(field);
 
@@ -2017,7 +2041,7 @@ init_unit_test_suite(int argc, char* argv[])
   typedef Field3D::half half;
 
   initIO();
-  
+
   test_suite* test = BOOST_TEST_SUITE("Field3D Test Suite");
   
   test->add(BOOST_TEST_CASE(&testDiscreteToContinuous));

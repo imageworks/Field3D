@@ -248,6 +248,14 @@ template <class Data_T>
 class DenseField<Data_T>::const_iterator
 {
 public:
+#ifdef WIN32
+  typedef std::forward_iterator_tag iterator_category;
+  typedef Data_T value_type;
+  typedef ptrdiff_t difference_type;
+  typedef ptrdiff_t distance_type;
+  typedef const Data_T *pointer;
+  typedef const Data_T& reference;
+#endif
 
   // Typedefs ------------------------------------------------------------------
 
@@ -259,7 +267,12 @@ public:
                  const V3i &currentPos)
     : x(currentPos.x), y(currentPos.y), z(currentPos.z), 
       m_window(window), m_field(field)
-  { m_p = m_field.ptr(x, y, z); }
+  { 
+    if (window.intersects(currentPos))
+      m_p = m_field.ptr(x, y, z); 
+    else
+      m_p = 0;
+  }
 
   // Operators -----------------------------------------------------------------
 
@@ -267,7 +280,11 @@ public:
   {
     if (x == m_window.max.x) {
       if (y == m_window.max.y) {
-        m_p = m_field.ptr(x = m_window.min.x, y = m_window.min.y, ++z);
+        if (z == m_window.max.z) {
+          m_p = 0;
+        } else {
+          m_p = m_field.ptr(x = m_window.min.x, y = m_window.min.y, ++z);
+        }
       } else {
         m_p = m_field.ptr(x = m_window.min.x, ++y, z);
       }
@@ -326,6 +343,14 @@ template <class Data_T>
 class DenseField<Data_T>::iterator
 {
 public:
+#ifdef WIN32
+  typedef std::forward_iterator_tag iterator_category;
+  typedef Data_T value_type;
+  typedef ptrdiff_t difference_type;
+  typedef ptrdiff_t distance_type;
+  typedef Data_T *pointer;
+  typedef Data_T& reference;
+#endif
 
   // Typedefs ------------------------------------------------------------------
 
@@ -337,7 +362,12 @@ public:
            const V3i &currentPos)
     : x(currentPos.x), y(currentPos.y), z(currentPos.z), 
       m_window(window), m_field(field)
-  { m_p = m_field.ptr(x, y, z); }
+  { 
+    if (window.intersects(currentPos))
+      m_p = m_field.ptr(x, y, z); 
+    else
+      m_p = 0;
+  }
 
   // Operators -----------------------------------------------------------------
 
@@ -345,7 +375,11 @@ public:
   {
     if (x == m_window.max.x) {
       if (y == m_window.max.y) {
-        m_p = m_field.ptr(x = m_window.min.x, y = m_window.min.y, ++z);
+        if (z == m_window.max.z) {
+          m_p = 0;
+        } else {
+          m_p = m_field.ptr(x = m_window.min.x, y = m_window.min.y, ++z);
+        }
       } else {
         m_p = m_field.ptr(x = m_window.min.x, ++y, z);
       }
@@ -594,7 +628,7 @@ void DenseField<Data_T>::sizeChanged()
     std::vector<Data_T>().swap(m_data);
     m_data.resize(m_memSize.x * m_memSize.y * m_memSize.z);
   }
-  catch (std::bad_alloc &e) {
+  catch (std::bad_alloc &) {
     throw Exc::MemoryException("Couldn't allocate DenseField of size " + 
                                boost::lexical_cast<std::string>(m_memSize));
   }

@@ -212,16 +212,16 @@ public:
   //! Returns a reference to the index. This is specialized so that the
   //! correct data member is accessed.
   template <class Data_T>
-  Reference<Data_T>& ref(int idx);
+  Reference<Data_T>& ref(size_t idx);
 
   //! Appends a reference to the collection. This is specialized so that the
   //! correct data member is accessed.
   template <class Data_T>
-  int append(const Reference<Data_T>& ref);
+  size_t append(const Reference<Data_T>& ref);
 
   //! Returns the number of file references of the corresponding collection
   template <class Data_T>
-    int numRefs() const;
+  size_t numRefs() const;
 
 private:
 
@@ -313,7 +313,7 @@ public:
 
 //----------------------------------------------------------------------------//
 
-class SparseFileManager
+class FIELD3D_API SparseFileManager
 {
 
 public:
@@ -746,7 +746,7 @@ namespace SparseFile {
 
 template <>
 inline Reference<half>& 
-FileReferences::ref(int idx)
+FileReferences::ref(size_t idx)
 {
   return m_hRefs[idx];
 }
@@ -755,7 +755,7 @@ FileReferences::ref(int idx)
 
 template <>
 inline Reference<V3h>& 
-FileReferences::ref(int idx)
+FileReferences::ref(size_t idx)
 {
   return m_vhRefs[idx];
 }
@@ -764,7 +764,7 @@ FileReferences::ref(int idx)
 
 template <>
 inline Reference<float>& 
-FileReferences::ref(int idx)
+FileReferences::ref(size_t idx)
 {
   return m_fRefs[idx];
 }
@@ -773,7 +773,7 @@ FileReferences::ref(int idx)
 
 template <>
 inline Reference<V3f>& 
-FileReferences::ref(int idx)
+FileReferences::ref(size_t idx)
 {
   return m_vfRefs[idx];
 }
@@ -782,7 +782,7 @@ FileReferences::ref(int idx)
 
 template <>
 inline Reference<double>& 
-FileReferences::ref(int idx)
+FileReferences::ref(size_t idx)
 {
   return m_dRefs[idx];
 }
@@ -791,7 +791,7 @@ FileReferences::ref(int idx)
 
 template <>
 inline Reference<V3d>& 
-FileReferences::ref(int idx)
+FileReferences::ref(size_t idx)
 {
   return m_vdRefs[idx];
 }
@@ -799,7 +799,7 @@ FileReferences::ref(int idx)
 //----------------------------------------------------------------------------//
 
 template <>
-inline int FileReferences::append(const Reference<half>& ref)
+inline size_t FileReferences::append(const Reference<half>& ref)
 {
   m_hRefs.push_back(ref);
   return m_hRefs.size() - 1;
@@ -808,7 +808,7 @@ inline int FileReferences::append(const Reference<half>& ref)
 //----------------------------------------------------------------------------//
 
 template <>
-inline int FileReferences::append(const Reference<V3h>& ref)
+inline size_t FileReferences::append(const Reference<V3h>& ref)
 {
   m_vhRefs.push_back(ref);
   return m_vhRefs.size() - 1;
@@ -817,7 +817,7 @@ inline int FileReferences::append(const Reference<V3h>& ref)
 //----------------------------------------------------------------------------//
 
 template <>
-inline int FileReferences::append(const Reference<float>& ref)
+inline size_t FileReferences::append(const Reference<float>& ref)
 {
   m_fRefs.push_back(ref);
   return m_fRefs.size() - 1;
@@ -826,7 +826,7 @@ inline int FileReferences::append(const Reference<float>& ref)
 //----------------------------------------------------------------------------//
 
 template <>
-inline int FileReferences::append(const Reference<V3f>& ref)
+inline size_t FileReferences::append(const Reference<V3f>& ref)
 {
   m_vfRefs.push_back(ref);
   return m_vfRefs.size() - 1;
@@ -835,7 +835,7 @@ inline int FileReferences::append(const Reference<V3f>& ref)
 //----------------------------------------------------------------------------//
 
 template <>
-inline int FileReferences::append(const Reference<double>& ref)
+inline size_t FileReferences::append(const Reference<double>& ref)
 {
   m_dRefs.push_back(ref);
   return m_dRefs.size() - 1;
@@ -844,7 +844,7 @@ inline int FileReferences::append(const Reference<double>& ref)
 //----------------------------------------------------------------------------//
 
 template <>
-inline int FileReferences::append(const Reference<V3d>& ref)
+inline size_t FileReferences::append(const Reference<V3d>& ref)
 {
   m_vdRefs.push_back(ref);
   return m_vdRefs.size() - 1;
@@ -853,7 +853,7 @@ inline int FileReferences::append(const Reference<V3d>& ref)
 //----------------------------------------------------------------------------//
 
 template <>
-inline int FileReferences::numRefs<half>() const
+inline size_t FileReferences::numRefs<half>() const
 {
   return m_hRefs.size();
 }
@@ -861,7 +861,7 @@ inline int FileReferences::numRefs<half>() const
 //----------------------------------------------------------------------------//
 
 template <>
-inline int FileReferences::numRefs<V3h>() const
+inline size_t FileReferences::numRefs<V3h>() const
 {
   return m_vhRefs.size();
 }
@@ -869,7 +869,7 @@ inline int FileReferences::numRefs<V3h>() const
 //----------------------------------------------------------------------------//
 
 template <>
-inline int FileReferences::numRefs<float>() const
+inline size_t FileReferences::numRefs<float>() const
 {
   return m_fRefs.size();
 }
@@ -877,7 +877,7 @@ inline int FileReferences::numRefs<float>() const
 //----------------------------------------------------------------------------//
 
 template <>
-inline int FileReferences::numRefs<V3f>() const
+inline size_t FileReferences::numRefs<V3f>() const
 {
   return m_vfRefs.size();
 }
@@ -885,7 +885,7 @@ inline int FileReferences::numRefs<V3f>() const
 //----------------------------------------------------------------------------//
 
 template <>
-inline int FileReferences::numRefs<double>() const
+inline size_t FileReferences::numRefs<double>() const
 {
   return m_dRefs.size();
 }
@@ -893,7 +893,7 @@ inline int FileReferences::numRefs<double>() const
 //----------------------------------------------------------------------------//
 
 template <>
-inline int FileReferences::numRefs<V3d>() const
+inline size_t FileReferences::numRefs<V3d>() const
 {
   return m_vdRefs.size();
 }
@@ -903,7 +903,7 @@ inline int FileReferences::numRefs<V3d>() const
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-Reference<Data_T>& FileReferences::ref(int idx)
+Reference<Data_T>& FileReferences::ref(size_t idx)
 {
   assert(false && "Do not use memory limiting on sparse fields that aren't "
          "simple scalars or vectors!");
@@ -917,7 +917,7 @@ Reference<Data_T>& FileReferences::ref(int idx)
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-int FileReferences::append(const Reference<Data_T>& ref)
+size_t FileReferences::append(const Reference<Data_T>& ref)
 {
   assert(false && "Do not use memory limiting on sparse fields that aren't "
          "simple scalars or vectors!");
@@ -930,7 +930,7 @@ int FileReferences::append(const Reference<Data_T>& ref)
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-int FileReferences::numRefs() const
+size_t FileReferences::numRefs() const
 {
   assert(false && "Do not use memory limiting on sparse fields that aren't "
          "simple scalars or vectors!");

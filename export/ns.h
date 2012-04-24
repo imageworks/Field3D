@@ -62,4 +62,19 @@
 
 #endif
 
+#ifdef WIN32
+
+#  ifdef FIELD3D_STATIC
+#    define FIELD3D_API
+#  else
+#    ifdef FIELD3D_EXPORT
+#      define FIELD3D_API __declspec(dllexport)
+#    else
+#      define FIELD3D_API __declspec(dllimport)
+#    endif
+#  endif
+#else
+#  define FIELD3D_API
+#endif
+
 //----------------------------------------------------------------------------//

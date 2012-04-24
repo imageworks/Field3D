@@ -247,7 +247,7 @@ public:
 
   //! TEMP: Copies the MAC field data from another MAC field. This should
   //! be re-implemented using proper iterators over the field
-  void copyMAC(MACField::Ptr other)
+  void copyMAC(typename MACField::Ptr other)
   {
     matchDefinition(other);
     std::copy(other->m_u.begin(), other->m_u.end(), m_u.begin());
@@ -259,7 +259,7 @@ public:
 
   //! Returns the size of U,V,W components 
   V3i getComponentSize() const
-  { return V3i(m_u.size(), m_v.size(), m_w.size()); }
+  { return V3i((int)m_u.size(), (int)m_v.size(), (int)m_w.size()); }
   
   // From FieldBase ------------------------------------------------------------
 
@@ -376,7 +376,8 @@ public:
       m_p(NULL), m_window(window), m_comp(comp), 
       m_field(field)
   { 
-    updatePointer();
+    if (window.intersects(currentPos))
+      updatePointer();
   }
 
   // Operators -----------------------------------------------------------------
@@ -385,9 +386,14 @@ public:
   {
     if (x == m_window.max.x) {
       if (y == m_window.max.y) {
-        x = m_window.min.x; 
-        y = m_window.min.y; 
-        ++z;
+        if (z == m_window.max.z) {
+          m_p = 0;
+          return *this;
+        } else {
+          x = m_window.min.x; 
+          y = m_window.min.y; 
+          ++z;
+        }
       } else {
         x = m_window.min.x; 
         ++y;
@@ -481,7 +487,8 @@ public:
       m_p(NULL), m_window(window), m_comp(comp), 
       m_field(field)
   { 
-    updatePointer();
+    if (window.intersects(currentPos))
+      updatePointer();
   }
 
   // Operators -----------------------------------------------------------------
@@ -490,9 +497,14 @@ public:
   {
     if (x == m_window.max.x) {
       if (y == m_window.max.y) {
-        x = m_window.min.x; 
-        y = m_window.min.y; 
-        ++z;
+        if (z == m_window.max.z) {
+          m_p = 0;
+          return *this;
+        } else {
+          x = m_window.min.x; 
+          y = m_window.min.y; 
+          ++z;
+        }
       } else {
         x = m_window.min.x; 
         ++y;
@@ -673,7 +685,7 @@ void MACField<Data_T>::sizeChanged()
     m_v.resize(m_vSize.x * m_vSize.y * m_vSize.z);
     m_w.resize(m_wSize.x * m_wSize.y * m_wSize.z);
   }
-  catch (std::bad_alloc &e) {
+  catch (std::bad_alloc &) {
     throw Exc::MemoryException("Couldn't allocate MACField of size " + 
                                boost::lexical_cast<std::string>(baseSize));
   }

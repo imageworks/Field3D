@@ -47,6 +47,8 @@
 
 #include <iostream>
 #include <vector>
+#include <boost/scoped_array.hpp>
+
 
 //----------------------------------------------------------------------------//
 
@@ -230,7 +232,7 @@ readAttribute(hid_t location, const string& attrName,
               std::vector<unsigned int> &attrSize, int &value)
 {
   H5T_class_t typeClass;
-  int rank = attrSize.size();
+  size_t rank = attrSize.size();
 
   if (H5Aexists(location, attrName.c_str()) < 0)
     throw MissingAttributeException("Couldn't find attribute " + attrName);
@@ -244,8 +246,8 @@ readAttribute(hid_t location, const string& attrName,
     throw MissingAttributeException("Bad attribute rank for attribute " + 
                                     attrName);
 
-  hsize_t dims[rank];
-  H5Sget_simple_extent_dims(attrSpace, dims, NULL);
+  boost::scoped_array<hsize_t>  dims(new hsize_t[rank]);
+  H5Sget_simple_extent_dims(attrSpace, dims.get(), NULL);
 
   for (int i=0; i < rank; i++) {
     if (dims[i] != attrSize[i]) 
@@ -274,7 +276,7 @@ readAttribute(hid_t location, const string& attrName,
               std::vector<unsigned int> &attrSize, float &value)
 {
   H5T_class_t typeClass;
-  int rank = attrSize.size();
+  size_t rank = attrSize.size();
 
   if (H5Aexists(location, attrName.c_str()) < 0)
     throw MissingAttributeException("Couldn't find attribute " + attrName);
@@ -288,8 +290,8 @@ readAttribute(hid_t location, const string& attrName,
     throw MissingAttributeException("Bad attribute rank for attribute " + 
                                     attrName);
 
-  hsize_t dims[rank];
-  H5Sget_simple_extent_dims(attrSpace, dims, NULL);
+  boost::scoped_array<hsize_t>  dims(new hsize_t[rank]);
+  H5Sget_simple_extent_dims(attrSpace, dims.get(), NULL);
 
   for (int i=0; i < rank; i++) {
     if (dims[i] != attrSize[i]) 
@@ -319,7 +321,7 @@ readAttribute(hid_t location, const string& attrName,
 {
 
   H5T_class_t typeClass;
-  int rank = attrSize.size();
+  size_t rank = attrSize.size();
 
   if (H5Aexists(location, attrName.c_str()) < 0)
     throw MissingAttributeException("Couldn't find attribute " + attrName);
@@ -333,8 +335,8 @@ readAttribute(hid_t location, const string& attrName,
     throw MissingAttributeException("Bad attribute rank for attribute " + 
                                     attrName);
 
-  hsize_t dims[rank];
-  H5Sget_simple_extent_dims(attrSpace, dims, NULL);
+  boost::scoped_array<hsize_t>  dims(new hsize_t[rank]);
+  H5Sget_simple_extent_dims(attrSpace, dims.get(), NULL);
 
   for (int i=0; i < rank; i++) {
     if (dims[i] != attrSize[i]) 
@@ -540,8 +542,9 @@ writeAttribute(hid_t location, const string& attrName,
   hid_t attr;
   hid_t attrSpace;
   size_t rank = attrSize.size();
-  hsize_t current_dims[rank];
-  hsize_t max_dims[rank];
+
+  boost::scoped_array<hsize_t>  current_dims(new hsize_t[rank]);
+  boost::scoped_array<hsize_t>  max_dims(new hsize_t[rank]);
 
   for (size_t i=0; i < rank; i++)
     current_dims[i] = attrSize[i];
@@ -553,7 +556,8 @@ writeAttribute(hid_t location, const string& attrName,
   if (attrSpace < 0) 
     return false;
 
-  if (H5Sset_extent_simple(attrSpace, rank, current_dims, max_dims) < 0) {
+  if (H5Sset_extent_simple(attrSpace, (int)rank, 
+                           current_dims.get(), max_dims.get()) < 0) {
     return false;
   }
 
@@ -588,8 +592,9 @@ writeAttribute(hid_t location, const string& attrName,
   hid_t attr;
   hid_t attrSpace;
   size_t rank = attrSize.size();
-  hsize_t current_dims[rank];
-  hsize_t max_dims[rank];
+
+  boost::scoped_array<hsize_t>  current_dims(new hsize_t[rank]);
+  boost::scoped_array<hsize_t>  max_dims(new hsize_t[rank]);
 
   for (size_t i=0; i < rank; i++)
     current_dims[i] = attrSize[i];
@@ -601,7 +606,8 @@ writeAttribute(hid_t location, const string& attrName,
   if (attrSpace < 0) 
     return false;
 
-  if (H5Sset_extent_simple(attrSpace, rank, current_dims, max_dims) < 0) {
+  if (H5Sset_extent_simple(attrSpace, (int)rank, 
+                           current_dims.get(), max_dims.get()) < 0) {
     return false;
   }
 
@@ -636,8 +642,8 @@ writeAttribute(hid_t location, const string& attrName,
   hid_t attr;
   hid_t attrSpace;
   size_t rank = attrSize.size();
-  hsize_t current_dims[rank];
-  hsize_t max_dims[rank];
+  boost::scoped_array<hsize_t>  current_dims(new hsize_t[rank]);
+  boost::scoped_array<hsize_t>  max_dims(new hsize_t[rank]);
 
   for (size_t i=0; i < rank; i++)
     current_dims[i] = attrSize[i];
@@ -649,7 +655,8 @@ writeAttribute(hid_t location, const string& attrName,
   if (attrSpace < 0) 
     return false;
 
-  if (H5Sset_extent_simple(attrSpace, rank, current_dims, max_dims) < 0) {
+  if (H5Sset_extent_simple(attrSpace, (int)rank, 
+                           current_dims.get(), max_dims.get()) < 0) {
     return false;
   }
 

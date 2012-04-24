@@ -87,7 +87,7 @@ FIELD3D_NAMESPACE_OPEN
 
 //----------------------------------------------------------------------------//
 
-class RefBase 
+class FIELD3D_API RefBase 
 {
 public:
 

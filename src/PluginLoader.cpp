@@ -41,9 +41,15 @@
 
 //----------------------------------------------------------------------------//
 
+#ifdef WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#else
 #include <dlfcn.h>
-#include <sys/types.h>
 #include <dirent.h>
+#endif
+
+#include <sys/types.h>
 #include <stdlib.h>
 #include <string>
 #include <vector>
@@ -82,7 +88,10 @@ namespace {
 //----------------------------------------------------------------------------//
 
 FIELD3D_NAMESPACE_OPEN
-  
+
+typedef int (*RegistrationFunc)(ClassFactory &);
+
+
 //----------------------------------------------------------------------------//
 // Static instances
 //----------------------------------------------------------------------------//
@@ -93,7 +102,7 @@ std::vector<std::string> PluginLoader::ms_pluginsLoaded;
 // PluginLoader implementations
 //----------------------------------------------------------------------------//
 
-int filter(std::string &name) 
+static int filter(std::string &name, const char *suffix) 
 {
   std::string delimiters = ".";
   std::vector <std::string> items;
@@ -103,8 +112,8 @@ int filter(std::string &name)
   if (items.size() == 0) {
     return 0;
   }
-  
-  if (items[items.size() -1] == "so") {
+
+  if (items[items.size() -1] == suffix) {
     return 1;
   }
 
@@ -115,6 +124,31 @@ int filter(std::string &name)
 
 bool getDirSos(std::vector<std::string> &sos, std::string &dir) 
 {
+#ifdef WIN32
+  const char *ds = dir.c_str();
+  HANDLE dirh;
+  WIN32_FIND_DATAA  fd;
+
+  dirh = FindFirstFileA(ds, &fd);
+  while (dirh != INVALID_HANDLE_VALUE)
+  {
+    std::string name = fd.cFileName;
+    std::string name_lower;
+
+    std::transform(name.begin(), name.end(), name_lower.begin(), ::tolower);
+
+    if (filter(name_lower, "so")) {
+      name = dir + "/" + name;
+      sos.push_back(name);
+    }
+    
+    if (!FindNextFileA(dirh, &fd))
+    {
+      ::FindClose(dirh);
+      break;
+    }
+  }
+#else
   struct dirent *dirent;
 
   const char *ds = dir.c_str();
@@ -131,7 +165,7 @@ bool getDirSos(std::vector<std::string> &sos, std::string &dir)
 
     std::string name = dirent->d_name;
 
-    if (filter(name)) {
+    if (filter(name, "so")) {
       name = dir + "/" + name;
       sos.push_back(name);
     }
@@ -140,9 +174,64 @@ bool getDirSos(std::vector<std::string> &sos, std::string &dir)
   }
 
   closedir(dirfd);
-  
+#endif
   return true;
 }
+
+static RegistrationFunc findRegistrationFunc(const std::string &sofile)
+{
+#ifdef WIN32
+  HMODULE handle = ::LoadLibraryA(sofile.c_str());
+#else
+  void *handle = dlopen(sofile.c_str(), RTLD_GLOBAL|RTLD_NOW);
+#endif
+  // Attempt to load .so file
+  if (!handle) {
+    std::string   errmsg;
+#ifdef WIN32
+    char *errstr;
+//----------------------------------------------------------------------------//
+    FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
+                   NULL, GetLastError(), 
+                   MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&errstr,
+                   0, NULL);
+    if (errstr) {
+      errmsg = errstr;
+      ::LocalFree(errstr);
+    } else {
+      errmsg = "Unknown error";
+    }
+#else
+    errmsg = dlerror();
+#endif
+
+    std::cout <<
+      "Field3D Plugin loader: failed to load plugin: " << errmsg << "\n";
+    return 0;
+  }
+
+  // Determine plugin type by looking for one of:
+  //   registerField3DPlugin()
+
+  RegistrationFunc  fptr;
+
+#ifdef WIN32
+  fptr = (RegistrationFunc)GetProcAddress(handle,"registerField3DPlugin");
+#else
+  fptr = (RegistrationFunc)dlsym(handle,"registerField3DPlugin");
+#endif
+  if (!fptr) {
+    char *debugEnvVar = getenv("FIELD3D_DEBUG");
+    if (debugEnvVar) {
+      // debug env var exist, so print warning
+      Msg::print(Msg::SevWarning,
+                 "Field3D plugin loader: failed to load "
+                 "the symbol registerField3DPlugin");
+    }
+  }
+  return fptr;
+}
+
 
 //----------------------------------------------------------------------------//
 
@@ -215,42 +304,17 @@ void PluginLoader::loadPlugins()
         ms_pluginsLoaded.push_back(lastName);
       }
       
+      RegistrationFunc  fptr;
 
-      // Attempt to load .so file
-      void *handle = dlopen(sofile.c_str(), RTLD_GLOBAL|RTLD_NOW);
-      if (!handle) {
-        std::cout <<
-          "Field3D Plugin loader: failed to load plugin: " << dlerror() << "\n";
-        continue;
-      }
-
-      // Determine plugin type by looking for one of:
-      //   registerField3DPlugin()
-
-      int (*fptr)(ClassFactory &) = NULL;
-      fptr = (int (*)(ClassFactory&))
-        dlsym(handle,"registerField3DPlugin");
-      std::string msg = "Initialized Field3D Plugin " + sofile;
-
-      char *dlsymError = dlerror();
-      if (!dlsymError) {
-        if (fptr) {
-          // Call the registration function
-          int res = (*fptr)(ClassFactory::singleton());
-          if (!res) {
-            Msg::print(Msg::SevWarning,
-                      "failed to init Field3D plugin " + sofile);
-          } else {
-            Msg::print(msg);
-          }
-        }
-      } else {
-        char *debugEnvVar = getenv("FIELD3D_DEBUG");
-        if (debugEnvVar) {
-          // debug env var exist, so print warning
+      fptr = findRegistrationFunc(sofile);
+      if (fptr) {
+        // Call the registration function
+        int res = (*fptr)(ClassFactory::singleton());
+        if (!res) {
           Msg::print(Msg::SevWarning,
-                     "Field3D plugin loader: failed to load "
-                     "the symbol registerField3DPlugin");
+                    "failed to init Field3D plugin " + sofile);
+        } else {
+          Msg::print("Initialized Field3D Plugin " + sofile);
         }
       }
     }

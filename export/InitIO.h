@@ -55,7 +55,7 @@ FIELD3D_NAMESPACE_OPEN
 
 //! Initializes the built-in Field3D IO classes.
 //! \ingroup file
-void initIO();
+FIELD3D_API void initIO();
 
 //----------------------------------------------------------------------------//
 

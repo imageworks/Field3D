@@ -105,8 +105,11 @@ SET ( Field3D_Libraries_Shared
   )
 
 IF ( CMAKE_HOST_UNIX )
+  IF ( MPI_FOUND )
+      LIST ( APPEND Field3D_Libraries_Shared
+             ${MPI_LIBRARIES} )
+  ENDIF ( MPI_FOUND )
   LIST ( APPEND Field3D_Libraries_Shared
-    ${MPI_LIBRARIES}
     Iex Half IlmThread Imath
     pthread dl z )
   SET ( Field3D_DSO_Libraries ${Field3D_Libraries_Shared} )

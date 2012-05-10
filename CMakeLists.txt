@@ -102,7 +102,6 @@ ADD_LIBRARY ( Field3D SHARED
 
 SET ( Field3D_Libraries_Shared
   ${HDF5_LIBRARIES}
-  ${Boost_LIBRARIES}
   )
 
 IF ( CMAKE_HOST_UNIX )
@@ -111,7 +110,8 @@ IF ( CMAKE_HOST_UNIX )
     Iex Half IlmThread Imath
     pthread dl z )
   SET ( Field3D_DSO_Libraries ${Field3D_Libraries_Shared} )
-  SET ( Field3D_BIN_Libraries Field3D ${Field3D_Libraries_Shared} )
+  SET ( Field3D_BIN_Libraries Field3D ${Field3D_Libraries_Shared}
+        ${Boost_LIBRARIES} )
 ENDIF ( )
 IF ( CMAKE_HOST_WIN32 )
   # Add OpenEXR and zlib release/debug
@@ -121,11 +121,8 @@ IF ( CMAKE_HOST_WIN32 )
       debug ${lib}_d )
   ENDFOREACH()
   SET ( Field3D_DSO_Libraries ${Field3D_Libraries_Shared} )
-  SET ( Field3D_BIN_Libraries Field3D )
+  SET ( Field3D_BIN_Libraries Field3D ${Boost_LIBRARIES} )
 ENDIF ()
-
-MESSAGE( ${Field3D_DSO_Libraries} )
-MESSAGE( ${Field3D_BIN_Libraries} )
 
 TARGET_LINK_LIBRARIES ( Field3D ${Field3D_DSO_Libraries} )
 

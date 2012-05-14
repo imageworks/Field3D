@@ -57,10 +57,17 @@ FIELD3D_NAMESPACE_OPEN
 
 namespace Msg {
 
+
+static int verbosity = 1;
+
+
 //----------------------------------------------------------------------------//
 
 void print(Severity severity, const std::string &message)
 {
+  if (verbosity < 1)
+      return;
+
   switch(severity) {
   case SevWarning:
     cout << "WARNING: ";
@@ -72,6 +79,13 @@ void print(Severity severity, const std::string &message)
   }
 
   cout << message << endl;
+}
+
+
+
+void setVerbosity (int level)
+{
+  verbosity = level;
 }
 
 //----------------------------------------------------------------------------//

@@ -76,6 +76,10 @@ namespace Msg {
   inline void print(const std::string &message)
   { print(SevMessage, message); }
 
+  //! Set the verbosity level of console output: 0 = do not echo anything
+  //! to the console; >=1 = echo all messages and warnings to the console.
+  FIELD3D_API void setVerbosity (int level=1);
+
 } // namespace Msg
 
 

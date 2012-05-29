@@ -58,8 +58,13 @@ FIELD3D_NAMESPACE_OPEN
 
 //----------------------------------------------------------------------------//
 
-// gets rid of warnings
-#define UNUSED(p) ((p)=(p))
+// gets rid of warnings (N.B. not on clang, where self-assignment is warned!)
+#ifdef __clang__
+#  define UNUSED(p)
+#else
+#  define UNUSED(p) ((p)=(p))
+#endif
+
 
 //----------------------------------------------------------------------------//
 

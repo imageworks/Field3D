@@ -164,7 +164,7 @@ void ClassFactory::registerFieldIO(CreateFieldIOFnPtr createFunc)
 FieldIO::Ptr 
 ClassFactory::createFieldIO(const std::string &className) const
 {
-  FieldIOFuncMap::const_iterator m = m_fieldIOs.begin();
+//  FieldIOFuncMap::const_iterator m = m_fieldIOs.begin();
   FieldIOFuncMap::const_iterator i = m_fieldIOs.find(className);
   if (i != m_fieldIOs.end())
     return i->second();

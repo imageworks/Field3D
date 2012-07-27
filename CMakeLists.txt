@@ -165,7 +165,7 @@ ADD_EXECUTABLE ( sparse_field_io
   apps/sample_code/sparse_field_io/main.cpp
   )
 
-TARGET_LINK_LIBRARIES ( sparse_field_io Field3D )
+TARGET_LINK_LIBRARIES ( sparse_field_io ${Field3D_BIN_Libraries} )
 
 # field3d - read
 ADD_EXECUTABLE ( read

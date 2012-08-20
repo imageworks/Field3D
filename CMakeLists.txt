@@ -45,7 +45,7 @@ IF ( CMAKE_HOST_WIN32 )
 # forced via a pragma.
 FIND_PACKAGE (Boost COMPONENTS regex thread)
 ELSE ()
-FIND_PACKAGE (Boost COMPONENTS regex thread program_options)
+FIND_PACKAGE (Boost COMPONENTS regex thread program_options system)
 FIND_PACKAGE (MPI)
 ENDIF ()
 

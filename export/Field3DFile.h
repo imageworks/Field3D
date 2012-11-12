@@ -549,29 +549,30 @@ public:
   //! Retrieves a layers for all partitions.
   //! Converts it to the given template type if needed
   template <template <typename T> class Field_T, class Data_T>
-  typename Field_T<Data_T>::Vec
+  typename Field_T<FIELD3D_VEC3_T<Data_T> >::Vec
   readVectorLayersAs(const std::string &layerName = std::string("")) const
   {
-    typedef typename Field<Data_T>::Vec FieldList;
-    typedef typename Field_T<Data_T>::Vec TypedFieldList;
+    typedef Field_T<FIELD3D_VEC3_T<Data_T> > TypedVField;
+    typedef typename Field<FIELD3D_VEC3_T<Data_T> >::Vec FieldList;
+    typedef typename Field_T<FIELD3D_VEC3_T<Data_T> >::Vec TypedFieldList;
 
     // First, read the layers as-is
     FieldList originals;
     originals = readVectorLayers<Data_T>(layerName);
-    
+  
     // Loop over fields, converting if needed
     TypedFieldList output;
     typename FieldList::iterator i = originals.begin();
     for (; i != originals.end(); ++i) {
-      typename Field_T<Data_T>::Ptr targetField;
-      targetField = field_dynamic_cast<Field_T<Data_T> >(*i);
+      typename TypedVField::Ptr targetField;
+      targetField = field_dynamic_cast<TypedVField>(*i);
       if (targetField) {
         output.push_back(targetField);
       } else {
-        typename Field_T<Data_T>::Ptr newTarget(new Field_T<Data_T>);
+        typename TypedVField::Ptr newTarget(new TypedVField);
         newTarget->name = (*i)->name;
         newTarget->attribute = (*i)->attribute;
-        newTarget->copyMetadata(*i);
+        newTarget->copyMetadata(**i);
         newTarget->copyFrom(*i);
         output.push_back(newTarget);
       }
@@ -583,30 +584,31 @@ public:
   //! Retrieves a layers given their and its parent partition's name.
   //! Converts it to the given template type if needed
   template <template <typename T> class Field_T, class Data_T>
-  typename Field_T<Data_T>::Vec
+  typename Field_T<FIELD3D_VEC3_T<Data_T> >::Vec
   readVectorLayersAs(const std::string &partitionName, 
                      const std::string &layerName) const
   {
-    typedef typename Field<Data_T>::Vec FieldList;
-    typedef typename Field_T<Data_T>::Vec TypedFieldList;
-
+    typedef Field_T<FIELD3D_VEC3_T<Data_T> > TypedVField;
+    typedef typename Field<FIELD3D_VEC3_T<Data_T> >::Vec FieldList;
+    typedef typename Field_T<FIELD3D_VEC3_T<Data_T> >::Vec TypedFieldList;
+  
     // First, read the layers as-is
     FieldList originals;
     originals = readVectorLayers<Data_T>(partitionName, layerName);
-    
+  
     // Loop over fields, converting if needed
     TypedFieldList output;
     typename FieldList::iterator i = originals.begin();
     for (; i != originals.end(); ++i) {
-      typename Field_T<Data_T>::Ptr targetField;
-      targetField = field_dynamic_cast<Field_T<Data_T> >(*i);
+      typename TypedVField::Ptr targetField;
+      targetField = field_dynamic_cast<TypedVField>(*i);
       if (targetField) {
         output.push_back(targetField);
       } else {
-        typename Field_T<Data_T>::Ptr newTarget(new Field_T<Data_T>);
+        typename TypedVField::Ptr newTarget(new TypedVField);
         newTarget->name = (*i)->name;
         newTarget->attribute = (*i)->attribute;
-        newTarget->copyMetadata(*i);
+        newTarget->copyMetadata(**i);
         newTarget->copyFrom(*i);
         output.push_back(newTarget);
       }

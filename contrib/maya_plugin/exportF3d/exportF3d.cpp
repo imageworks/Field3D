@@ -163,7 +163,8 @@ MSyntax exportF3d::newSyntax()
     stat = syntax.addFlag("-av", "-addVelocity", MSyntax::kNoArg);ERRCHK; 
     stat = syntax.addFlag("-ac", "-addColor",MSyntax::kNoArg);ERRCHK; 
     stat = syntax.addFlag("-ap", "-addPressure",MSyntax::kNoArg);ERRCHK; 
-    stat = syntax.addFlag("-at", "-addTexture",MSyntax::kNoArg);ERRCHK; 
+    stat = syntax.addFlag("-at", "-addTexture",MSyntax::kNoArg);ERRCHK;
+    stat = syntax.addFlag("-af", "-addFalloff",MSyntax::kLong);ERRCHK;
     stat = syntax.addFlag("-ns", "-numOversample",MSyntax::kLong);ERRCHK; 
     
     stat = syntax.addFlag("-d", "-debug");ERRCHK; 

@@ -56,7 +56,7 @@ FIELD3D_NAMESPACE_OPEN
 
 void initIO() 
 {
-  boost::mutex mutex;
+  static boost::mutex mutex;
   boost::mutex::scoped_lock lock(mutex);
 
   ClassFactory &factory = ClassFactory::singleton();

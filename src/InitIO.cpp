@@ -56,6 +56,9 @@ FIELD3D_NAMESPACE_OPEN
 
 void initIO() 
 {
+  static boost::mutex mutex;
+  boost::mutex::scoped_lock lock(mutex);
+
   ClassFactory &factory = ClassFactory::singleton();
 
   factory.registerFieldIO(DenseFieldIO::create);

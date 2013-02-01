@@ -173,11 +173,6 @@ bool MACFieldIO::writeInternal(hid_t layerGroup,
   using namespace Hdf5Util;
 
   int components = FieldTraits<Data_T>::dataDims();
-  V3i compSize = field->getComponentSize();
-  int size[3];
-  size[0] = compSize.x;
-  size[1] = compSize.y;
-  size[2] = compSize.z;
 
   Box3i ext(field->extents()), dw(field->dataWindow());
 

@@ -286,27 +286,27 @@ long long SparseFileManager::totalLoads()
 
   long long int numLoads = 0;
 
-  for (int i=0; i<m_fileData.numRefs<half>(); i++) {
+  for (size_t i=0; i<m_fileData.numRefs<half>(); i++) {
     numLoads += m_fileData.ref<half>(i).totalLoads();
   }
 
-  for (int i=0; i<m_fileData.numRefs<V3h>(); i++) {
+  for (size_t i=0; i<m_fileData.numRefs<V3h>(); i++) {
     numLoads += m_fileData.ref<V3h>(i).totalLoads();
   }
 
-  for (int i=0; i<m_fileData.numRefs<float>(); i++) {
+  for (size_t i=0; i<m_fileData.numRefs<float>(); i++) {
     numLoads += m_fileData.ref<float>(i).totalLoads();
   }
 
-  for (int i=0; i<m_fileData.numRefs<V3f>(); i++) {
+  for (size_t i=0; i<m_fileData.numRefs<V3f>(); i++) {
     numLoads += m_fileData.ref<V3f>(i).totalLoads();
   }
 
-  for (int i=0; i<m_fileData.numRefs<double>(); i++) {
+  for (size_t i=0; i<m_fileData.numRefs<double>(); i++) {
     numLoads += m_fileData.ref<double>(i).totalLoads();
   }
 
-  for (int i=0; i<m_fileData.numRefs<V3d>(); i++) {
+  for (size_t i=0; i<m_fileData.numRefs<V3d>(); i++) {
     numLoads += m_fileData.ref<V3d>(i).totalLoads();
   }
   return numLoads;
@@ -319,27 +319,27 @@ long long SparseFileManager::numLoadedBlocks()
 
   long long int numBlocks = 0;
 
-  for (int i=0; i<m_fileData.numRefs<half>(); i++) {
+  for (size_t i=0; i<m_fileData.numRefs<half>(); i++) {
     numBlocks += m_fileData.ref<half>(i).numLoadedBlocks();
   }
 
-  for (int i=0; i<m_fileData.numRefs<V3h>(); i++) {
+  for (size_t i=0; i<m_fileData.numRefs<V3h>(); i++) {
     numBlocks += m_fileData.ref<V3h>(i).numLoadedBlocks();
   }
 
-  for (int i=0; i<m_fileData.numRefs<float>(); i++) {
+  for (size_t i=0; i<m_fileData.numRefs<float>(); i++) {
     numBlocks += m_fileData.ref<float>(i).numLoadedBlocks();
   }
 
-  for (int i=0; i<m_fileData.numRefs<V3f>(); i++) {
+  for (size_t i=0; i<m_fileData.numRefs<V3f>(); i++) {
     numBlocks += m_fileData.ref<V3f>(i).numLoadedBlocks();
   }
 
-  for (int i=0; i<m_fileData.numRefs<double>(); i++) {
+  for (size_t i=0; i<m_fileData.numRefs<double>(); i++) {
     numBlocks += m_fileData.ref<double>(i).numLoadedBlocks();
   }
 
-  for (int i=0; i<m_fileData.numRefs<V3d>(); i++) {
+  for (size_t i=0; i<m_fileData.numRefs<V3d>(); i++) {
     numBlocks += m_fileData.ref<V3d>(i).numLoadedBlocks();
   }
   return numBlocks;
@@ -352,27 +352,27 @@ long long SparseFileManager::totalLoadedBlocks()
 
   long long int numBlocks = 0;
 
-  for (int i=0; i<m_fileData.numRefs<half>(); i++) {
+  for (size_t i=0; i<m_fileData.numRefs<half>(); i++) {
     numBlocks += m_fileData.ref<half>(i).totalLoadedBlocks();
   }
 
-  for (int i=0; i<m_fileData.numRefs<V3h>(); i++) {
+  for (size_t i=0; i<m_fileData.numRefs<V3h>(); i++) {
     numBlocks += m_fileData.ref<V3h>(i).totalLoadedBlocks();
   }
 
-  for (int i=0; i<m_fileData.numRefs<float>(); i++) {
+  for (size_t i=0; i<m_fileData.numRefs<float>(); i++) {
     numBlocks += m_fileData.ref<float>(i).totalLoadedBlocks();
   }
 
-  for (int i=0; i<m_fileData.numRefs<V3f>(); i++) {
+  for (size_t i=0; i<m_fileData.numRefs<V3f>(); i++) {
     numBlocks += m_fileData.ref<V3f>(i).totalLoadedBlocks();
   }
 
-  for (int i=0; i<m_fileData.numRefs<double>(); i++) {
+  for (size_t i=0; i<m_fileData.numRefs<double>(); i++) {
     numBlocks += m_fileData.ref<double>(i).totalLoadedBlocks();
   }
 
-  for (int i=0; i<m_fileData.numRefs<V3d>(); i++) {
+  for (size_t i=0; i<m_fileData.numRefs<V3d>(); i++) {
     numBlocks += m_fileData.ref<V3d>(i).totalLoadedBlocks();
   }
   return numBlocks;
@@ -404,27 +404,27 @@ float SparseFileManager::cacheEfficiency()
 void SparseFileManager::resetCacheStatistics()
 {
 
-  for (int i=0; i<m_fileData.numRefs<half>(); i++) {
+  for (size_t i=0; i<m_fileData.numRefs<half>(); i++) {
     m_fileData.ref<half>(i).resetCacheStatistics();
   }
 
-  for (int i=0; i<m_fileData.numRefs<V3h>(); i++) {
+  for (size_t i=0; i<m_fileData.numRefs<V3h>(); i++) {
     m_fileData.ref<V3h>(i).resetCacheStatistics();
   }
 
-  for (int i=0; i<m_fileData.numRefs<float>(); i++) {
+  for (size_t i=0; i<m_fileData.numRefs<float>(); i++) {
     m_fileData.ref<float>(i).resetCacheStatistics();
   }
 
-  for (int i=0; i<m_fileData.numRefs<V3f>(); i++) {
+  for (size_t i=0; i<m_fileData.numRefs<V3f>(); i++) {
     m_fileData.ref<V3f>(i).resetCacheStatistics();
   }
 
-  for (int i=0; i<m_fileData.numRefs<double>(); i++) {
+  for (size_t i=0; i<m_fileData.numRefs<double>(); i++) {
     m_fileData.ref<double>(i).resetCacheStatistics();
   }
 
-  for (int i=0; i<m_fileData.numRefs<V3d>(); i++) {
+  for (size_t i=0; i<m_fileData.numRefs<V3d>(); i++) {
     m_fileData.ref<V3d>(i).resetCacheStatistics();
   }
 }

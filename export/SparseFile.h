@@ -603,10 +603,10 @@ void Reference<Data_T>::loadBlock(int blockIdx)
 
   // Allocate the block  
   blocks[blockIdx]->resize(valuesPerBlock);
-  assert(blocks[blockIdx]->data.size() > 0);
+  assert(blocks[blockIdx]->data != NULL);
   // Read the data
   assert(m_reader);
-  m_reader->readBlock(fileBlockIndices[blockIdx], blocks[blockIdx]->dataRef());
+  m_reader->readBlock(fileBlockIndices[blockIdx], *blocks[blockIdx]->data);
   // Mark block as loaded
   blockLoaded[blockIdx] = 1;
 }
@@ -994,14 +994,16 @@ SparseFileManager::removeFieldFromCache(int refIdx)
   }
   m_memUse -= bytesFreed;
 
-  // reset the block indices to -1, to ensure that the cache manager
-  // won't try to activate a block
-  reference.fileBlockIndices.clear();
+  std::vector<int>().swap(reference.fileBlockIndices);
   reference.fileBlockIndices.resize(reference.blocks.size(), -1);
-  // clear the reference's pointers into the field, and relevant 
-  reference.blocks.clear();
-  reference.blockLoaded.clear();
-  reference.blockUsed.clear();
+  typedef typename SparseFile::Reference<Data_T>::BlockPtrs BlockPtrs;
+  BlockPtrs().swap(reference.blocks);
+  std::vector<int>().swap(reference.blockLoaded);
+  std::vector<bool>().swap(reference.blockUsed);
+  std::vector<int>().swap(reference.loadCounts);
+  std::vector<int>().swap(reference.refCounts);
+  delete[] reference.blockMutex;
+  reference.blockMutex = NULL;
 }
 
 //----------------------------------------------------------------------------//

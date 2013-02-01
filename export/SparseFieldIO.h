@@ -183,14 +183,7 @@ bool SparseFieldIO::writeInternal(hid_t layerGroup,
 
   int valuesPerBlock = (1 << (field->m_blockOrder * 3)) * components;
 
-  int size[3];
-  size[0] = dw.max.x - dw.min.x + 1;
-  size[1] = dw.max.y - dw.min.y + 1;
-  size[2] = dw.max.z - dw.min.z + 1;
 
-
-  hsize_t totalSize[1];
-  totalSize[0] = size[0] * size[1] * size[2] * components;
 
   // Add extents attribute ---
 
@@ -255,36 +248,34 @@ bool SparseFieldIO::writeInternal(hid_t layerGroup,
 
   // Write the block info data sets ---
   
+  SparseBlock<Data_T> *blocks = field->m_blocks;
+
   // ... Write the isAllocated array
   {
     vector<char> isAllocated(numBlocks);
-    vector<char>::iterator i = isAllocated.begin();
-    typename vector<SparseBlock<Data_T> >::const_iterator b = 
-      field->m_blocks.begin();
-    for (; i != isAllocated.end(); ++i, ++b)
-      *i = static_cast<char>(b->isAllocated);
+    for (int i = 0; i < numBlocks; ++i) {
+      isAllocated[i] = static_cast<char>(blocks[i].isAllocated);
+    }
     writeSimpleData<char>(layerGroup, "block_is_allocated_data", isAllocated);
   }
 
   // ... Write the emptyValue array
   {
     vector<Data_T> emptyValue(numBlocks);
-    typename vector<Data_T>::iterator i = emptyValue.begin();
-    typename vector<SparseBlock<Data_T> >::const_iterator b = 
-      field->m_blocks.begin();
-    for (; i != emptyValue.end(); ++i, ++b)
-      *i = static_cast<Data_T>(b->emptyValue);
+    for (int i = 0; i < numBlocks; ++i) {
+      emptyValue[i] = static_cast<Data_T>(blocks[i].emptyValue);
+    }
     writeSimpleData<Data_T>(layerGroup, "block_empty_value_data", emptyValue);
   }
 
   // Count the number of occupied blocks ---
   int occupiedBlocks = 0;
-  typename vector<SparseBlock<Data_T> >::iterator b = 
-    field->m_blocks.begin();
-  for (; b != field->m_blocks.end(); ++b) {
-    if (b->isAllocated)
+  for (int i = 0; i < numBlocks; ++i) {
+    if (blocks[i].isAllocated) {
       occupiedBlocks++;
   }
+  }
+
   if (!writeAttribute(layerGroup, k_numOccupiedBlocksStr, 1, occupiedBlocks)) {
     throw WriteAttributeException("Couldn't add attribute " + 
                                 k_numOccupiedBlocksStr);
@@ -338,8 +329,8 @@ bool SparseFieldIO::writeInternal(hid_t layerGroup,
     hsize_t count[2];
     herr_t status;
 
-    for (b = field->m_blocks.begin(); b != field->m_blocks.end(); ++b) {
-      if (b->isAllocated) {
+    for (int i = 0; i < numBlocks; ++i) {
+      if (blocks[i].isAllocated) {
         offset[0] = nextBlockIdx;  // Index of next block
         offset[1] = 0;             // Index of first data in block. Always 0
         count[0] = 1;              // Number of columns to read. Always 1
@@ -351,7 +342,7 @@ bool SparseFieldIO::writeInternal(hid_t layerGroup,
             "Couldn't select slab " + 
             boost::lexical_cast<std::string>(nextBlockIdx));
         }
-        Data_T *data = &b->data[0];
+        Data_T *data = field->m_blocks[i].data;
         status = H5Dwrite(dataSet.id(), DataTypeTraits<Data_T>::h5type(), 
                           memDataSpace.id(), 
                           fileDataSpace.id(), H5P_DEFAULT, data);
@@ -409,21 +400,17 @@ bool SparseFieldIO::readData(hid_t location,
 
   // Read the block info data sets ---
 
+  SparseBlock<Data_T> *blocks = result->m_blocks;
+
   // ... Read the isAllocated array
 
   {
     vector<char> isAllocated(numBlocks);
-    vector<char>::iterator i = isAllocated.begin();
     readSimpleData<char>(location, "block_is_allocated_data", isAllocated);
-    typename vector<SparseBlock<Data_T> >::iterator b =
-      result->m_blocks.begin();
-    typename vector<SparseBlock<Data_T> >::iterator bend = 
-      result->m_blocks.end();
-    // We're assuming there are as many blocks in isAllocated as in the field.
-    for (; b != bend; ++b, ++i) {
-      b->isAllocated = static_cast<bool>(*i);
-      if (*i && !dynamicLoading) {
-        b->data.resize(valuesPerBlock);
+    for (int i = 0; i < numBlocks; ++i) {
+      blocks[i].isAllocated = isAllocated[i];
+      if (isAllocated[i]) {
+        blocks[i].resize(valuesPerBlock);
       }
     }
   }
@@ -433,14 +420,8 @@ bool SparseFieldIO::readData(hid_t location,
   {
     vector<Data_T> emptyValue(numBlocks);
     readSimpleData<Data_T>(location, "block_empty_value_data", emptyValue);
-    typename vector<SparseBlock<Data_T> >::iterator b =
-      result->m_blocks.begin();
-    typename vector<SparseBlock<Data_T> >::iterator bend = 
-      result->m_blocks.end();
-    typename vector<Data_T>::iterator i = emptyValue.begin();
-    // We're assuming there are as many blocks in isAllocated as in the field.
-    for (; b != bend; ++b, ++i) {
-      b->emptyValue = *i;
+    for (int i = 0; i < numBlocks; ++i) {
+      blocks[i].emptyValue = emptyValue[i];
     }
   }
 
@@ -454,10 +435,7 @@ bool SparseFieldIO::readData(hid_t location,
 
     } else {
       
-      typename vector<SparseBlock<Data_T> >::iterator b =
-        result->m_blocks.begin();
-      typename vector<SparseBlock<Data_T> >::iterator bend =
-        result->m_blocks.end();
+      size_t b = 0, bend = b + numBlocks;
 
       SparseDataReader<Data_T> reader(location, valuesPerBlock, occupiedBlocks);
 
@@ -470,9 +448,9 @@ bool SparseFieldIO::readData(hid_t location,
         std::vector<Data_T*> memoryList;
         
         for (; b != bend && mem < maxMemPerPass; ++b) {
-          if (b->isAllocated) {
+          if (blocks[b].isAllocated) {
             mem += sizeof(Data_T)*valuesPerBlock;
-            memoryList.push_back(&b->data[0]);
+            memoryList.push_back(blocks[b].data);
           }
         }
 

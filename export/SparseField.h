@@ -62,13 +62,139 @@
 FIELD3D_NAMESPACE_OPEN
 
 //----------------------------------------------------------------------------//
-// Forward declarations 
+// Forward declarations
 //----------------------------------------------------------------------------//
 
 template <class Field_T>
 class LinearGenericFieldInterp;
 template <class Field_T>
-class CubicGenericFieldInterp; 
+class CubicGenericFieldInterp;
+
+//----------------------------------------------------------------------------//
+// LinearSparseFieldInterp
+//----------------------------------------------------------------------------//
+
+/* \class LinearSparseFieldInterp
+   \ingroup field
+   \brief Linear interpolator optimized for fields with a fastValue function
+*/
+
+//----------------------------------------------------------------------------//
+
+template <typename Data_T>
+class LinearSparseFieldInterp : public RefBase
+{
+public:
+
+  // Typedefs ------------------------------------------------------------------
+
+  typedef Data_T value_type;
+  typedef boost::intrusive_ptr<LinearSparseFieldInterp> Ptr;
+
+  // RTTI replacement ----------------------------------------------------------
+
+  typedef LinearSparseFieldInterp class_type;
+  DEFINE_FIELD_RTTI_CONCRETE_CLASS;
+
+  static const char *staticClassName()
+  {
+    return "LinearSparseFieldInterp";
+  }
+
+  static const char* classType()
+  {
+    return ms_classType.name();
+  }
+
+  // Main methods --------------------------------------------------------------
+
+  value_type sample(const SparseField<Data_T> &field, const V3d &vsP) const
+  {
+    // Pixel centers are at .5 coordinates
+    // NOTE: Don't use contToDisc for this, we're looking for sample
+    // point locations, not coordinate shifts.
+    FIELD3D_VEC3_T<double> p(vsP - FIELD3D_VEC3_T<double>(0.5));
+
+    // Lower left corner
+    V3i c1(static_cast<int>(floor(p.x)),
+           static_cast<int>(floor(p.y)),
+           static_cast<int>(floor(p.z)));
+    // Upper right corner
+    V3i c2(c1 + V3i(1));
+    // C1 fractions
+    FIELD3D_VEC3_T<double> f1(static_cast<FIELD3D_VEC3_T<double> >(c2) - p);
+    // C2 fraction
+    FIELD3D_VEC3_T<double> f2(static_cast<FIELD3D_VEC3_T<double> >(1.0) - f1);
+
+    const Box3i &dataWindow = field.dataWindow();
+
+    // Clamp the coordinates
+    c1.x = std::min(dataWindow.max.x, std::max(dataWindow.min.x, c1.x));
+    c1.y = std::min(dataWindow.max.y, std::max(dataWindow.min.y, c1.y));
+    c1.z = std::min(dataWindow.max.z, std::max(dataWindow.min.z, c1.z));
+    c2.x = std::min(dataWindow.max.x, std::max(dataWindow.min.x, c2.x));
+    c2.y = std::min(dataWindow.max.y, std::max(dataWindow.min.y, c2.y));
+    c2.z = std::min(dataWindow.max.z, std::max(dataWindow.min.z, c2.z));
+
+    // Determine which block we're in
+    int i = c1.x, j = c1.y, k = c1.z, vi, vj, vk, bi, bj, bk;
+    field.applyDataWindowOffset(i, j, k);
+    field.getVoxelInBlock(i, j, k, vi, vj, vk);
+    field.getBlockCoord(i, j, k, bi, bj, bk);
+    int blockSize = 1 << field.blockOrder();
+
+    // If in the middle of a block, optimize lookup stencil
+    if (vi < blockSize - 1 && vj < blockSize - 1 && vk < blockSize - 1) {
+      // Only do work if the block is allocated
+      const Data_T * const p = field.blockData(bi, bj, bk);
+      if (p) {
+        const Data_T * const c111 = p + vi + vj * blockSize + vk * blockSize * blockSize;
+        const Data_T * const c121 = c111 + blockSize * (c2.y - c1.y);
+        const Data_T * const c112 = c111 + blockSize * blockSize * (c2.z - c1.z);
+        const Data_T * const c122 = c112 + blockSize * (c2.y - c1.y);
+        int xInc = c2.x - c1.x;
+        return static_cast<Data_T>
+          (f1.x * (f1.y * (f1.z * *c111 +
+                           f2.z * *c112) +
+                   f2.y * (f1.z * *c121 +
+                           f2.z * *c122)) +
+           f2.x * (f1.y * (f1.z * *(c111 + xInc) +
+                           f2.z * *(c112 + xInc)) +
+                   f2.y * (f1.z * *(c121 + xInc) +
+                           f2.z * *(c122 + xInc))));
+      } else {
+        return static_cast<Data_T>(field.getBlockEmptyValue(bi, bj, bk));
+      }
+    } else {
+      return static_cast<Data_T>
+        (f1.x * (f1.y * (f1.z * field.fastValue(c1.x, c1.y, c1.z) +
+                         f2.z * field.fastValue(c1.x, c1.y, c2.z)) +
+                 f2.y * (f1.z * field.fastValue(c1.x, c2.y, c1.z) +
+                         f2.z * field.fastValue(c1.x, c2.y, c2.z))) +
+         f2.x * (f1.y * (f1.z * field.fastValue(c2.x, c1.y, c1.z) +
+                         f2.z * field.fastValue(c2.x, c1.y, c2.z)) +
+                 f2.y * (f1.z * field.fastValue(c2.x, c2.y, c1.z) +
+                         f2.z * field.fastValue(c2.x, c2.y, c2.z))));
+    }
+
+  }
+
+private:
+
+  // Static data members -------------------------------------------------------
+
+  static TemplatedFieldType<LinearSparseFieldInterp<Data_T> > ms_classType;
+
+  // Typedefs ------------------------------------------------------------------
+
+  //! Convenience typedef for referring to base class
+  typedef RefBase base;
+
+};
+
+//----------------------------------------------------------------------------//
+
+FIELD3D_CLASSTYPE_TEMPL_INSTANTIATION(LinearSparseFieldInterp);
 
 //----------------------------------------------------------------------------//
 // SparseBlock
@@ -78,43 +204,79 @@ class CubicGenericFieldInterp;
 //! \ingroup field_int
 namespace Sparse {
 
+
 //! \class SparseBlock
 //! \ingroup field_int
 //! Storage for one individual block of a SparseField
 template <typename Data_T>
-struct SparseBlock 
+struct SparseBlock : boost::noncopyable
 {
   // Constructors --------------------------------------------------------------
 
   //! Ctor
   SparseBlock()
     : isAllocated(false),
-      emptyValue(static_cast<Data_T>(0))
+      emptyValue(static_cast<Data_T>(0)),
+      data(NULL)
   { /* Empty */ }
+
+  //! Dtor
+  ~SparseBlock()
+  {
+    if (data) {
+      delete[] data;
+    }
+  }
 
   // Main methods --------------------------------------------------------------
 
   //! Gets the value of a given voxel
-  Data_T& value(int i, int j, int k, int blockOrder)
+  inline Data_T& value(int i, int j, int k, int blockOrder)
   //! \note Bit shift should be ok, indices are always positive.
   { return data[(k << blockOrder << blockOrder) + (j << blockOrder) + i]; }
 
   //! Gets the const value of a given voxel
   //! \note Bit shift should be ok, indices are always positive.
-  const Data_T& value(int i, int j, int k, int blockOrder) const
+  inline const Data_T& value(int i, int j, int k, int blockOrder) const
   { return data[(k << blockOrder << blockOrder) + (j << blockOrder) + i]; }
 
   //! Alloc data
   void resize(int n)
-  { this->data.resize(n); }
+  {
+    if (data) {
+      delete[] data;
+    }
+    data = new Data_T[n];
+    isAllocated = true;
+    std::fill_n(data, n, emptyValue);
+  }
 
   //! Remove data
   void clear()
-  { std::vector<Data_T>().swap(data); }
+  {
+    if (data) {
+      delete[] data;
+      data = NULL;
+    }
+    isAllocated = false;
+  }
 
-  //! Returns reference to start of memory
-  Data_T& dataRef()
-  { return data[0]; }
+  //! Copy data from another block
+  void copy(const SparseBlock &other, size_t n)
+  {
+    if(other.isAllocated) {
+      if (!data) {
+        resize(n);
+      }
+      Data_T *p = data, *end = data + n, *o = other.data;
+      while (p != end) {
+        *p++ = *o++;
+      }
+    }
+    else
+      clear();
+
+  }
 
   // Data members --------------------------------------------------------------
 
@@ -126,13 +288,15 @@ struct SparseBlock
   //! values when storing narrow-band levelsets
   Data_T emptyValue;
 
-  //! Container for this block's data. It's either size 0 or size m_blockSize^3
-  std::vector<Data_T> data;
+  //! Pointer to data. Null if block is unallocated
+  Data_T *data;
 
 private:
 
-  //! \note Should make data private and eventually a pointer so that the 
-  //! overhead of a constant sparse field is a little less
+  //! Non-copyable
+  SparseBlock(const SparseBlock&);
+  //! Non-copyable
+  const SparseBlock& operator=(const SparseBlock&);
 
 };
 
@@ -144,9 +308,9 @@ private:
 
 /*! \class SparseField
   \ingroup field
-  \brief This Field subclass stores voxel data in block-allocated arrays. 
+  \brief This Field subclass stores voxel data in block-allocated arrays.
 
-  Empty blocks aren't allocated. This effectively optimizes away memory use 
+  Empty blocks aren't allocated. This effectively optimizes away memory use
   for "empty" voxels.
 
   Refer to \ref using_fields for examples of how to use this in your code.
@@ -163,11 +327,11 @@ class SparseField
 public:
 
   // Typedefs ------------------------------------------------------------------
-  
+
   typedef boost::intrusive_ptr<SparseField> Ptr;
   typedef std::vector<Ptr> Vec;
 
-  typedef LinearGenericFieldInterp<SparseField<Data_T> > LinearInterp;
+  typedef LinearSparseFieldInterp<Data_T> LinearInterp;
   typedef CubicGenericFieldInterp<SparseField<Data_T> > CubicInterp;
 
   // RTTI replacement ----------------------------------------------------------
@@ -179,7 +343,7 @@ public:
   {
     return "SparseField";
   }
-  
+
   static const char *classType()
   {
     return SparseField<Data_T>::ms_classType.name();
@@ -202,7 +366,7 @@ public:
   //! Assignment operator.  For cache-managed fields, it creates a new
   //! file reference, and for non-managed fields, it copies the data
   SparseField& operator=(const SparseField &o);
-  
+
   // \}
 
   // Main methods --------------------------------------------------------------
@@ -225,7 +389,7 @@ public:
 
   //! Checks if a block is allocated
   bool blockIsAllocated(int bi, int bj, int bk) const;
-  
+
   //! Returns the constant value of an block, whether it's allocated
   //! already or not..
   const Data_T getBlockEmptyValue(int bi, int bj, int bk) const;
@@ -255,7 +419,7 @@ public:
   //! \note The i,j,k coordinates are strictly positive, and refer to the
   //! coordinates of a voxel -after- the data window offset has been applied.
   void getBlockCoord(int i, int j, int k, int &bi, int &bj, int &bk) const;
-  
+
   //! Calculates the coordinates in a block for the given voxel index
   //! \note The i,j,k coordinates are strictly positive, and refer to the
   //! coordinates of a voxel -after- the data window offset has been applied.
@@ -268,15 +432,15 @@ public:
     j -= base::m_dataWindow.min.y;
     k -= base::m_dataWindow.min.z;
   }
-  
+
   // From Field base class -----------------------------------------------------
 
   //! \name From Field
-  //! \{  
+  //! \{
   virtual Data_T value(int i, int j, int k) const;
   virtual long long int memSize() const;
   //! \}
-  
+
   // From WritableField base class ---------------------------------------------
 
   //! \name From WritableField
@@ -291,6 +455,10 @@ public:
   //! Write access to voxel. Notice that this is non-virtual.
   Data_T& fastLValue(int i, int j, int k);
 
+  //! Returns a pointer to the data in a block, or null if the given block is
+  //! unallocated
+  Data_T* blockData(int bi, int bj, int bk) const;
+
   // From FieldBase ------------------------------------------------------------
 
   //! \name From FieldBase
@@ -302,7 +470,7 @@ public:
   { return Ptr(new SparseField(*this)); }
 
   //! \}
-  
+
   // Iterators -----------------------------------------------------------------
 
   //! \name Iterators
@@ -317,7 +485,7 @@ public:
   const_iterator cbegin(const Box3i &subset) const;
   //! Const iterator pointing one element past the last valid one.
   const_iterator cend() const;
-  //! Const iterator pointing one element past the last valid one (for a 
+  //! Const iterator pointing one element past the last valid one (for a
   //! subset)
   const_iterator cend(const Box3i &subset) const;
 
@@ -332,7 +500,7 @@ public:
   iterator begin(const Box3i &subset);
   //! Iterator pointing one element past the last valid one.
   iterator end();
-  //! Iterator pointing one element past the last valid one (for a 
+  //! Iterator pointing one element past the last valid one (for a
   //! subset)
   iterator end(const Box3i &subset);
 
@@ -356,7 +524,7 @@ public:
   //! Internal function to setup the Reference's block pointers, for
   //! use with dynamic reading.
   void setupReferenceBlocks();
-  
+
  protected:
 
   friend class SparseFieldIO;
@@ -369,10 +537,10 @@ public:
   // From ResizableField class -------------------------------------------------
 
   virtual void sizeChanged()
-  { 
+  {
     // Call base class
     base::sizeChanged();
-    setupBlocks(); 
+    setupBlocks();
   }
 
   // Convenience methods -------------------------------------------------------
@@ -396,8 +564,10 @@ public:
   V3i m_blockRes;
   //! Block array res.x * res.y
   int m_blockXYSize;
-  //! Information for all blocks in the field
-  std::vector<Block> m_blocks;
+  //! Array of blocks. Not using std::vector since SparseBlock is noncopyable
+  Block *m_blocks;
+  //! Number of blocks in field.
+  size_t m_numBlocks;
 
   //! Pointer to SparseFileManager. Used when doing dynamic reading.
   //! NULL if not in use.
@@ -469,11 +639,11 @@ struct CheckAllEqual
     Data_T first = block.data[0];
     // Iterate over rest
     bool match = true;
+    size_t len = blockSize.x * blockSize.y * blockSize.z;
     if (validSize == blockSize) {
       // interior block so look at all voxels
-      for (typename std::vector<Data_T>::const_iterator i = block.data.begin();
-           i != block.data.end(); ++i) {
-        if (*i != first) {
+      for (size_t i = 0; i < len; i++) {
+        if (block.data[i] != first) {
           match = false;
           break;
         }
@@ -481,8 +651,7 @@ struct CheckAllEqual
     } else {
       // only look at valid voxels
       int x=0, y=0, z=0;
-      for (typename std::vector<Data_T>::const_iterator i = block.data.begin();
-           i != block.data.end(); ++i, ++x) {
+      for (size_t i = 0; i < len; i++, x++) {
         if (x >= blockSize.x) {
           x = 0;
           ++y;
@@ -494,8 +663,7 @@ struct CheckAllEqual
         if (x >= validSize.x || y >= validSize.y || z >= validSize.z) {
           continue;
         }
-
-        if (*i != first) {
+        if (block.data[i] != first) {
           match = false;
           break;
         }
@@ -524,8 +692,8 @@ inline bool isAnyLess(const Data_T &left, const Data_T &right)
 template <>
 inline bool isAnyLess(const V3h &left, const V3h &right)
 {
-  return (std::abs(left.x) < right.x || 
-          std::abs(left.y) < right.y || 
+  return (std::abs(left.x) < right.x ||
+          std::abs(left.y) < right.y ||
           std::abs(left.z) < right.z );
 }
 
@@ -534,8 +702,8 @@ inline bool isAnyLess(const V3h &left, const V3h &right)
 template <>
 inline bool isAnyLess(const V3f &left, const V3f &right)
 {
-  return (std::abs(left.x) < right.x || 
-          std::abs(left.y) < right.y || 
+  return (std::abs(left.x) < right.x ||
+          std::abs(left.y) < right.y ||
           std::abs(left.z) < right.z );
 }
 
@@ -544,8 +712,8 @@ inline bool isAnyLess(const V3f &left, const V3f &right)
 template <>
 inline bool isAnyLess(const V3d &left, const V3d &right)
 {
-  return (std::abs(left.x) < right.x || 
-          std::abs(left.y) < right.y || 
+  return (std::abs(left.x) < right.x ||
+          std::abs(left.y) < right.y ||
           std::abs(left.z) < right.z );
 }
 
@@ -557,7 +725,7 @@ inline bool isAnyLess(const V3d &left, const V3d &right)
 template <typename Data_T>
 struct CheckMaxAbs
 {
-  //! Constructor. Takes max value 
+  //! Constructor. Takes max value
   CheckMaxAbs(Data_T maxValue)
     : m_maxValue(maxValue)
   { }
@@ -576,11 +744,12 @@ struct CheckMaxAbs
     Data_T first = block.data[0];
     // Iterate over rest
     bool allGreater = true;
+    size_t len = blockSize.x * blockSize.y * blockSize.z;
+
     if (validSize == blockSize) {
       // interior block so look at all voxels
-      for (typename std::vector<Data_T>::const_iterator i = block.data.begin();
-           i != block.data.end(); ++i) {
-        if (isAnyLess<Data_T>(*i, m_maxValue)) {
+      for (size_t i = 0; i < len; i++) {
+        if (isAnyLess<Data_T>(block.data[i], m_maxValue)) {
           allGreater = false;
           break;
         }
@@ -588,8 +757,7 @@ struct CheckMaxAbs
     } else {
       // only look at valid voxels
       int x=0, y=0, z=0;
-      for (typename std::vector<Data_T>::const_iterator i = block.data.begin();
-           i != block.data.end(); ++i, ++x) {
+      for (size_t i = 0; i < len; i++, x++) {
         if (x >= blockSize.x) {
           x = 0;
           ++y;
@@ -601,7 +769,7 @@ struct CheckMaxAbs
         if (x >= validSize.x || y >= validSize.y || z >= validSize.z) {
           continue;
         }
-        if (isAnyLess<Data_T>(*i, m_maxValue)) {
+        if (isAnyLess<Data_T>(block.data[i], m_maxValue)) {
           allGreater = false;
           break;
         }
@@ -619,6 +787,8 @@ private:
   Data_T m_maxValue;
 };
 
+//----------------------------------------------------------------------------//
+
 } // namespace Sparse
 
 //----------------------------------------------------------------------------//
@@ -634,17 +804,17 @@ class SparseField<Data_T>::const_iterator
   const_iterator(const class_type &field,
                  const Box3i &window,
                  const V3i &currentPos, int blockOrder)
-    : x(currentPos.x), y(currentPos.y), z(currentPos.z), 
-      m_p(NULL), m_blockIsActivated(false), 
-      m_blockStepsTicker(0), m_blockOrder(blockOrder), 
+    : x(currentPos.x), y(currentPos.y), z(currentPos.z),
+      m_p(NULL), m_blockIsActivated(false),
+      m_blockStepsTicker(0), m_blockOrder(blockOrder),
       m_blockId(-1), m_window(window), m_field(&field)
   {
     m_manager = m_field->m_fileManager;
     setupNextBlock(x, y, z);
   }
   ~const_iterator() {
-    if (m_manager && m_blockId >= 0 && 
-        m_blockId < static_cast<int>(m_field->m_blocks.size())) {
+    if (m_manager && m_blockId >= 0 &&
+        m_blockId < static_cast<int>(m_field->m_numBlocks)) {
       if (m_field->m_blocks[m_blockId].isAllocated)
         m_manager->decBlockRef<Data_T>(m_field->m_fileId, m_blockId);
     }
@@ -671,7 +841,7 @@ class SparseField<Data_T>::const_iterator
     ++m_blockStepsTicker;
     // ... but only step forward if we're in a non-empty block
     if (!m_isEmptyBlock && (!m_manager || m_blockIsActivated))
-      ++m_p;   
+      ++m_p;
     // Check if we've reached the end of this block
     if (m_blockStepsTicker == (1 << m_blockOrder))
       resetPtr = true;
@@ -731,15 +901,15 @@ private:
 
   // Convenience methods -------------------------------------------------------
 
-  void setupNextBlock(int i, int j, int k) 
+  void setupNextBlock(int i, int j, int k)
   {
     m_field->applyDataWindowOffset(i, j, k);
     m_field->getBlockCoord(i, j, k, m_blockI, m_blockJ, m_blockK);
     int oldBlockId = m_blockId;
     m_blockId = m_field->blockId(m_blockI, m_blockJ, m_blockK);
     if (m_manager && oldBlockId != m_blockId &&
-        oldBlockId >= 0 && 
-        oldBlockId < static_cast<int>(m_field->m_blocks.size()) &&
+        oldBlockId >= 0 &&
+        oldBlockId < static_cast<int>(m_field->m_numBlocks) &&
         m_field->m_blocks[oldBlockId].isAllocated) {
       m_manager->decBlockRef<Data_T>(m_field->m_fileId, oldBlockId);
     }
@@ -750,7 +920,7 @@ private:
 
     const Block &block = m_field->m_blocks[m_blockId];
     int vi, vj, vk;
-    m_field->getVoxelInBlock(i, j, k, vi, vj, vk);      
+    m_field->getVoxelInBlock(i, j, k, vi, vj, vk);
     m_blockStepsTicker = vi;
     if (block.isAllocated) {
       if (m_manager && oldBlockId != m_blockId && m_blockId >= 0) {
@@ -775,7 +945,7 @@ private:
 
   //! Current pointed-to element
   mutable const Data_T *m_p;
-  //! Whether we're at an empty block and we don't increment m_p 
+  //! Whether we're at an empty block and we don't increment m_p
   bool m_isEmptyBlock;
   //! Used with delayed-load fields. Check if we've already activated the
   //! current blocks
@@ -808,7 +978,7 @@ class SparseField<Data_T>::iterator
            const Box3i &window,
            const V3i &currentPos, int blockOrder)
     : x(currentPos.x), y(currentPos.y), z(currentPos.z),
-      m_p(NULL), m_blockStepsTicker(0), m_blockOrder(blockOrder), 
+      m_p(NULL), m_blockStepsTicker(0), m_blockOrder(blockOrder),
       m_blockId(-1), m_window(window), m_field(&field)
   {
     setupNextBlock(x, y, z);
@@ -835,7 +1005,7 @@ class SparseField<Data_T>::iterator
     ++m_blockStepsTicker;
     // ... but only step forward if we're in a non-empty block
     if (!m_isEmptyBlock)
-      ++m_p;   
+      ++m_p;
     // Check if we've reached the end of this block
     if (m_blockStepsTicker == (1 << m_blockOrder))
       resetPtr = true;
@@ -860,7 +1030,7 @@ class SparseField<Data_T>::iterator
       assert(false && "Dereferencing iterator on a dynamic-read sparse field");
       Msg::print(Msg::SevWarning, "Dereferencing iterator on a dynamic-read "
                 "sparse field");
-      return *m_p;      
+      return *m_p;
     }
     // If the block is currently empty, we must allocate it
     if (m_isEmptyBlock) {
@@ -877,7 +1047,7 @@ class SparseField<Data_T>::iterator
       assert(false && "Dereferencing iterator on a dynamic-read sparse field");
       Msg::print(Msg::SevWarning, "Dereferencing iterator on a dynamic-read "
                 "sparse field");
-      return m_p;      
+      return m_p;
     }
     // If the block is currently empty, we must allocate it
     if (m_isEmptyBlock) {
@@ -893,7 +1063,7 @@ class SparseField<Data_T>::iterator
 private:
   typedef Sparse::SparseBlock<Data_T> Block;
   //! Convenience
-  void setupNextBlock(int i, int j, int k) 
+  void setupNextBlock(int i, int j, int k)
   {
     m_field->applyDataWindowOffset(i, j, k);
     m_field->getBlockCoord(i, j, k, m_blockI, m_blockJ, m_blockK);
@@ -904,7 +1074,7 @@ private:
     }
     Block &block = m_field->m_blocks[m_blockId];
     int vi, vj, vk;
-    m_field->getVoxelInBlock(i, j, k, vi, vj, vk);      
+    m_field->getVoxelInBlock(i, j, k, vi, vj, vk);
     m_blockStepsTicker = vi;
     if (block.isAllocated) {
       m_p = &block.value(vi, vj, vk, m_blockOrder);
@@ -916,7 +1086,7 @@ private:
   }
   //! Current pointed-to element
   Data_T *m_p;
-  //! Whether we're at an empty block and we don't increment m_p 
+  //! Whether we're at an empty block and we don't increment m_p
   bool m_isEmptyBlock;
   //! Ticker for how many more steps to take before resetting the pointer
   int m_blockStepsTicker;
@@ -934,7 +1104,7 @@ private:
 // SparseField::block_iterator
 //----------------------------------------------------------------------------/
 
-//! \note This iterator type can not be dereferenced. It's only used to 
+//! \note This iterator type can not be dereferenced. It's only used to
 //! provide a bounding box and indices for each block.
 template <class Data_T>
 class SparseField<Data_T>::block_iterator
@@ -945,7 +1115,7 @@ class SparseField<Data_T>::block_iterator
   //! Constructor
   block_iterator(const class_type &field, const Box3i &window,
                  const V3i &currentPos)
-    : x(currentPos.x), y(currentPos.y), z(currentPos.z), 
+    : x(currentPos.x), y(currentPos.y), z(currentPos.z),
       m_window(window), m_field(field)
   {
     recomputeBlockBoundingBox();
@@ -959,7 +1129,7 @@ class SparseField<Data_T>::block_iterator
         y = m_window.min.y;
         ++z;
       } else {
-        x = m_window.min.x; 
+        x = m_window.min.x;
         ++y;
       }
     } else {
@@ -992,7 +1162,7 @@ private:
     int blockSize = m_field.blockSize();
     box.min = V3i(x * blockSize, y * blockSize, z * blockSize);
     box.max = box.min + V3i(blockSize - 1, blockSize - 1, blockSize - 1);
-    // Clamp the box 
+    // Clamp the box
     box.min = FIELD3D_CLIP(box.min, m_field.dataWindow());
     box.max = FIELD3D_CLIP(box.max, m_field.dataWindow());
     // Set the member variable
@@ -1014,16 +1184,20 @@ template <class Data_T>
 SparseField<Data_T>::SparseField()
   : base(),
     m_blockOrder(BLOCK_ORDER),
+    m_blocks(NULL),
     m_fileManager(NULL)
-{ 
+{
   setupBlocks();
 }
 
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-SparseField<Data_T>::SparseField(const SparseField<Data_T> &o) :
-  base(o)
+SparseField<Data_T>::SparseField(const SparseField<Data_T> &o)
+ : base(o),
+   m_blockOrder(o.m_blockOrder),
+   m_blocks(NULL),
+   m_fileManager(o.m_fileManager)
 {
   copySparseField(o);
 }
@@ -1038,6 +1212,9 @@ SparseField<Data_T>::~SparseField()
     // cache doesn't point to this field's blocks because they are
     // about to be deleted
     m_fileManager->removeFieldFromCache<Data_T>(m_fileId);
+  }
+  if (m_blocks) {
+    delete[] m_blocks;
   }
 }
 
@@ -1064,9 +1241,8 @@ SparseField<Data_T>::copySparseField(const SparseField<Data_T> &o)
   if (o.m_fileManager) {
     // allocate m_blocks, sets m_blockRes, m_blockXYSize, m_blocks
     setupBlocks();
-
     m_fileManager = o.m_fileManager;
-    SparseFile::Reference<Data_T> &oldReference = 
+    SparseFile::Reference<Data_T> &oldReference =
       m_fileManager->reference<Data_T>(o.m_fileId);
     addReference(oldReference.filename, oldReference.layerPath,
                  oldReference.valuesPerBlock,
@@ -1077,7 +1253,17 @@ SparseField<Data_T>::copySparseField(const SparseField<Data_T> &o)
     // directly copy all values and blocks from the source, no extra setup
     m_blockRes = o.m_blockRes;
     m_blockXYSize = o.m_blockXYSize;
-    m_blocks = o.m_blocks;
+    if (m_blocks) {
+      delete[] m_blocks;
+    }
+    m_numBlocks = o.m_numBlocks;
+    m_blocks = new Block[m_numBlocks];
+    for (size_t i = 0; i < m_numBlocks; ++i) {
+      m_blocks[i].isAllocated = o.m_blocks[i].isAllocated;
+      m_blocks[i].emptyValue = o.m_blocks[i].emptyValue;
+      m_blocks[i].copy(o.m_blocks[i],
+                       1 << m_blockOrder << m_blockOrder << m_blockOrder);
+    }
     m_fileId = -1;
     m_fileManager = NULL;
   }
@@ -1094,11 +1280,11 @@ void SparseField<Data_T>::addReference(const std::string &filename,
   m_fileManager = &SparseFileManager::singleton();
   m_fileId = m_fileManager->getNextId<Data_T>(filename, layerPath);
   // Set up the manager data
-  SparseFile::Reference<Data_T> &reference = 
+  SparseFile::Reference<Data_T> &reference =
     m_fileManager->reference<Data_T>(m_fileId);
   reference.valuesPerBlock = valuesPerBlock;
   reference.occupiedBlocks = occupiedBlocks;
-  reference.setNumBlocks(m_blocks.size());
+  reference.setNumBlocks(m_numBlocks);
 }
 
 //----------------------------------------------------------------------------//
@@ -1106,19 +1292,12 @@ void SparseField<Data_T>::addReference(const std::string &filename,
 template <class Data_T>
 void SparseField<Data_T>::copyBlockStates(const SparseField<Data_T> &o)
 {
-  if (m_blocks.size() != o.m_blocks.size()) return;
+  if (m_numBlocks != o.m_numBlocks) return;
 
-  typename std::vector<Sparse::SparseBlock<Data_T> >::iterator b =
-    m_blocks.begin();
-  typename std::vector<Sparse::SparseBlock<Data_T> >::iterator bend = 
-    m_blocks.end();
-  typename std::vector<Sparse::SparseBlock<Data_T> >::const_iterator ob =
-    o.m_blocks.begin();
-
-  for (; b != bend; ++b, ++ob) {
-    b->isAllocated = ob->isAllocated;
-    b->emptyValue = ob->emptyValue;
-    b->clear();
+  for (size_t i = 0; i < m_numBlocks; ++i) {
+    m_blocks[i].isAllocated = o.m_blocks[i].isAllocated;
+    m_blocks[i].emptyValue = o.m_blocks[i].emptyValue;
+    m_blocks[i].clear();
   }
 }
 
@@ -1129,22 +1308,17 @@ void SparseField<Data_T>::setupReferenceBlocks()
 {
   if (!m_fileManager || m_fileId < 0) return;
 
-  SparseFile::Reference<Data_T> &reference = 
+  SparseFile::Reference<Data_T> &reference =
     m_fileManager->reference<Data_T>(m_fileId);
 
   std::vector<int>::iterator fb = reference.fileBlockIndices.begin();
-  typename SparseFile::Reference<Data_T>::BlockPtrs::iterator bp = 
+  typename SparseFile::Reference<Data_T>::BlockPtrs::iterator bp =
     reference.blocks.begin();
-  typename std::vector<Sparse::SparseBlock<Data_T> >::iterator b =
-    m_blocks.begin();
-  typename std::vector<Sparse::SparseBlock<Data_T> >::iterator bend =
-    m_blocks.end();
   int nextBlockIdx = 0;
-
-  for (; b != bend; ++b, ++fb, ++bp) {
-    if (b->isAllocated) {
+  for (size_t i = 0; i < m_numBlocks; ++i, ++fb, ++bp) {
+    if (m_blocks[i].isAllocated) {
       *fb = nextBlockIdx;
-      *bp = &(*b);
+      *bp = m_blocks + i;
       nextBlockIdx++;
     } else {
       *fb = -1;
@@ -1159,11 +1333,10 @@ void SparseField<Data_T>::clear(const Data_T &value)
 {
   // If we're clearing, we can get rid of all current blocks
   setupBlocks();
-  // Then just fill in the default values
-  typename std::vector<Block>::iterator i;
-  typename std::vector<Block>::iterator end;
-  for (i = m_blocks.begin(), end = m_blocks.end(); i != end; ++i) {
-    i->emptyValue = value;
+  Block *p = m_blocks, *end = m_blocks + m_numBlocks;
+  while (p != end) {
+    p->emptyValue = value;
+    ++p;
   }
 }
 
@@ -1179,7 +1352,7 @@ void SparseField<Data_T>::setBlockOrder(int order)
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-int SparseField<Data_T>::blockOrder() const 
+int SparseField<Data_T>::blockOrder() const
 {
   return m_blockOrder;
 }
@@ -1188,7 +1361,7 @@ int SparseField<Data_T>::blockOrder() const
 
 template <class Data_T>
 int SparseField<Data_T>::blockSize() const
-{ 
+{
   return 1 << m_blockOrder;
 }
 
@@ -1211,7 +1384,7 @@ bool SparseField<Data_T>::blockIsAllocated(int bi, int bj, int bk) const
   const Block &block = m_blocks[blockId(bi, bj, bk)];
   return block.isAllocated;
 }
-  
+
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
@@ -1223,7 +1396,7 @@ const Data_T SparseField<Data_T>::getBlockEmptyValue(int bi, int bj, int bk) con
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-void SparseField<Data_T>::setBlockEmptyValue(int bi, int bj, int bk, 
+void SparseField<Data_T>::setBlockEmptyValue(int bi, int bj, int bk,
                                              const Data_T &val)
 {
   Block &block = m_blocks[blockId(bi, bj, bk)];
@@ -1239,7 +1412,7 @@ void SparseField<Data_T>::setBlockEmptyValue(int bi, int bj, int bk,
 template <class Data_T>
 bool SparseField<Data_T>::blockIndexIsValid(int bi, int bj, int bk) const
 {
-  return bi >= 0 && bj >= 0 && bk >= 0 && 
+  return bi >= 0 && bj >= 0 && bk >= 0 &&
     bi < m_blockRes.x && bj < m_blockRes.y && bk < m_blockRes.z;
 }
 
@@ -1259,7 +1432,6 @@ int SparseField<Data_T>::releaseBlocks(Functor_T func)
 {
   Data_T emptyValue;
   int numDeallocs = 0;
-  typename std::vector<Block>::iterator i;
 
   // If the block is on the edge of the field, it may have unused
   // voxels, with undefined values.  We need to pass the range of
@@ -1268,9 +1440,8 @@ int SparseField<Data_T>::releaseBlocks(Functor_T func)
   V3i dataRes = FieldRes::dataResolution();
   V3i validSize;
   V3i blockAllocSize(blockSize());
-  int bx, by, bz;
 
-  for (i = m_blocks.begin(), bx=0, by=0, bz=0; i != m_blocks.end(); ++i, ++bx) {
+  for (int i = 0, bx=0, by=0, bz=0; i < m_numBlocks; ++i, ++bx) {
     if (bx >= m_blockRes.x) {
       bx = 0;
       ++by;
@@ -1290,9 +1461,9 @@ int SparseField<Data_T>::releaseBlocks(Functor_T func)
       validSize.z = dataRes.z - bz * blockAllocSize.z;
     }
 
-    if (i->isAllocated) {
-      if (func.check(*i, emptyValue, validSize, blockAllocSize)) {
-        deallocBlock(*i, emptyValue);
+    if (m_blocks[i].isAllocated) {
+      if (func.check(m_blocks[i], emptyValue, validSize, blockAllocSize)) {
+        deallocBlock(m_blocks[i], emptyValue);
         numDeallocs++;
       }
     }
@@ -1337,7 +1508,6 @@ Data_T SparseField<Data_T>::fastValue(int i, int j, int k) const
   getVoxelInBlock(i, j, k, vi, vj, vk);
   // Get the actual block
   int id = blockId(bi, bj, bk);
-
   const Block &block = m_blocks[id];
   // Check if block data is allocated
   if (block.isAllocated) {
@@ -1391,10 +1561,23 @@ Data_T& SparseField<Data_T>::fastLValue(int i, int j, int k)
     return block.value(vi, vj, vk, m_blockOrder);
   } else {
     // ... Otherwise, allocate block
-    block.isAllocated = true;
-    block.data.resize(1 << m_blockOrder << m_blockOrder << m_blockOrder);
-    std::fill(block.data.begin(), block.data.end(), block.emptyValue);
+    size_t blockSize = 1 << m_blockOrder << m_blockOrder << m_blockOrder;
+    block.resize(blockSize);
     return block.value(vi, vj, vk, m_blockOrder);
+  }
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+Data_T* SparseField<Data_T>::blockData(int bi, int bj, int bk) const
+{
+  int id = blockId(bi, bj, bk);
+  const Block &block = m_blocks[id];
+  if (block.isAllocated) {
+    return block.data;
+  } else {
+    return NULL;
   }
 }
 
@@ -1403,48 +1586,51 @@ Data_T& SparseField<Data_T>::fastLValue(int i, int j, int k)
 template <class Data_T>
 long long int SparseField<Data_T>::memSize() const
 {
-  long long int blockSize = m_blocks.capacity() * sizeof(Block);
+  long long int blockSize = m_numBlocks * sizeof(Block);
   long long int dataSize = 0;
   typename std::vector<Block>::const_iterator i;
-  for (i = m_blocks.begin(); i != m_blocks.end(); ++i) {
-    if (i->isAllocated) {
-      dataSize += i->data.capacity() * sizeof(Data_T);
+
+  for (size_t i = 0; i < m_numBlocks; ++i) {
+    if (m_blocks[i].isAllocated) {
+      dataSize += (1 << m_blockOrder << m_blockOrder << m_blockOrder) *
+        sizeof(Data_T);
     }
   }
+
   return sizeof(*this) + dataSize + blockSize;
 }
 
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-typename SparseField<Data_T>::const_iterator 
+typename SparseField<Data_T>::const_iterator
 SparseField<Data_T>::cbegin() const
-{ 
+{
   if (FieldRes::dataResolution() == V3i(0))
     return cend();
   return const_iterator(*this, base::m_dataWindow, base::m_dataWindow.min,
-                        m_blockOrder); 
+                        m_blockOrder);
 }
 
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-typename SparseField<Data_T>::const_iterator 
+typename SparseField<Data_T>::const_iterator
 SparseField<Data_T>::cbegin(const Box3i &subset) const
-{ 
+{
   if (subset.isEmpty())
     return cend(subset);
-  return const_iterator(*this, subset, subset.min, m_blockOrder); 
+  return const_iterator(*this, subset, subset.min, m_blockOrder);
 }
 
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-typename SparseField<Data_T>::const_iterator 
+typename SparseField<Data_T>::const_iterator
 SparseField<Data_T>::cend() const
-{ 
-  return const_iterator(*this, base::m_dataWindow, 
-                        V3i(base::m_dataWindow.min.x, 
+{
+  return const_iterator(*this, base::m_dataWindow,
+                        V3i(base::m_dataWindow.min.x,
                                    base::m_dataWindow.min.y,
                                    base::m_dataWindow.max.z + 1),
                         m_blockOrder);
@@ -1453,11 +1639,11 @@ SparseField<Data_T>::cend() const
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-typename SparseField<Data_T>::const_iterator 
+typename SparseField<Data_T>::const_iterator
 SparseField<Data_T>::cend(const Box3i &subset) const
-{ 
-  return const_iterator(*this, subset, 
-                        V3i(subset.min.x, 
+{
+  return const_iterator(*this, subset,
+                        V3i(subset.min.x,
                                    subset.min.y,
                                    subset.max.z + 1), m_blockOrder);
 }
@@ -1465,33 +1651,33 @@ SparseField<Data_T>::cend(const Box3i &subset) const
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-typename SparseField<Data_T>::iterator 
+typename SparseField<Data_T>::iterator
 SparseField<Data_T>::begin()
-{ 
+{
   if (FieldRes::dataResolution() == V3i(0))
     return end();
-  return iterator(*this, base::m_dataWindow, 
+  return iterator(*this, base::m_dataWindow,
                   base::m_dataWindow.min, m_blockOrder); }
 
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-typename SparseField<Data_T>::iterator 
+typename SparseField<Data_T>::iterator
 SparseField<Data_T>::begin(const Box3i &subset)
-{ 
+{
   if (subset.isEmpty())
     return end(subset);
-  return iterator(*this, subset, subset.min, m_blockOrder); 
+  return iterator(*this, subset, subset.min, m_blockOrder);
 }
 
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-typename SparseField<Data_T>::iterator 
+typename SparseField<Data_T>::iterator
 SparseField<Data_T>::end()
-{ 
-  return iterator(*this, base::m_dataWindow, 
-                  V3i(base::m_dataWindow.min.x, 
+{
+  return iterator(*this, base::m_dataWindow,
+                  V3i(base::m_dataWindow.min.x,
                              base::m_dataWindow.min.y,
                              base::m_dataWindow.max.z + 1), m_blockOrder);
 }
@@ -1499,33 +1685,33 @@ SparseField<Data_T>::end()
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-typename SparseField<Data_T>::iterator 
+typename SparseField<Data_T>::iterator
 SparseField<Data_T>::end(const Box3i &subset)
-{ 
-  return iterator(*this, subset, 
-                  V3i(subset.min.x, subset.min.y, subset.max.z + 1), 
+{
+  return iterator(*this, subset,
+                  V3i(subset.min.x, subset.min.y, subset.max.z + 1),
                   m_blockOrder);
 }
 
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-typename SparseField<Data_T>::block_iterator 
+typename SparseField<Data_T>::block_iterator
 SparseField<Data_T>::blockBegin() const
-{ 
+{
   if (FieldRes::dataResolution() == V3i(0))
     return blockEnd();
-  return block_iterator(*this, Box3i(V3i(0), m_blockRes - V3i(1)), 
-                        V3i(0)); 
+  return block_iterator(*this, Box3i(V3i(0), m_blockRes - V3i(1)),
+                        V3i(0));
 }
 
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-typename SparseField<Data_T>::block_iterator 
+typename SparseField<Data_T>::block_iterator
 SparseField<Data_T>::blockEnd() const
-{ 
-  return block_iterator(*this, Box3i(V3i(0), m_blockRes - V3i(1)), 
+{
+  return block_iterator(*this, Box3i(V3i(0), m_blockRes - V3i(1)),
                         V3i(0, 0, m_blockRes.z));
 }
 
@@ -1545,11 +1731,11 @@ void SparseField<Data_T>::setupBlocks()
                          static_cast<int>(blockRes.z));
   m_blockRes = intBlockRes;
   m_blockXYSize = m_blockRes.x * m_blockRes.y;
-  // clear() won't deallocate data. Do the swap trick.
-  //m_blocks.clear();
-  std::vector<Block>().swap(m_blocks);
-  
-  m_blocks.resize(intBlockRes.x * intBlockRes.y * intBlockRes.z);
+  if (m_blocks) {
+    delete[] m_blocks;
+  }
+  m_numBlocks = intBlockRes.x * intBlockRes.y * intBlockRes.z;
+  m_blocks = new Block[m_numBlocks];
 }
 
 //----------------------------------------------------------------------------//
@@ -1564,8 +1750,8 @@ int SparseField<Data_T>::blockId(int blockI, int blockJ, int blockK) const
 
 //! \note Bit shift should be ok, indices are always positive.
 template <class Data_T>
-void SparseField<Data_T>::getBlockCoord(int i, int j, int k, 
-                                        int &bi, int &bj, int &bk) const 
+void SparseField<Data_T>::getBlockCoord(int i, int j, int k,
+                                        int &bi, int &bj, int &bk) const
 {
   assert(i >= 0);
   assert(j >= 0);
@@ -1579,7 +1765,7 @@ void SparseField<Data_T>::getBlockCoord(int i, int j, int k,
 
 //! \note Bit shift should be ok, indices are always positive.
 template <class Data_T>
-void SparseField<Data_T>::getVoxelInBlock(int i, int j, int k, 
+void SparseField<Data_T>::getVoxelInBlock(int i, int j, int k,
                                           int &vi, int &vj, int &vk) const
 {
   assert(i >= 0);

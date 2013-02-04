@@ -952,7 +952,7 @@ template <class Data_T2>
 void ResizableField<Data_T>::copyFrom(typename Field<Data_T2>::Ptr other) 
 {
   // Set mapping
-  setMapping(other->mapping());
+  FieldRes::setMapping(other->mapping());
   // Set size to match
   setSize(other->extents(), other->dataWindow());
   // Copy over the data
@@ -980,7 +980,8 @@ void ResizableField<Data_T>::matchDefinition(FieldRes::Ptr fieldToMatch)
 //! identical
 template <class Data_T, class Data_T2>
 bool sameDefinition(typename Field<Data_T>::Ptr a, 
-                    typename Field<Data_T2>::Ptr b)
+                    typename Field<Data_T2>::Ptr b,
+                    double tolerance = 0.0)
 {
   if (a->extents() != b->extents()) {
     return false;
@@ -988,7 +989,7 @@ bool sameDefinition(typename Field<Data_T>::Ptr a,
   if (a->dataWindow() != b->dataWindow()) {
     return false;
   }
-  if (!a->mapping()->isIdentical(b->mapping())) {
+  if (!a->mapping()->isIdentical(b->mapping(), tolerance)) {
     return false;
   }
   return true;

@@ -502,7 +502,7 @@ public:
         typename Field_T<Data_T>::Ptr newTarget(new Field_T<Data_T>);
         newTarget->name = (*i)->name;
         newTarget->attribute = (*i)->attribute;
-        newTarget->copyMetadata(*i);
+        newTarget->copyMetadata(**i);
         newTarget->copyFrom(*i);
         output.push_back(newTarget);
       }
@@ -591,7 +591,6 @@ public:
     typedef Field_T<FIELD3D_VEC3_T<Data_T> > TypedVField;
     typedef typename Field<FIELD3D_VEC3_T<Data_T> >::Vec FieldList;
     typedef typename Field_T<FIELD3D_VEC3_T<Data_T> >::Vec TypedFieldList;
-  
     // First, read the layers as-is
     FieldList originals;
     originals = readVectorLayers<Data_T>(partitionName, layerName);

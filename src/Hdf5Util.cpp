@@ -242,14 +242,14 @@ readAttribute(hid_t location, const string& attrName,
   H5ScopedAget_type attrType(attr);
 
 
-  if (H5Sget_simple_extent_ndims(attrSpace) != rank) 
+  if (H5Sget_simple_extent_ndims(attrSpace) != (int) rank) 
     throw MissingAttributeException("Bad attribute rank for attribute " + 
                                     attrName);
 
   boost::scoped_array<hsize_t>  dims(new hsize_t[rank]);
   H5Sget_simple_extent_dims(attrSpace, dims.get(), NULL);
 
-  for (int i=0; i < rank; i++) {
+  for (size_t i=0; i < rank; i++) {
     if (dims[i] != attrSize[i]) 
       throw MissingAttributeException("Invalid attribute size for attribute " + 
                                       attrName);
@@ -286,14 +286,14 @@ readAttribute(hid_t location, const string& attrName,
   H5ScopedAget_type attrType(attr);
 
 
-  if (H5Sget_simple_extent_ndims(attrSpace) != rank) 
+  if (H5Sget_simple_extent_ndims(attrSpace) != (int) rank) 
     throw MissingAttributeException("Bad attribute rank for attribute " + 
                                     attrName);
 
   boost::scoped_array<hsize_t>  dims(new hsize_t[rank]);
   H5Sget_simple_extent_dims(attrSpace, dims.get(), NULL);
 
-  for (int i=0; i < rank; i++) {
+  for (size_t i=0; i < rank; i++) {
     if (dims[i] != attrSize[i]) 
       throw MissingAttributeException("Invalid attribute size for attribute " + 
                                       attrName);
@@ -331,14 +331,14 @@ readAttribute(hid_t location, const string& attrName,
   H5ScopedAget_type attrType(attr);
 
 
-  if (H5Sget_simple_extent_ndims(attrSpace) != rank) 
+  if (H5Sget_simple_extent_ndims(attrSpace) != (int) rank) 
     throw MissingAttributeException("Bad attribute rank for attribute " + 
                                     attrName);
 
   boost::scoped_array<hsize_t>  dims(new hsize_t[rank]);
   H5Sget_simple_extent_dims(attrSpace, dims.get(), NULL);
 
-  for (int i=0; i < rank; i++) {
+  for (size_t i=0; i < rank; i++) {
     if (dims[i] != attrSize[i]) 
       throw MissingAttributeException("Invalid attribute size for attribute " + 
                                       attrName);

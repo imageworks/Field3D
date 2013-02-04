@@ -99,7 +99,7 @@ void convertMACToCellCentered(typename MACField<Data_T>::Ptr mac,
   bool rotateVector = false;
   M44d ssToWsMtx;
   MatrixFieldMapping::Ptr mapping =
-    field_dynamic_cast<MatrixFieldMapping>(mac->mapping());
+    FIELD_DYNAMIC_CAST<MatrixFieldMapping>(mac->mapping());
   if (mapping) {
     M44d localToWorldMtx = mapping->localToWorld();
     V3d scale, rot, trans, shear;
@@ -155,7 +155,7 @@ void convertCellCenteredToMAC(typename Field_T::Ptr cc,
   bool rotateVector = false;
   M44d wsToSsMtx;
   MatrixFieldMapping::Ptr mapping =
-    field_dynamic_cast<MatrixFieldMapping>(mac->mapping());
+    FIELD_DYNAMIC_CAST<MatrixFieldMapping>(mac->mapping());
   if (mapping) {
     M44d localToWorld = mapping->localToWorld();
     V3d scale, rot, trans, shear;

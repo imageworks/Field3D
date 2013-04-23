@@ -1,0 +1,12 @@
+This test suite does not require that you build or install either 
+of the Field3D and OpenVDB libraries. 
+
+In order to build the test, take the following steps:
+
+ 1 Copy the 'export' and 'src' folders from your Field3D distribution 
+   into 'Field3D_here'.
+ 2 Copy the entire 'openvdb' folder from you OpenVDB distribution 
+   into 'OpenVDB_here'
+ 3 'scons'
+ 4 Run test from build/<platform>/<architecture>/release/vdb_test
+

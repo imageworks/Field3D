@@ -1,0 +1,135 @@
+# ------------------------------------------------------------------------------
+# PYTHON IMPORTS
+# ------------------------------------------------------------------------------
+
+import sys
+import os
+
+from os.path import join
+
+# ------------------------------------------------------------------------------
+# HELPER FUNCTIONS
+# ------------------------------------------------------------------------------
+
+def red(s):
+    return "\033[1m" + s + "\033[0m"
+
+# ------------------------------------------------------------------------------
+
+def architectureStr():
+    if ARGUMENTS.get('do64', 1):
+        return "m64"
+    else:
+        return "m32"
+
+# ------------------------------------------------------------------------------
+
+def buildDir(env):
+    basePath = join("build", sys.platform, env["CXX"], architectureStr())
+    return join(basePath, "release")
+
+# ------------------------------------------------------------------------------
+
+def numCPUs():
+    if os.sysconf_names.has_key("SC_NPROCESSORS_ONLN"):
+        nCPUs = os.sysconf("SC_NPROCESSORS_ONLN")
+        if isinstance(nCPUs, int) and nCPUs > 0:
+            return nCPUs
+    else: 
+        return int(os.popen2("sysctl -n hw.ncpu")[1].read())
+    if os.environ.has_key("NUMBER_OF_PROCESSORS"):
+         nCPUs = int(os.environ["NUMBER_OF_PROCESSORS"]);
+         if nCPUs > 0:
+             return nCPUs
+    return 1
+
+# ------------------------------------------------------------------------------
+
+def getOptions(env):
+    # SCons settings
+    if ARGUMENTS.get("verbose", 0) != "1":
+        env["ARCOMSTR"] = "AR $TARGET"
+        env["CXXCOMSTR"] = "Compiling " + red("$TARGET")
+        env["SHCXXCOMSTR"] = "Compiling " + red("$TARGET")
+        env["LDMODULECOMSTR"] = "Compiling " + red("$TARGET")
+        env["LINKCOMSTR"] = "Linking " + red("$TARGET")
+        env["SHLINKCOMSTR"] = "Linking " + red("$TARGET")
+        env["INSTALLSTR"] = "Installing " + red("$TARGET")
+    # Compiler setting
+    env.Replace(CXX = ARGUMENTS.get("cxx", "g++"))
+
+# ------------------------------------------------------------------------------
+
+def setupEnv(env):
+    # System paths
+    env.Append(CPPPATH = ["/usr/local/include"])
+    env.Append(CPPPATH = ["/opt/local/include"])
+    env.Append(LIBPATH = ["/usr/local/lib"])
+    env.Append(LIBPATH = ["/opt/local/lib"])
+    # SPI locations
+    env.Append(CPPPATH = ["/usr/include/OpenEXR"])
+    env.Append(CPPPATH = ["/net/apps/spinux1/intel/tbb/include"])
+    env.Append(LIBPATH = ["/usr/lib64"])
+    env.Append(LIBPATH = ["/net/apps/spinux1/intel/tbb/lib/intel64/"])
+    # Special case for OpenEXR
+    env.Append(CPPPATH = ["/usr/local/include/OpenEXR"])
+    env.Append(CPPPATH = ["/opt/local/include/OpenEXR"])
+    # System libs
+    env.Append(LIBS = ["z", "pthread"])
+    # Hdf5 lib
+    env.Append(LIBS = ["hdf5"])
+    # OpenEXR
+    if "SP_PLATFORM" in os.environ:
+        env.Append(LIBS = ["SpiHalf"])
+        env.Append(LIBS = ["SpiIex"])
+        env.Append(LIBS = ["SpiImath"])
+        env.Append(LIBS = ["dl"])
+        env.Append(LIBS = ["boost_thread"])
+    else:
+        env.Append(LIBS = ["Half"])
+        env.Append(LIBS = ["Iex"])
+        env.Append(LIBS = ["Imath"])
+        env.Append(LIBS = ["boost_thread-mt"])
+    # TBB
+    env.Append(LIBS = ["tbb"])
+    # Field3D
+    env.Append(CPPPATH = "Field3D_here/export")
+    # OpenVDB
+    env.Append(CPPPATH = "OpenVDB_here")    
+    # Compiler flags
+    env.Append(CCFLAGS = ["-g", "-O3"])
+    env.Append(CPPDEFINES = ["NDEBUG"])
+    # env.Append(CCFLAGS = ["-Wall"])
+    env.Append(CCFLAGS = ["-m64"])
+    env.Append(LINKFLAGS = ["-m64"])
+   
+# ------------------------------------------------------------------------------
+# BUILD SCRIPT
+# ------------------------------------------------------------------------------
+
+env = Environment()
+
+getOptions(env)
+
+# Build dir
+buildPath = buildDir(env)
+env.VariantDir(join(buildPath, "Field3D"), "Field3D_here")
+env.VariantDir(join(buildPath, "OpenVDB"), "OpenVDB_here")
+env.VariantDir(buildPath, "src")
+ 
+setupEnv(env)
+
+files = [
+    "src/main.cpp"
+]
+
+files += Glob(join(buildPath, "Field3D/src", "*.cpp"))
+files += Glob(join(buildPath, "OpenVDB/openvdb", "*.cc"))
+files += Glob(join(buildPath, "OpenVDB/openvdb", "io", "*.cc"))
+files += Glob(join(buildPath, "OpenVDB/openvdb", "math", "*.cc"))
+files += Glob(join(buildPath, "OpenVDB/openvdb", "metadata", "*.cc"))
+files += Glob(join(buildPath, "OpenVDB/openvdb", "tools", "*.cc"))
+files += Glob(join(buildPath, "OpenVDB/openvdb", "tree", "*.cc"))
+files += Glob(join(buildPath, "OpenVDB/openvdb", "util", "*.cc"))
+
+env.Program(join(buildPath, "lib_perf_test"), files)

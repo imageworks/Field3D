@@ -339,6 +339,11 @@ int main()
 
   cout << "Dense Domain Tests - Field3D & OpenVDB (taking " << samples << 
     " samples, time in ms)" << endl;
+  cout << "  Field3D - " << FIELD3D_MAJOR_VER << "." << FIELD3D_MINOR_VER 
+       << "." << FIELD3D_MICRO_VER << endl;
+  cout << "  OpenVDB - " << OPENVDB_LIBRARY_MAJOR_VERSION << "." 
+       << OPENVDB_LIBRARY_MINOR_VERSION << "."
+       << OPENVDB_LIBRARY_PATCH_VERSION << endl;
 
   testContiguousWriteAccess(baseRes, samples);
   testContiguousPreAllocWriteAccess(baseRes, samples);

@@ -79,24 +79,24 @@ enum MIPFilterType
 
 template <class Data_T1, class Data_T2>
 bool copySparseFieldToSparseField(
-  typename SPI::Field3D::SparseField<Data_T1>::Ptr src,
-  typename SPI::Field3D::SparseField<Data_T2>::Ptr dest);
+  typename Field3D::SparseField<Data_T1>::Ptr src,
+  typename Field3D::SparseField<Data_T2>::Ptr dest);
 
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-bool resample(typename SPI::Field3D::DenseField<Data_T>::Ptr source,
-              typename SPI::Field3D::DenseField<Data_T>::Ptr target,
-              SPI::Field3D::V3i reSize,
+bool resample(typename Field3D::DenseField<Data_T>::Ptr source,
+              typename Field3D::DenseField<Data_T>::Ptr target,
+              Field3D::V3i reSize,
               int filterType = 2,
               int numThreads = 8);
 
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-bool resample(typename SPI::Field3D::SparseField<Data_T>::Ptr source,
-              typename SPI::Field3D::SparseField<Data_T>::Ptr target,
-              SPI::Field3D::V3i reSize,
+bool resample(typename Field3D::SparseField<Data_T>::Ptr source,
+              typename Field3D::SparseField<Data_T>::Ptr target,
+              Field3D::V3i reSize,
               int filterType = 2,
               int numThreads = 8);
 
@@ -164,7 +164,7 @@ class ResampleDenseCPU
  public:
 
   // Typedefs ----------------------------------------------------------------//
-  typedef typename SPI::Field3D::DenseField<Data_T>::Ptr dense_ptr;
+  typedef typename Field3D::DenseField<Data_T>::Ptr dense_ptr;
   typedef Imath::V3i V3i; 
   typedef Imath::Box3i iBox;
 
@@ -334,7 +334,7 @@ class ResampleSparseCPU
  public:
 
   // Typedefs ----------------------------------------------------------------//
-  typedef typename SPI::Field3D::SparseField<Data_T>::Ptr sparse_ptr;
+  typedef typename Field3D::SparseField<Data_T>::Ptr sparse_ptr;
   typedef Imath::V3i V3i;
   typedef Imath::Box<V3i> iBox;
 
@@ -506,7 +506,7 @@ class ResampleSparseCPU<Data_T>::Worker
 template <class Data_T>
 ResampleDenseCPU<Data_T>::ResampleDenseCPU()
 {
-  m_numWorkThreads = 8; // SPI::FieldTools::getNumThreads(10000);
+  m_numWorkThreads = 8; // FieldTools::getNumThreads(10000);
 
   m_size = V3i( 1, 1, 1 );
 
@@ -520,10 +520,10 @@ ResampleDenseCPU<Data_T>::ResampleDenseCPU()
 
 template <class Data_T1, class Data_T2>
 bool copySparseFieldToSparseField
-(typename SPI::Field3D::SparseField<Data_T1>::Ptr src,
- typename SPI::Field3D::SparseField<Data_T2>::Ptr dest){
+(typename Field3D::SparseField<Data_T1>::Ptr src,
+ typename Field3D::SparseField<Data_T2>::Ptr dest){
 
-  using namespace SPI::Field3D;
+  using namespace Field3D;
 
   dest->setBlockOrder(src->blockOrder());
   dest->matchDefinition(src);
@@ -573,7 +573,7 @@ bool copySparseFieldToSparseField
 template <class Data_T>
 ResampleDenseCPU<Data_T>::ResampleDenseCPU( V3i inSize ) 
 {
-  m_numWorkThreads = 8; // SPI::FieldTools::getNumThreads(10000);
+  m_numWorkThreads = 8; // FieldTools::getNumThreads(10000);
 
   if( inSize.x < 1 ) { 
     Msg::print(Msg::SevWarning, 
@@ -604,7 +604,7 @@ ResampleDenseCPU<Data_T>::ResampleDenseCPU( V3i inSize )
 template <class Data_T>
 ResampleDenseCPU<Data_T>::ResampleDenseCPU( V3i inSize, int inFilterType ) 
 {
-  m_numWorkThreads = 8; //SPI::FieldTools::getNumThreads(10000);
+  m_numWorkThreads = 8; //FieldTools::getNumThreads(10000);
 
   if( inSize.x < 1 ) { 
     Msg::print(Msg::SevWarning,
@@ -638,7 +638,7 @@ ResampleDenseCPU<Data_T>::ResampleDenseCPU(
   int inFilterType, 
   int inThreads )
 {
-  m_numWorkThreads = 8; //SPI::FieldTools::getNumThreads(10000);
+  m_numWorkThreads = 8; //FieldTools::getNumThreads(10000);
 
   if( inSize.x < 1 ) { 
     Msg::print(Msg::SevWarning, 
@@ -755,9 +755,9 @@ void ResampleDenseCPU<Data_T>::setThreads( int inThreads )
   if( inThreads < 1 ) {
     Msg::print(Msg::SevWarning, "Warning::ResampleDenseCPU::setThreads()::Threads < 1,"
               " setting active threads to " +
-              //str(SPI::FieldTools::getNumThreads(10000) ) );
+              //str(FieldTools::getNumThreads(10000) ) );
                boost::lexical_cast<std::string>(8));
-    m_numWorkThreads = 8; // SPI::FieldTools::getNumThreads(10000);
+    m_numWorkThreads = 8; // FieldTools::getNumThreads(10000);
   }
   else {
     m_numWorkThreads = inThreads;
@@ -806,7 +806,7 @@ bool ResampleDenseCPU<Data_T>::resample( dense_ptr volPtr, dense_ptr resPtr )
                   static_cast<int>( volPtr->mapping()->resolution().y ), 
                   static_cast<int>( volPtr->mapping()->resolution().z ) );
 
-    tmpField1 = dense_ptr( new SPI::Field3D::DenseField<Data_T> );
+    tmpField1 = dense_ptr( new Field3D::DenseField<Data_T> );
     tmpField1->setMapping(volPtr->mapping());
     tmpField1->setSize( tmpSize1 );
   }
@@ -822,7 +822,7 @@ bool ResampleDenseCPU<Data_T>::resample( dense_ptr volPtr, dense_ptr resPtr )
                   m_size.y, 
                   static_cast<int>( volPtr->mapping()->resolution().z ) );
 
-    tmpField2 = dense_ptr( new SPI::Field3D::DenseField<Data_T> );
+    tmpField2 = dense_ptr( new Field3D::DenseField<Data_T> );
     tmpField2->setMapping(volPtr->mapping());
     tmpField2->setSize( tmpSize2 );
   }
@@ -1086,11 +1086,11 @@ inline void ResampleDenseCPU<Data_T>::Worker::filtX()
     
 
     // Get iterator for the result volume
-    typename SPI::Field3D::DenseField<Data_T>::iterator it =
+    typename Field3D::DenseField<Data_T>::iterator it =
       m_resPtr->begin( workSeg );
 
     // Get end iterator for the result volume
-    typename SPI::Field3D::DenseField<Data_T>::iterator end =
+    typename Field3D::DenseField<Data_T>::iterator end =
       m_resPtr->end( workSeg );
 
     // Loop through and filter voxels in x axis, x is current sampel position
@@ -1193,11 +1193,11 @@ inline void ResampleDenseCPU<Data_T>::Worker::filtY()
     }
            
     // Get iterator for the result volume
-    typename SPI::Field3D::DenseField<Data_T>::iterator it =
+    typename Field3D::DenseField<Data_T>::iterator it =
       m_resPtr->begin( workSeg );
 
     // Get end iterator for the result volume
-    typename SPI::Field3D::DenseField<Data_T>::iterator end =
+    typename Field3D::DenseField<Data_T>::iterator end =
       m_resPtr->end( workSeg );
 
     // Unlike the xFilter we stay at the same y value for every scanline but need
@@ -1306,11 +1306,11 @@ inline void ResampleDenseCPU<Data_T>::Worker::filtZ()
     
 
     // Get iterator for the result volume
-    typename SPI::Field3D::DenseField<Data_T>::iterator it =
+    typename Field3D::DenseField<Data_T>::iterator it =
       m_resPtr->begin( workSeg );
 
     // Get end iterator for the result volume
-    typename SPI::Field3D::DenseField<Data_T>::iterator end =
+    typename Field3D::DenseField<Data_T>::iterator end =
       m_resPtr->end( workSeg );
 
     // Unlike the xFilter we stay at the same y value for every scanline but need
@@ -1369,7 +1369,7 @@ inline void ResampleDenseCPU<Data_T>::Worker::filtZ()
 template <class Data_T>
 ResampleSparseCPU<Data_T>::ResampleSparseCPU()
 {
-  m_numWorkThreads = 8; //SPI::FieldTools::getNumThreads(10000);
+  m_numWorkThreads = 8; //FieldTools::getNumThreads(10000);
 
   m_size = V3i( 1, 1, 1 );
 
@@ -1384,7 +1384,7 @@ ResampleSparseCPU<Data_T>::ResampleSparseCPU()
 template <class Data_T>
 ResampleSparseCPU<Data_T>::ResampleSparseCPU( V3i inSize ) 
 {
-  m_numWorkThreads = 8; //SPI::FieldTools::getNumThreads(10000);
+  m_numWorkThreads = 8; //FieldTools::getNumThreads(10000);
 
   if( inSize.x < 1 ) { 
     Msg::print(Msg::SevWarning, 
@@ -1415,7 +1415,7 @@ ResampleSparseCPU<Data_T>::ResampleSparseCPU( V3i inSize )
 template <class Data_T>
 ResampleSparseCPU<Data_T>::ResampleSparseCPU( V3i inSize, int inFilterType ) 
 {
-  m_numWorkThreads = 8; // SPI::FieldTools::getNumThreads(10000);
+  m_numWorkThreads = 8; // FieldTools::getNumThreads(10000);
 
   if( inSize.x < 1 ) { 
     Msg::print(Msg::SevWarning,
@@ -1449,7 +1449,7 @@ ResampleSparseCPU<Data_T>::ResampleSparseCPU(
   int inFilterType, 
   int inThreads )
 {
-  m_numWorkThreads = 8; // SPI::FieldTools::getNumThreads(10000);
+  m_numWorkThreads = 8; // FieldTools::getNumThreads(10000);
 
   if( inSize.x < 1 ) { 
     Msg::print(Msg::SevWarning, 
@@ -1566,9 +1566,9 @@ void ResampleSparseCPU<Data_T>::setThreads( int inThreads )
   if( inThreads < 1 ) {
     Msg::print(Msg::SevWarning, "Warning::ResampleSparseCPU::setThreads()::Threads < 1,"
               " setting active threads to " +
-              // str(SPI::FieldTools::getNumThreads(10000) ) );
+              // str(FieldTools::getNumThreads(10000) ) );
                boost::lexical_cast<std::string>(8));
-    m_numWorkThreads = 8; //SPI::FieldTools::getNumThreads(10000);
+    m_numWorkThreads = 8; //FieldTools::getNumThreads(10000);
   }
   else {
     m_numWorkThreads = inThreads;
@@ -1617,7 +1617,7 @@ bool ResampleSparseCPU<Data_T>::resample( sparse_ptr volPtr, sparse_ptr resPtr )
                   static_cast<int>( volResolution.y ), 
                   static_cast<int>( volResolution.z ) );
 
-    tmpField1 = sparse_ptr( new SPI::Field3D::SparseField<Data_T> );
+    tmpField1 = sparse_ptr( new Field3D::SparseField<Data_T> );
     tmpField1->setBlockOrder(resPtr->blockOrder());
     tmpField1->setMapping(volPtr->mapping());
     tmpField1->setSize( tmpSize1 );
@@ -1637,7 +1637,7 @@ bool ResampleSparseCPU<Data_T>::resample( sparse_ptr volPtr, sparse_ptr resPtr )
                   m_size.y, 
                   static_cast<int>( volResolution.z ) );
 
-    tmpField2 = sparse_ptr( new SPI::Field3D::SparseField<Data_T> );
+    tmpField2 = sparse_ptr( new Field3D::SparseField<Data_T> );
     tmpField2->setBlockOrder(resPtr->blockOrder());
     tmpField2->setMapping(volPtr->mapping());
     tmpField2->setSize( tmpSize2 );
@@ -1707,19 +1707,19 @@ bool ResampleSparseCPU<Data_T>::resample( sparse_ptr volPtr, sparse_ptr resPtr )
       return false;
   }
   
-  using namespace SPI::Field3D;
+  using namespace Field3D;
   // loop over unallocated blocks in the new field and set their empty
   // values to the corresponding empty values in the input field
-  typename SPI::Field3D::SparseField<Data_T>::block_iterator rblocki = resPtr->blockBegin();
-  typename SPI::Field3D::SparseField<Data_T>::block_iterator rblockend = resPtr->blockEnd();
-  SPI::Field3D::V3d voxelRatio =
-    SPI::Field3D::V3d(volResolution) / SPI::Field3D::V3d(resResolution);
+  typename Field3D::SparseField<Data_T>::block_iterator rblocki = resPtr->blockBegin();
+  typename Field3D::SparseField<Data_T>::block_iterator rblockend = resPtr->blockEnd();
+  Field3D::V3d voxelRatio =
+    Field3D::V3d(volResolution) / Field3D::V3d(resResolution);
   for (; rblocki != rblockend; ++rblocki) {
     if (!resPtr->blockIsAllocated(rblocki.x, rblocki.y, rblocki.z)) {
-      SPI::Field3D::Box3i blockBox = rblocki.blockBoundingBox();
-      SPI::Field3D::V3i middle =
-        SPI::Field3D::V3i(SPI::Field3D::V3d(blockBox.max+blockBox.min)*0.5);
-      SPI::Field3D::V3i srcVoxel = SPI::Field3D::V3i(SPI::Field3D::V3d(middle) * voxelRatio);
+      Field3D::Box3i blockBox = rblocki.blockBoundingBox();
+      Field3D::V3i middle =
+        Field3D::V3i(Field3D::V3d(blockBox.max+blockBox.min)*0.5);
+      Field3D::V3i srcVoxel = Field3D::V3i(Field3D::V3d(middle) * voxelRatio);
       resPtr->setBlockEmptyValue(
         rblocki.x, rblocki.y, rblocki.z,
         volPtr->fastValue(srcVoxel.x, srcVoxel.y, srcVoxel.z));
@@ -1842,7 +1842,7 @@ template <class Data_T>
 void ResampleSparseCPU<Data_T>::createWorkBuffer( sparse_ptr volPtr,
                                                   sparse_ptr resPtr )
 {
-  using namespace SPI::Field3D;
+  using namespace Field3D;
   V3i volSize = volPtr->mapping()->resolution();
 
   // add work units for each soon-to-be-allocated resampled block
@@ -2067,11 +2067,11 @@ inline void ResampleSparseCPU<Data_T>::Worker::filtX()
     Imath::Box3i dataWindow = m_volPtr->dataWindow();
 
     // Get iterator for the result volume
-    typename SPI::Field3D::SparseField<Data_T>::iterator it =
+    typename Field3D::SparseField<Data_T>::iterator it =
       m_resPtr->begin( workSeg );
 
     // Get end iterator for the result volume
-    typename SPI::Field3D::SparseField<Data_T>::iterator end =
+    typename Field3D::SparseField<Data_T>::iterator end =
       m_resPtr->end( workSeg );
 
     // Loop through target filter voxels in the block, filter along x axis
@@ -2176,11 +2176,11 @@ inline void ResampleSparseCPU<Data_T>::Worker::filtY()
     Imath::Box3i dataWindow = m_volPtr->dataWindow();
 
     // Get iterator for the result volume
-    typename SPI::Field3D::SparseField<Data_T>::iterator it =
+    typename Field3D::SparseField<Data_T>::iterator it =
       m_resPtr->begin( workSeg );
 
     // Get end iterator for the result volume
-    typename SPI::Field3D::SparseField<Data_T>::iterator end =
+    typename Field3D::SparseField<Data_T>::iterator end =
       m_resPtr->end( workSeg );
 
     // Loop through target filter voxels in the block, filter along y axis
@@ -2283,11 +2283,11 @@ inline void ResampleSparseCPU<Data_T>::Worker::filtZ()
     Imath::Box3i dataWindow = m_volPtr->dataWindow();
 
     // Get iterator for the result volume
-    typename SPI::Field3D::SparseField<Data_T>::iterator it =
+    typename Field3D::SparseField<Data_T>::iterator it =
       m_resPtr->begin( workSeg );
 
     // Get end iterator for the result volume
-    typename SPI::Field3D::SparseField<Data_T>::iterator end =
+    typename Field3D::SparseField<Data_T>::iterator end =
       m_resPtr->end( workSeg );
 
     // Loop through target filter voxels in the block, filter along z axis

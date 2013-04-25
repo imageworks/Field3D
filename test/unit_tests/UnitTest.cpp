@@ -66,8 +66,8 @@ using namespace boost::unit_test;
 
 using namespace std;
 
-using namespace FIELD3D_NS;
-using namespace FIELD3D_NS::Hdf5Util;
+using namespace Field3D;
+using namespace Field3D::Hdf5Util;
 
 //----------------------------------------------------------------------------//
 
@@ -124,7 +124,6 @@ getTempFile(const std::string &file)
   
   // Make sure the path is valid.
   std::string valid_file(file);
-  size_t  s = 0;
   for (size_t i = 0; i < valid_file.size(); i++)
   {
     if (!isalnum(valid_file[i]) && valid_file[i] != '.')
@@ -2204,7 +2203,7 @@ bool CopyThreaded<Field_T>::simpleFunc(
   typename Field_T::Ptr  srcPtr, 
   typename Field_T::Ptr  destPtr)
 {
-  using namespace SPI::Field3D;
+  using namespace Field3D;
   typedef typename Field_T::value_type Data_T;
 
   // Resulting densefield pointer pointing to the incoming volume will give undesired result
@@ -2485,7 +2484,7 @@ void testMIPMake()
 test_suite*
 init_unit_test_suite(int argc, char* argv[])
 {
-  typedef FIELD3D_NS::half half;
+  typedef Field3D::half half;
 
   initIO();
 

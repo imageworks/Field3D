@@ -41,6 +41,8 @@
 #include <boost/test/included/unit_test.hpp>
 
 #include <boost/timer.hpp>
+#include <boost/thread/thread.hpp>
+#include <boost/thread/mutex.hpp>
 
 #include <OpenEXR/ImathFrustum.h>
 
@@ -50,6 +52,9 @@
 #include "Field3D/FieldInterp.h"
 #include "Field3D/InitIO.h"
 #include "Field3D/MACField.h"
+#include "Field3D/MIPDenseField.h"
+#include "Field3D/MIPSparseField.h"
+#include "Field3D/MIPUtil.h"
 #include "Field3D/SparseField.h"
 #include "Field3D/Types.h"
 #include "Field3D/Log.h"
@@ -61,8 +66,8 @@ using namespace boost::unit_test;
 
 using namespace std;
 
-using namespace Field3D;
-using namespace Field3D::Hdf5Util;
+using namespace FIELD3D_NS;
+using namespace FIELD3D_NS::Hdf5Util;
 
 //----------------------------------------------------------------------------//
 
@@ -94,10 +99,14 @@ namespace {
   {
   public:
     boost::timer timer;
+    ScopedPrintTimer(int numThreads=1)
+      : m_numThreads(numThreads)
+      {}
     ~ScopedPrintTimer()
     {
-      Msg::print("  Time elapsed: " + lexical_cast<string>(timer.elapsed()));
+      Msg::print("  Time elapsed: " + lexical_cast<string>(timer.elapsed()/float(m_numThreads)));
     }
+    int m_numThreads;
   };
 }
 
@@ -2027,6 +2036,442 @@ void testTimeVaryingFrustumFieldMapping()
 
 //----------------------------------------------------------------------------//
 
+// ---------------------------------------------------------------------------//
+// Functions -----------------------------------------------------------------//
+// ---------------------------------------------------------------------------//
+
+// ---------------------------------------------------------------------------//
+
+template <typename Data_T > 
+void createWorkBuffer( 
+  typename DenseField<Data_T>::Ptr destPtr, std::vector<Imath::Box3i> &workBuf )
+{
+  V3i res = destPtr->mapping()->resolution();
+  for( int i = 0; i < res.y; ++i ){
+    for( int j = 0; j < res.z; ++j ) {
+      workBuf.push_back( Imath::Box3i( Imath::V3i( 0,  i, j ), 
+                                       Imath::V3i( res.x - 1, i , j ) ) );
+      
+    }
+  }
+}
+
+template <typename Data_T> 
+void createWorkBuffer( 
+  typename SparseField<Data_T>::Ptr destPtr, std::vector<Imath::Box3i> &workBuf )
+{
+    // for sparse loop over each block to be thread safe.
+  typename SparseField<Data_T>::block_iterator i = destPtr->blockBegin();
+  typename SparseField<Data_T>::block_iterator end = destPtr->blockEnd();
+  for (; i != end; ++i) 
+  {
+    workBuf.push_back(i.blockBoundingBox());
+  }
+}
+
+
+
+//----------------------------------------------------------------------------//
+// Conv class declaration
+template <class Field_T>
+class CopyThreaded
+{
+ public:
+ 
+  // Forward declaration -----------------------------------------------------//
+  
+  //Class for doing all the work
+  class Worker;
+
+  // Constructors ------------------------------------------------------------//
+   
+  // Creates an empty CopyThreaded object
+  CopyThreaded()
+    :
+    m_numWorkThreads(1)
+    {}
+
+  // Witch chosen parameters
+  CopyThreaded(int inThreads = 8)
+    :
+    m_numWorkThreads(inThreads)
+    {}
+  
+  // Destructor --------------------------------------------------------------//
+  virtual ~CopyThreaded() 
+    {}
+
+  // Functions ---------------------------------------------------------------//
+
+  // Performs the copyion of the volume
+  bool simpleFunc( typename Field_T::Ptr srcPtr, typename Field_T::Ptr destPtr);
+
+ protected:
+
+  int m_numWorkThreads;        // Number of worker threads;
+
+  boost::mutex m_bufMutex;     // Mutex for reading from buffer
+
+  std::vector<Imath::Box3i> m_workBuf; // Buffer for holding the work data first conv
+
+}; //CopyThreaded class declaration end
+
+//----------------------------------------------------------------------------//
+// CopyThreaded::Worker
+//----------------------------------------------------------------------------//
+ 
+template <class Field_T>
+class CopyThreaded<Field_T>::Worker
+{
+ public:
+
+  typedef typename Field_T::value_type Data_T;
+
+  // Constructors ------------------------------------------------------------//
+  Worker( 
+    CopyThreaded<Field_T>* inBoss, 
+    typename Field_T::Ptr inSrcPtr, 
+    typename Field_T::Ptr inDestPtr)
+    : 
+      m_boss( inBoss ), 
+      m_srcPtr( inSrcPtr ), 
+      m_destPtr( inDestPtr )
+  { }
+  
+  // Destructor --------------------------------------------------------------//
+  virtual ~Worker() 
+  { }
+
+  // Main function -----------------------------------------------------------//
+  void operator()()
+  {
+
+    //Start execution
+    while( true ) { 
+      
+      // Declaration for the current work segment
+      Imath::Box3i workSeg;
+      
+      // Lock work buffer while reading from it
+      {
+        boost::mutex::scoped_lock lock( m_boss->m_bufMutex );
+	    
+        // Get work from work buffer if it is not empty
+        if ( !m_boss->m_workBuf.empty() ) {
+          // Fetch work
+          workSeg = m_boss->m_workBuf.back();
+          // Delete work segment
+          m_boss->m_workBuf.pop_back();
+          
+        }
+        // Or buffers empty, exit
+        else {
+          return;
+        } 
+      } 
+      //typename Field_T::CubicInterp interp;
+      // Create iterators for volume field
+      typename Field_T::const_iterator itSrc = m_srcPtr->cbegin( workSeg );
+      // create iterators for the result field
+      typename Field_T::iterator itDest = m_destPtr->begin( workSeg );
+      typename Field_T::iterator itDestEnd = m_destPtr->end( workSeg );
+
+      // Iterate through each volume element
+      for( ; itDest != itDestEnd; ++itSrc, ++itDest) {        
+        // Copy through field and get back voxel value
+        *itDest = *itSrc;
+        //Imath::V3i vsP(itSrc.x, itSrc.y, itSrc.z);
+        //*itDest = interp.sample(*m_srcPtr, vsP);
+      }
+    }
+  }
+
+
+ private:
+  
+  CopyThreaded<Field_T>* m_boss;     // Pointer to parent boss instance
+  typename Field_T::Ptr   m_srcPtr;  // Pointer to the incoming volume
+  typename Field_T::Ptr   m_destPtr; // Pointer to the outgoing result/
+
+};
+
+
+// ---------------------------------------------------------------------------//
+
+// Performs the copyion of the volume
+template <class Field_T>
+bool CopyThreaded<Field_T>::simpleFunc( 
+  typename Field_T::Ptr  srcPtr, 
+  typename Field_T::Ptr  destPtr)
+{
+  using namespace SPI::Field3D;
+  typedef typename Field_T::value_type Data_T;
+
+  // Resulting densefield pointer pointing to the incoming volume will give undesired result
+  if ( srcPtr.get() == destPtr.get() ) {
+    Msg::print(
+              "Error::CopyThreaded::copy()::"
+              "resulting field same as incoming"); // Change these to exceptions?
+    return false;
+  }
+
+  Imath::Box3i srcExtents = srcPtr->extents();
+  Imath::Box3i srcDataWindow = srcPtr->dataWindow();
+
+  // Make sure destPtr is the same size as srcPtr
+  V3i srcRes = srcPtr->mapping()->resolution();
+  V3i destRes = destPtr->mapping()->resolution();
+
+  if ( srcRes.x != destRes.x ||
+       srcRes.y != destRes.y ||
+       srcRes.z != destRes.z   ) {
+
+    destPtr->matchDefinition(srcPtr);
+  }
+
+  // Downcast to MatrixFieldMapping ptr type to extract tranformation matrices
+  MatrixFieldMapping::Ptr srcMapping =
+    FIELD_DYNAMIC_CAST<MatrixFieldMapping>( srcPtr->mapping());  
+
+
+  if (srcMapping == 0){
+    Msg::print(
+              "Error::CopyThreaded::copy()::"
+              "FieldMapping not of matrix type");
+    return false;
+  }
+   
+
+  //Create work buffer for the workers
+  createWorkBuffer<Data_T>( destPtr, m_workBuf);
+ 
+  // Thread group for the workers
+  boost::thread_group group;
+  //Create workers
+  for( int i = 0; i < m_numWorkThreads; ++i ) {
+    group.create_thread( Worker(this, srcPtr, destPtr) );
+  }
+
+  // Make sure every thread is finished before exiting
+  group.join_all();
+
+  return true;
+}
+//----------------------------------------------------------------------------//
+
+
+template <template <typename T> class Field_T, class Data_T>
+void testThreadField()
+{
+
+  typedef Field_T<Data_T> SField;
+  Box3i extents(V3i(0), V3i(62,128,62));
+  //Box3i extents(V3i(0), V3i(128,256,128));
+  typename SField::Ptr src = new(SField);
+  typename SField::Ptr dest = new(SField);
+
+  float testVal = 1.5f;
+  dest->setSize(extents);
+  dest->clear(testVal);
+  src->setSize(extents);
+  src->clear(testVal);
+  //intialized src with random value
+  {
+    V3i srcRes = src->mapping()->resolution();
+    Imath::Rand32 rng(0);
+    typename SField::iterator i = src->begin();
+    typename SField::iterator end = src->end();
+    for (; i != end; ++i) {
+      float val = rng.nextf();
+      *i = val;          
+    }  
+  }
+  
+  std::vector<int> numThreads;
+  numThreads.push_back(1);
+  numThreads.push_back(4);
+  numThreads.push_back(8);
+
+ 
+
+  for (std::vector<int>::const_iterator i=numThreads.begin(), end=numThreads.end();
+       i != end; ++i) 
+  {
+    {
+      Msg::print("Testing " + src->className()+ " with " 
+                 + lexical_cast<string>(*i) + " # of theards.");
+      ScopedPrintTimer t(*i);
+      CopyThreaded<SField> vol( *i );
+      vol.simpleFunc(src, dest);
+    }
+    // verify data
+    {
+      typename SField::const_iterator itSrc = src->cbegin();
+      typename SField::const_iterator itDest = dest->cbegin();
+      typename SField::const_iterator itDestEnd = dest->cend();
+      // Iterate through each volume element
+      for( ; itDest != itDestEnd; ++itSrc, ++itDest) {        
+        BOOST_CHECK_EQUAL(*itDest, *itSrc);
+      }
+      dest->clear(testVal);
+    }
+  }
+}
+
+//----------------------------------------------------------------------------//
+
+template <template <typename T> class MIP_T, 
+          template <typename T> class Field_T, 
+          class Data_T>
+void testMIPField()
+{
+  typedef MIP_T<Data_T> FieldType;
+
+  string TName(DataTypeTraits<Data_T>::name());
+  Msg::print(string("Testing ") + MIP_T<Data_T>::classType());
+
+  typename Field_T<Data_T>::Ptr level0(new Field_T<Data_T>);
+  typename Field_T<Data_T>::Ptr level1(new Field_T<Data_T>);
+  typename Field_T<Data_T>::Ptr level2(new Field_T<Data_T>);
+
+  level0->setSize(V3i(100));
+  level1->setSize(V3i(50));
+  level2->setSize(V3i(25));
+
+  level0->clear(1.0);
+  level1->clear(0.5);
+  level2->clear(0.25);
+
+  std::vector<typename Field_T<Data_T>::Ptr> levels;
+  levels.push_back(level0);
+  levels.push_back(level1);
+  levels.push_back(level2);
+
+  typename MIP_T<Data_T>::Ptr mipField(new MIP_T<Data_T>);
+  mipField->setup(levels);
+  mipField->name = "mip";
+  mipField->attribute = "density";
+  
+  Field3DOutputFile out;
+  string filename(getTempFile(string(MIP_T<Data_T>::classType()) + ".f3d")); 
+
+  out.create(filename);
+  out.writeScalarLayer<float>(mipField);
+
+  Field3DInputFile in;
+  in.open(filename);
+  typename Field<Data_T>::Vec fields = in.readScalarLayers<Data_T>();
+  mipField = field_dynamic_cast<MIP_T<Data_T> >(fields[0]);
+
+  BOOST_CHECK_EQUAL(fields.size(), 1);
+  BOOST_CHECK_EQUAL(mipField != NULL, true);
+  BOOST_CHECK_EQUAL(mipField->numLevels(), 3);
+  bool matchLevel0 = isIdentical<Data_T>(mipField->mipLevel(0), level0);
+  BOOST_CHECK(matchLevel0);
+  bool matchLevel1 = isIdentical<Data_T>(mipField->mipLevel(1), level1);
+  BOOST_CHECK(matchLevel1);
+  bool matchLevel2 = isIdentical<Data_T>(mipField->mipLevel(2), level2);
+  BOOST_CHECK(matchLevel2);
+}
+
+//----------------------------------------------------------------------------//
+
+template <template <typename T> class MIP_T, 
+          template <typename T> class Field_T, 
+          class Data_T>
+void testMIPFieldColor()
+{
+  string TName(DataTypeTraits<Data_T>::name());
+  Msg::print(string("Testing ") + MIP_T<Data_T>::classType());
+
+  // typename Field_T<Data_T>::Ptr level0(new Field_T<Data_T>);
+  typename Field_T<Data_T>::Ptr level1(new Field_T<Data_T>);
+  typename Field_T<Data_T>::Ptr level2(new Field_T<Data_T>);
+  typename Field_T<Data_T>::Ptr level3(new Field_T<Data_T>);
+  typename Field_T<Data_T>::Ptr level4(new Field_T<Data_T>);
+  typename Field_T<Data_T>::Ptr level5(new Field_T<Data_T>);
+
+  // level0->setSize(V3i(400));
+  level1->setSize(V3i(200));
+  level2->setSize(V3i(100));
+  level3->setSize(V3i(50));
+  level4->setSize(V3i(25));
+  level5->setSize(V3i(13));
+
+  // level0->clear(V3f(1.0, 0.1, 0.1));
+  level1->clear(V3f(0.1, 1.0, 0.1));
+  level2->clear(V3f(0.1, 0.1, 1.0));
+  level3->clear(V3f(1.0, 1.0, 0.1));
+  level4->clear(V3f(1.0, 0.1, 1.0));
+  level5->clear(V3f(0.1, 1.0, 1.0));
+
+  std::vector<typename Field_T<Data_T>::Ptr> levels;
+  // levels.push_back(level0);
+  levels.push_back(level1);
+  levels.push_back(level2);
+  levels.push_back(level3);
+  levels.push_back(level4);
+  levels.push_back(level5);
+
+  typename MIP_T<Data_T>::Ptr mipField(new MIP_T<Data_T>);
+  mipField->setup(levels);
+  mipField->name = "mip";
+  mipField->attribute = "emission";
+  
+  Field3DOutputFile out;
+  string filename(getTempFile(string(MIP_T<Data_T>::classType()) + ".f3d")); 
+
+  out.create(filename);
+  out.writeVectorLayer<float>(mipField);
+}
+
+//----------------------------------------------------------------------------//
+
+template <template <typename T> class MIP_T, 
+          template <typename T> class Field_T, 
+          class Data_T>
+void testMIPMake()
+{
+  typedef MIP_T<Data_T> FieldType;
+
+  string TName(DataTypeTraits<Data_T>::name());
+  Msg::print(string("Testing MIP Make") + MIP_T<Data_T>::classType());
+
+  typename Field_T<Data_T>::Ptr level0(new Field_T<Data_T>);
+
+  level0->setSize(V3i(400));
+  
+  int val = 0;
+  for (typename Field_T<Data_T>::iterator i = level0->begin(), end = level0->end();
+       i != end; ++i) {
+    *i = val;
+    val = val++ % 128;
+  }
+
+  typename MIP_T<Data_T>::Ptr mipField = makeMIP<MIP_T<Data_T> >(level0);
+  mipField->name = "mip";
+  mipField->attribute = "density";
+  
+  Field3DOutputFile out;
+  string filename(getTempFile("testMIPMake.f3d")); 
+
+  out.create(filename);
+  out.writeScalarLayer<float>(mipField);
+
+  Field3DInputFile in;
+  in.open(filename);
+  typename Field<Data_T>::Vec fields = in.readScalarLayers<Data_T>();
+  mipField = field_dynamic_cast<MIP_T<Data_T> >(fields[0]);
+
+  BOOST_CHECK_EQUAL(fields.size(), 1);
+  BOOST_CHECK_EQUAL(mipField != NULL, true);
+  BOOST_CHECK_EQUAL(mipField->numLevels(), 5);
+  bool matchLevel0 = isIdentical<Data_T>(mipField->mipLevel(0), level0);
+  BOOST_CHECK(matchLevel0);
+}
+
+//----------------------------------------------------------------------------//
+
 #define DO_BASIC_TESTS         1
 #define DO_INTERP_TESTS        1
 #define DO_CUBIC_INTERP_TESTS  1
@@ -2034,11 +2479,13 @@ void testTimeVaryingFrustumFieldMapping()
 #define DO_ADVANCED_FILE_TESTS 1
 #define DO_SPARSE_BLOCK_TESTS  1
 #define DO_MAC_TESTS           1
+#define DO_THREAD_TESTS        1
+#define DO_MIP_TESTS           1
 
 test_suite*
 init_unit_test_suite(int argc, char* argv[])
 {
-  typedef Field3D::half half;
+  typedef FIELD3D_NS::half half;
 
   initIO();
 
@@ -2165,6 +2612,20 @@ init_unit_test_suite(int argc, char* argv[])
 
 #if DO_MAC_TESTS
   test->add(BOOST_TEST_CASE((&testMACField<float>)));
+#endif
+
+
+#if DO_THREAD_TESTS
+  test->add(BOOST_TEST_CASE((&testThreadField<DenseField, float>)));
+  test->add(BOOST_TEST_CASE((&testThreadField<SparseField, float>)));
+#endif 
+
+#if DO_MIP_TESTS
+  test->add(BOOST_TEST_CASE((&testMIPField<MIPDenseField, DenseField, float>)));
+  test->add(BOOST_TEST_CASE((&testMIPFieldColor<MIPDenseField, DenseField, V3f>)));
+  test->add(BOOST_TEST_CASE((&testMIPField<MIPSparseField, SparseField, float>)));
+  test->add(BOOST_TEST_CASE((&testMIPFieldColor<MIPSparseField, SparseField, V3f>)));
+  test->add(BOOST_TEST_CASE((&testMIPMake<MIPDenseField, DenseField, float>)));
 #endif
 
   return test;

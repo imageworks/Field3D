@@ -152,6 +152,7 @@ private:
   static const std::string k_extentsStr;
   static const std::string k_dataWindowStr;
   static const std::string k_componentsStr;
+  static const std::string k_bitsPerComponentStr;
   static const std::string k_dataStr;
 
   // Typedefs ------------------------------------------------------------------
@@ -212,6 +213,14 @@ bool DenseFieldIO::writeInternal(hid_t layerGroup,
 
   if (!writeAttribute(layerGroup, k_componentsStr, 1, components)) {
     throw WriteAttributeException("Couldn't write attribute " + k_componentsStr);
+  }
+
+  // Add the bits per component attribute ---
+
+  int bits = DataTypeTraits<Data_T>::h5bits();
+  if (!writeAttribute(layerGroup, k_bitsPerComponentStr, 1, bits)) {
+    Msg::print(Msg::SevWarning, "Error adding bits per component attribute.");
+    return false;
   }
 
   // Add data to file ---

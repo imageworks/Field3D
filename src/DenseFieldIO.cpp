@@ -68,6 +68,7 @@ const std::string DenseFieldIO::k_versionAttrName("version");
 const std::string DenseFieldIO::k_extentsStr("extents");
 const std::string DenseFieldIO::k_dataWindowStr("data_window");
 const std::string DenseFieldIO::k_componentsStr("components");
+const std::string DenseFieldIO::k_bitsPerComponentStr("bits_per_component");
 const std::string DenseFieldIO::k_dataStr("data");
 
 //----------------------------------------------------------------------------//

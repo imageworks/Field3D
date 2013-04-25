@@ -1607,7 +1607,6 @@ long long int SparseField<Data_T>::memSize() const
 {
   long long int blockSize = m_numBlocks * sizeof(Block);
   long long int dataSize = 0;
-  typename std::vector<Block>::const_iterator i;
 
   for (size_t i = 0; i < m_numBlocks; ++i) {
     if (m_blocks[i].isAllocated) {

@@ -35,46 +35,38 @@
 
 //----------------------------------------------------------------------------//
 
-#define FIELD3D_MAJOR_VER 1
-#define FIELD3D_MINOR_VER 5
-#define FIELD3D_MICRO_VER 0
+/*! \file ProceduralField.cpp
+  contains template instantiations for ProceduralField class
+*/
 
-#define FIELD3D_VERSION_NS v1_5
+//----------------------------------------------------------------------------//
 
-#ifdef FIELD3D_EXTRA_NAMESPACE
+#include "ProceduralField.h"
 
-#  define FIELD3D_NAMESPACE_OPEN \
-  namespace FIELD3D_EXTRA_NAMESPACE { \
-    namespace Field3D { namespace FIELD3D_VERSION_NS {
-#  define FIELD3D_NAMESPACE_HEADER_CLOSE \
-  } using namespace FIELD3D_VERSION_NS; } }
-#  define FIELD3D_NAMESPACE_SOURCE_CLOSE \
-  } } }
+//----------------------------------------------------------------------------//
 
-#else
+FIELD3D_NAMESPACE_OPEN
 
-#  define FIELD3D_NAMESPACE_OPEN \
-  namespace Field3D { namespace FIELD3D_VERSION_NS {
-#  define FIELD3D_NAMESPACE_HEADER_CLOSE \
-  } using namespace FIELD3D_VERSION_NS; } 
-#  define FIELD3D_NAMESPACE_SOURCE_CLOSE \
-  } } 
+//----------------------------------------------------------------------------//
+// ProceduralField
+//----------------------------------------------------------------------------//
 
-#endif
+//----------------------------------------------------------------------------//
+//static template member
+//----------------------------------------------------------------------------//
 
-#ifdef WIN32
+// template <class Data_T>
+// TemplatedFieldType<ProceduralField<Data_T> > ProceduralField<Data_T>::ms_classType;
 
-#  ifdef FIELD3D_STATIC
-#    define FIELD3D_API
-#  else
-#    ifdef FIELD3D_EXPORT
-#      define FIELD3D_API __declspec(dllexport)
-#    else
-#      define FIELD3D_API __declspec(dllimport)
-#    endif
-#  endif
-#else
-#  define FIELD3D_API
-#endif
+// template TemplatedFieldType<ProceduralField<half> > ProceduralField<half>::ms_classType;
+// template TemplatedFieldType<ProceduralField<float> > ProceduralField<float>::ms_classType;
+// template TemplatedFieldType<ProceduralField<double> > ProceduralField<double>::ms_classType;
+// template TemplatedFieldType<ProceduralField<V3h> > ProceduralField<V3h>::ms_classType;
+// template TemplatedFieldType<ProceduralField<V3f> > ProceduralField<V3f>::ms_classType;
+// template TemplatedFieldType<ProceduralField<V3d> > ProceduralField<V3d>::ms_classType;
+
+//----------------------------------------------------------------------------//
+
+FIELD3D_NAMESPACE_SOURCE_CLOSE
 
 //----------------------------------------------------------------------------//

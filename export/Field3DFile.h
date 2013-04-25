@@ -591,6 +591,7 @@ public:
     typedef Field_T<FIELD3D_VEC3_T<Data_T> > TypedVField;
     typedef typename Field<FIELD3D_VEC3_T<Data_T> >::Vec FieldList;
     typedef typename Field_T<FIELD3D_VEC3_T<Data_T> >::Vec TypedFieldList;
+  
     // First, read the layers as-is
     FieldList originals;
     originals = readVectorLayers<Data_T>(partitionName, layerName);
@@ -632,6 +633,16 @@ public:
                  const std::string &layerName, 
                  bool isVectorLayer) const;
 
+  //! Retrieves a proxy version (EmptyField) from a given HDF5 location
+  //! \note Although the call is templated, all fields are read, regardless
+  //! of bit depth.
+  //! \param location HDF5 file location
+  template <class Data_T>
+  typename EmptyField<Data_T>::Ptr
+  readProxyLayer(hid_t location, const std::string &name,
+                 const std::string &attribute, 
+                 FieldMapping::Ptr mapping) const;
+  
   //! Retrieves a proxy version (EmptyField) of each scalar layer 
   //! \note Although the call is templated, all fields are read, regardless
   //! of bit depth.
@@ -718,6 +729,11 @@ private:
   std::string m_filename;  
 
 };
+
+//----------------------------------------------------------------------------//
+// Utility functions
+//----------------------------------------------------------------------------//
+
 
 //----------------------------------------------------------------------------//
 // Field3DOutputFile
@@ -1156,30 +1172,19 @@ Field3DInputFile::readProxyLayer(const std::string &partitionName,
                       + layerName + " in .f3d file ");
             return emptyList;
           }
-          // Read the extents and data window
-          Box3i extents, dataW;
-          if (!readAttribute(layerGroup, "extents", 6, extents.min.x)) {
-            return emptyList;
-          }
-          if (!readAttribute(layerGroup, "data_window", 6, dataW.min.x)) {
-            return emptyList;
-          } 
-          // Construct the field and load the data
-          typename EmptyField<Data_T>::Ptr field(new EmptyField<Data_T>);
-          field->setSize(extents, dataW);
 
-          // read the metadata 
-          string metadataPath = layerPath + "/metadata";
-          H5ScopedGopen metadataGroup(m_file, metadataPath.c_str());
-          if (metadataGroup.id() > 0) {    
-            readMetadata(metadataGroup.id(), field);
-          }
+          // Make the proxy representation
+          typename EmptyField<Data_T>::Ptr field = 
+            readProxyLayer<Data_T>(layerGroup, partitionName, layerName, 
+                                   part->mapping);
 
-          // ... Set the name of the field so it's possible to 
-          // ... re-create the file
-          field->name = partitionName;
-          field->attribute = layerName;
-          field->setMapping(part->mapping);
+          // Read MIPField's number of mip levels
+          int numLevels = 0;
+          H5ScopedGopen mipGroup(layerGroup, "mip_levels");
+          if (mipGroup.id() >= 0)
+            readAttribute(mipGroup, "levels", 1, numLevels);
+          field->metadata().setIntMetadata("mip_levels", numLevels);
+
           // Add field to output
           output.push_back(field);
         }
@@ -1193,6 +1198,48 @@ Field3DInputFile::readProxyLayer(const std::string &partitionName,
   }
   
   return output;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+typename EmptyField<Data_T>::Ptr 
+Field3DInputFile::readProxyLayer(hid_t location, 
+                                 const std::string &name,
+                                 const std::string &attribute,
+                                 FieldMapping::Ptr mapping) const
+{
+  using namespace boost;
+  using namespace std;
+  using namespace Hdf5Util;
+
+  typename EmptyField<Data_T>::Ptr null;
+
+  // Read the extents and data window
+  Box3i extents, dataW;
+  if (!readAttribute(location, "extents", 6, extents.min.x)) {
+    return null;
+  }
+  if (!readAttribute(location, "data_window", 6, dataW.min.x)) {
+    return null;
+  } 
+
+  // Construct the field and load the data
+  typename EmptyField<Data_T>::Ptr field(new EmptyField<Data_T>);
+  field->setSize(extents, dataW);
+
+  // Read the metadata 
+  H5ScopedGopen metadataGroup(location, "metadata");
+  if (metadataGroup.id() > 0) {    
+    readMetadata(metadataGroup.id(), field);
+  }
+
+  // Set field properties
+  field->name = name;
+  field->attribute = attribute;
+  field->setMapping(mapping);
+
+  return field;
 }
 
 //----------------------------------------------------------------------------//

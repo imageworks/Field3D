@@ -35,13 +35,13 @@
 
 //----------------------------------------------------------------------------//
 
-/*! \file DenseFieldIO.cpp
-  Containts implementation of the DenseFieldIO class
+/*! \file MIPDenseFieldIO.cpp
+  Containts implementation of the MIPDenseFieldIO class
 */
 
 //----------------------------------------------------------------------------//
 
-#include "DenseFieldIO.h"
+#include "MIPDenseFieldIO.h"
 
 //----------------------------------------------------------------------------//
 
@@ -60,30 +60,33 @@ using namespace Exc;
 using namespace Hdf5Util;
 
 //----------------------------------------------------------------------------//
-// Static members
+// Static member initialization
 //----------------------------------------------------------------------------//
 
-const int         DenseFieldIO::k_versionNumber(1);
-const std::string DenseFieldIO::k_versionAttrName("version");
-const std::string DenseFieldIO::k_extentsStr("extents");
-const std::string DenseFieldIO::k_dataWindowStr("data_window");
-const std::string DenseFieldIO::k_componentsStr("components");
-const std::string DenseFieldIO::k_bitsPerComponentStr("bits_per_component");
-const std::string DenseFieldIO::k_dataStr("data");
+const int         MIPDenseFieldIO::k_versionNumber(1);
+const std::string MIPDenseFieldIO::k_versionAttrName("version");
+const std::string MIPDenseFieldIO::k_extentsStr("extents");
+const std::string MIPDenseFieldIO::k_dataWindowStr("data_window");
+const std::string MIPDenseFieldIO::k_componentsStr("components");
+const std::string MIPDenseFieldIO::k_bitsPerComponentStr("bits_per_component");
+const std::string MIPDenseFieldIO::k_mipGroupStr("mip_levels");
+const std::string MIPDenseFieldIO::k_levelGroupStr("level");
+const std::string MIPDenseFieldIO::k_levelsStr("levels");
 
+//----------------------------------------------------------------------------//
+// MIPDenseFieldIO
 //----------------------------------------------------------------------------//
 
 FieldBase::Ptr
-DenseFieldIO::read(hid_t layerGroup, const std::string &/*filename*/, 
-                   const std::string &/*layerPath*/,
-                   DataTypeEnum typeEnum)
+MIPDenseFieldIO::read(hid_t layerGroup, const std::string &filename, 
+                      const std::string &layerPath,
+                      DataTypeEnum typeEnum)
 {
   Box3i extents, dataW;
   int components;
-  hsize_t dims[1];
   
   if (layerGroup == -1)
-    throw BadHdf5IdException("Bad layer group in DenseFieldIO::read");
+    throw BadHdf5IdException("Bad layer group in MIPDenseFieldIO::read");
 
   int version;
   if (!readAttribute(layerGroup, k_versionAttrName, 1, version))
@@ -91,67 +94,52 @@ DenseFieldIO::read(hid_t layerGroup, const std::string &/*filename*/,
                                     k_versionAttrName);
 
   if (version != k_versionNumber)
-    throw UnsupportedVersionException("DenseField version not supported: " + 
+    throw UnsupportedVersionException("MIPDenseField version not supported: " + 
                                       lexical_cast<std::string>(version));
 
-  if (!readAttribute(layerGroup, k_extentsStr, 6, extents.min.x)) 
-    throw MissingAttributeException("Couldn't find attribute " + 
-                                    k_extentsStr);
-
-  if (!readAttribute(layerGroup, k_dataWindowStr, 6, dataW.min.x)) 
-    throw MissingAttributeException("Couldn't find attribute " + 
-                                    k_dataWindowStr);
-  
   if (!readAttribute(layerGroup, k_componentsStr, 1, components)) 
     throw MissingAttributeException("Couldn't find attribute " + 
                                     k_componentsStr);
 
-  H5ScopedDopen dataSet(layerGroup, k_dataStr, H5P_DEFAULT);
+  // Check data type ---
 
-  if (dataSet.id() < 0) 
-    throw OpenDataSetException("Couldn't open data set: " + k_dataStr);
+  int bits;
+  if (!readAttribute(layerGroup, k_bitsPerComponentStr, 1, bits)) 
+    throw MissingAttributeException("Couldn't find attribute: " +
+                                    k_bitsPerComponentStr);  
 
-  H5ScopedDget_space dataSpace(dataSet.id());
-  H5ScopedDget_type dataType(dataSet.id());
-  H5Sget_simple_extent_dims(dataSpace.id(), dims, NULL);
+  bool isHalf = false;
+  bool isFloat = false;
+  bool isDouble = false;
 
-  if (dataSpace.id() < 0) 
-    throw GetDataSpaceException("Couldn't get data space");
-
-  if (dataType.id() < 0)
-    throw GetDataTypeException("Couldn't get data type");
-
-  // Double-check that the sizes match ---
-
-  V3i size(dataW.size() + V3i(1));
-  int calculatedTotal = size.x * size.y * size.z;
-  int reportedSize = dims[0] / components;
-
-  if (calculatedTotal != reportedSize) 
-    throw FileIntegrityException("Data size doesn't match number of voxels");
-
-  // Build a DenseField to store everything in
-  FieldBase::Ptr result;
+  switch (bits) {
+  case 16:
+    isHalf = true;
+    break;
+  case 64:
+    isDouble = true;
+    break;
+  case 32:
+  default:
+    isFloat = true;
+  }
 
   // Read the data ---
 
-  bool isHalf, isFloat, isDouble;
-  isHalf = H5Tequal(dataType, H5T_NATIVE_SHORT);
-  isFloat = H5Tequal(dataType, H5T_NATIVE_FLOAT);
-  isDouble = H5Tequal(dataType, H5T_NATIVE_DOUBLE);
+  FieldBase::Ptr result;
 
   if (isHalf && components == 1 && typeEnum == DataTypeHalf)
-    result = readData<half>(dataSet.id(), extents, dataW);
+    result = readInternal<half>(layerGroup, filename, layerPath, typeEnum);
   if (isFloat && components == 1 && typeEnum == DataTypeFloat)
-    result = readData<float>(dataSet.id(), extents, dataW);
+    result = readInternal<float>(layerGroup, filename, layerPath, typeEnum);
   if (isDouble && components == 1 && typeEnum == DataTypeDouble)
-    result = readData<double>(dataSet.id(), extents, dataW);
+    result = readInternal<double>(layerGroup, filename, layerPath, typeEnum); 
   if (isHalf && components == 3 && typeEnum == DataTypeVecHalf)
-    result = readData<V3h>(dataSet.id(), extents, dataW);
+    result = readInternal<V3h>(layerGroup, filename, layerPath, typeEnum);
   if (isFloat && components == 3 && typeEnum == DataTypeVecFloat)
-    result = readData<V3f>(dataSet.id(), extents, dataW);
+    result = readInternal<V3f>(layerGroup, filename, layerPath, typeEnum);
   if (isDouble && components == 3 && typeEnum == DataTypeVecDouble)
-    result = readData<V3d>(dataSet.id(), extents, dataW);
+    result = readInternal<V3d>(layerGroup, filename, layerPath, typeEnum);
 
   return result;
 }
@@ -159,29 +147,31 @@ DenseFieldIO::read(hid_t layerGroup, const std::string &/*filename*/,
 //----------------------------------------------------------------------------//
 
 bool
-DenseFieldIO::write(hid_t layerGroup, FieldBase::Ptr field)
+MIPDenseFieldIO::write(hid_t layerGroup, FieldBase::Ptr field)
 {
-  if (layerGroup == -1)
-    throw BadHdf5IdException("Bad layer group in DenseFieldIO::write");
+  if (layerGroup == -1) {
+    throw BadHdf5IdException("Bad layer group in MIPDenseFieldIO::write");
+  }
 
   // Add version attribute
   if (!writeAttribute(layerGroup, k_versionAttrName, 
-                    1, k_versionNumber))
+                      1, k_versionNumber)) {
     throw WriteAttributeException("Couldn't write attribute " + 
                                   k_versionAttrName);
+  }
 
-  DenseField<half>::Ptr halfField = 
-    field_dynamic_cast<DenseField<half> >(field);
-  DenseField<float>::Ptr floatField = 
-    field_dynamic_cast<DenseField<float> >(field);
-  DenseField<double>::Ptr doubleField = 
-    field_dynamic_cast<DenseField<double> >(field);
-  DenseField<V3h>::Ptr vecHalfField = 
-    field_dynamic_cast<DenseField<V3h> >(field);
-  DenseField<V3f>::Ptr vecFloatField = 
-    field_dynamic_cast<DenseField<V3f> >(field);
-  DenseField<V3d>::Ptr vecDoubleField = 
-    field_dynamic_cast<DenseField<V3d> >(field);
+  MIPDenseField<half>::Ptr halfField = 
+    field_dynamic_cast<MIPDenseField<half> >(field);
+  MIPDenseField<float>::Ptr floatField = 
+    field_dynamic_cast<MIPDenseField<float> >(field);
+  MIPDenseField<double>::Ptr doubleField = 
+    field_dynamic_cast<MIPDenseField<double> >(field);
+  MIPDenseField<V3h>::Ptr vecHalfField = 
+    field_dynamic_cast<MIPDenseField<V3h> >(field);
+  MIPDenseField<V3f>::Ptr vecFloatField = 
+    field_dynamic_cast<MIPDenseField<V3f> >(field);
+  MIPDenseField<V3d>::Ptr vecDoubleField = 
+    field_dynamic_cast<MIPDenseField<V3d> >(field);
 
   bool success = true;
 
@@ -204,8 +194,8 @@ DenseFieldIO::write(hid_t layerGroup, FieldBase::Ptr field)
     success = writeInternal<V3d>(layerGroup, vecDoubleField);
   }
   else {
-    throw WriteLayerException("DenseFieldIO does not support the given "
-                              "DenseField template parameter");
+    throw WriteLayerException("MIPDenseFieldIO does not support the given "
+                              "MIPDenseField template parameter");
   }
 
   return success;

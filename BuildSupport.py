@@ -214,7 +214,7 @@ def setupEnv(env, pathToRoot = "."):
     # Hdf5 lib
     env.Append(LIBS = ["hdf5"])
     # Boost system
-    env.Append(LIBS = ["boost_system-mt"])
+    env.Append(LIBS = ["boost_system-gcc44-mt-1.51"])
     # Boost threads
     if siteExists and hasattr(Site, "boostThreadLib"):
         env.Append(LIBS = [Site.boostThreadLib])

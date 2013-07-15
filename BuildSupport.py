@@ -167,6 +167,10 @@ def setupEnv(env, pathToRoot = "."):
     baseIncludePaths = systemIncludePaths[sys.platform][architectureStr()]
     baseLibPaths = systemLibPaths[sys.platform][architectureStr()]
     baseLibs = systemLibs[sys.platform]
+    # Compiler
+    compiler = ARGUMENTS.get('compiler', '')
+    if compiler != '':
+        env.Replace(CXX = compiler)
     # System include paths
     env.Append(CPPPATH = baseIncludePaths)
     # System lib paths

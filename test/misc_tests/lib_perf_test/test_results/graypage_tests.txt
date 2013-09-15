@@ -1,0 +1,143 @@
+Dense Domain Tests - Field3D & OpenVDB (taking 10 samples, time in ms)
+  Field3D - 1.4.0
+  OpenVDB - 1.1.1
+Contiguous write access 800^3
+ - Dense           | alloc: 434       | run: 380       | total: 814       | mem: 2048000744     | rss: 2048204800     | check sum: 512000000
+ - Sparse 8        | alloc: 3         | run: 5174      | total: 5177      | mem: 2064000400     | rss: 2080235520     | check sum: 512000000
+ - VDB 8           | alloc: 0         | run: 4904      | total: 4904      | mem: 2143866376     | rss: 2172227584     | check sum: 512000000
+ - Sparse 16       | alloc: 0         | run: 6339      | total: 6339      | mem: 2050000400     | rss: 2052349952     | check sum: 512000000
+ - VDB 16          | alloc: 0         | run: 5623      | total: 5623      | mem: 2116935060     | rss: 2120822784     | check sum: 512000000
+ - Sparse 32       | alloc: 0         | run: 4594      | total: 4594      | mem: 2048250400     | rss: 2048884736     | check sum: 512000000
+ - VDB 32          | alloc: 0         | run: 3945      | total: 3945      | mem: 2112854536     | rss: 2113699840     | check sum: 512000000
+Contiguous write access (preallocated) 800^3
+ - Dense           | alloc: 0         | run: 193       | total: 193       | mem: 2048000744     | rss: 2048819200     | check sum: 512000000
+ - Sparse 8        | alloc: 0         | run: 6127      | total: 6127      | mem: 2064000400     | rss: 2080415744     | check sum: 512000000
+ - VDB 8           | alloc: 0         | run: 5506      | total: 5506      | mem: 2143866376     | rss: 2172313600     | check sum: 512000000
+ - Sparse 16       | alloc: 0         | run: 6102      | total: 6102      | mem: 2050000400     | rss: 2052435968     | check sum: 512000000
+ - VDB 16          | alloc: 0         | run: 5198      | total: 5198      | mem: 2116935060     | rss: 2120896512     | check sum: 512000000
+ - Sparse 32       | alloc: 0         | run: 3875      | total: 3875      | mem: 2048250400     | rss: 2048958464     | check sum: 512000000
+ - VDB 32          | alloc: 0         | run: 3141      | total: 3141      | mem: 2112854536     | rss: 2113769472     | check sum: 512000000
+Contiguous read access 800^3
+ - Dense           | alloc: 0         | run: 1247      | total: 1247      | mem: 2048000744     | rss: 2049114112     | check sum: 512000000
+ - Sparse 8        | alloc: 0         | run: 3470      | total: 3470      | mem: 2064000400     | rss: 2080477184     | check sum: 512000000
+ - VDB 8           | alloc: 0         | run: 2359      | total: 2359      | mem: 2143866376     | rss: 2172358656     | check sum: 512000000
+ - Sparse 16       | alloc: 0         | run: 3347      | total: 3347      | mem: 2050000400     | rss: 2052481024     | check sum: 512000000
+ - VDB 16          | alloc: 0         | run: 2129      | total: 2129      | mem: 2116935060     | rss: 2120921088     | check sum: 512000000
+ - Sparse 32       | alloc: 0         | run: 3422      | total: 3422      | mem: 2048250400     | rss: 2048983040     | check sum: 512000000
+ - VDB 32          | alloc: 0         | run: 2231      | total: 2231      | mem: 2112854536     | rss: 2113781760     | check sum: 512000000
+Memory coherent write access 800^3
+ - Dense           | alloc: 431       | run: 190       | total: 621       | mem: 2048000744     | rss: 2049122304     | check sum: 512000000
+ - Sparse 8        | alloc: 3         | run: 873       | total: 876       | mem: 2064000400     | rss: 2080497664     | check sum: 512000000
+ - VDB 8           | alloc: 0         | run: 941       | total: 941       | mem: 2143866376     | rss: 2172370944     | check sum: 512000000
+ - Sparse 16       | alloc: 0         | run: 788       | total: 788       | mem: 2050000400     | rss: 2052497408     | check sum: 512000000
+ - VDB 16          | alloc: 0         | run: 871       | total: 871       | mem: 2116935060     | rss: 2120937472     | check sum: 512000000
+ - Sparse 32       | alloc: 0         | run: 774       | total: 774       | mem: 2048250400     | rss: 2049003520     | check sum: 512000000
+ - VDB 32          | alloc: 0         | run: 863       | total: 863       | mem: 2112854536     | rss: 2113798144     | check sum: 512000000
+Memory coherent write access (preallocated) 800^3
+ - Dense           | alloc: 0         | run: 189       | total: 189       | mem: 2048000744     | rss: 2049142784     | check sum: 512000000
+ - Sparse 8        | alloc: 0         | run: 216       | total: 216       | mem: 2064000400     | rss: 2080505856     | check sum: 512000000
+ - VDB 8           | alloc: 0         | run: 217       | total: 217       | mem: 2143866376     | rss: 2172387328     | check sum: 512000000
+ - Sparse 16       | alloc: 0         | run: 197       | total: 197       | mem: 2050000400     | rss: 2052513792     | check sum: 512000000
+ - VDB 16          | alloc: 0         | run: 201       | total: 201       | mem: 2116935060     | rss: 2120957952     | check sum: 512000000
+ - Sparse 32       | alloc: 0         | run: 194       | total: 194       | mem: 2048250400     | rss: 2049024000     | check sum: 512000000
+ - VDB 32          | alloc: 0         | run: 198       | total: 198       | mem: 2112854536     | rss: 2113814528     | check sum: 512000000
+Memory coherent read access 800^3
+ - Dense           | alloc: 0         | run: 1245      | total: 1245      | mem: 2048000744     | rss: 2049159168     | check sum: 512000000
+ - Sparse 8        | alloc: 0         | run: 1267      | total: 1267      | mem: 2064000400     | rss: 2080522240     | check sum: 512000000
+ - VDB 8           | alloc: 0         | run: 1252      | total: 1252      | mem: 2143866376     | rss: 2172395520     | check sum: 512000000
+ - Sparse 16       | alloc: 0         | run: 1251      | total: 1251      | mem: 2050000400     | rss: 2052521984     | check sum: 512000000
+ - VDB 16          | alloc: 0         | run: 1254      | total: 1254      | mem: 2116935060     | rss: 2120957952     | check sum: 512000000
+ - Sparse 32       | alloc: 0         | run: 1248      | total: 1248      | mem: 2048250400     | rss: 2049024000     | check sum: 512000000
+ - VDB 32          | alloc: 0         | run: 1255      | total: 1255      | mem: 2112854536     | rss: 2113818624     | check sum: 512000000
+Sparse fill (time in us) 1024^3
+ - Sparse 8        | alloc: 7717      | run: 13339     | total: 21056     | mem: 33554832       | rss: 34721792       | check sum: 0
+ - VDB 8           | alloc: 0         | run: 37        | total: 37        | mem: 271604         | rss: 1163264        | check sum: 0
+ - Sparse 16       | alloc: 256       | run: 575       | total: 831       | mem: 4194704        | rss: 4726784        | check sum: 0
+ - VDB 16          | alloc: 0         | run: 33        | total: 33        | mem: 271604         | rss: 4726784        | check sum: 0
+ - Sparse 32       | alloc: 32        | run: 70        | total: 102       | mem: 524688         | rss: 4726784        | check sum: 0
+ - VDB 32          | alloc: 0         | run: 33        | total: 33        | mem: 271604         | rss: 4726784        | check sum: 0
+Sparse fill (time in us) 2048^3
+ - Sparse 8        | alloc: 61015     | run: 108191    | total: 169206    | mem: 268435856      | rss: 273166336      | check sum: 0
+ - VDB 8           | alloc: 0         | run: 61        | total: 61        | mem: 271604         | rss: 4726784        | check sum: 0
+ - Sparse 16       | alloc: 7124      | run: 12997     | total: 20121     | mem: 33554832       | rss: 38285312       | check sum: 0
+ - VDB 16          | alloc: 0         | run: 36        | total: 36        | mem: 271604         | rss: 4726784        | check sum: 0
+ - Sparse 32       | alloc: 256       | run: 575       | total: 831       | mem: 4194704        | rss: 4726784        | check sum: 0
+ - VDB 32          | alloc: 0         | run: 33        | total: 33        | mem: 271604         | rss: 4726784        | check sum: 0
+Random incoherent write access 200000 points, 800^3
+ - Dense           | alloc: 430       | run: 2         | total: 432       | mem: 2048000744     | rss: 2052759552     | check sum: 199955
+ - Sparse 8        | alloc: 1         | run: 154       | total: 155       | mem: 387605904      | rss: 393469952      | check sum: 199955
+ - VDB 8           | alloc: 0         | run: 186       | total: 186       | mem: 398713512      | rss: 406765568      | check sum: 199955
+ - Sparse 16       | alloc: 0         | run: 591       | total: 591       | mem: 1639564816     | rss: 1644130304     | check sum: 199955
+ - VDB 16          | alloc: 0         | run: 732       | total: 732       | mem: 1693172344     | rss: 1698942976     | check sum: 199955
+ - Sparse 32       | alloc: 0         | run: 729       | total: 729       | mem: 2048250400     | rss: 2051473408     | check sum: 199955
+ - VDB 32          | alloc: 0         | run: 889       | total: 889       | mem: 2112854536     | rss: 2116263936     | check sum: 199955
+Random incoherent write access (preallocated) 200000 points, 800^3
+ - Dense           | alloc: 0         | run: 2         | total: 2         | mem: 2048000744     | rss: 2053402624     | check sum: 199955
+ - Sparse 8        | alloc: 0         | run: 17        | total: 17        | mem: 2064000400     | rss: 2082971648     | check sum: 199955
+ - VDB 8           | alloc: 0         | run: 37        | total: 37        | mem: 2143866376     | rss: 2174844928     | check sum: 199955
+ - Sparse 16       | alloc: 0         | run: 17        | total: 17        | mem: 2050000400     | rss: 2054971392     | check sum: 199955
+ - VDB 16          | alloc: 0         | run: 24        | total: 24        | mem: 2116935060     | rss: 2123407360     | check sum: 199955
+ - Sparse 32       | alloc: 0         | run: 16        | total: 16        | mem: 2048250400     | rss: 2051473408     | check sum: 199955
+ - VDB 32          | alloc: 0         | run: 18        | total: 18        | mem: 2112854536     | rss: 2116263936     | check sum: 199955
+Random incoherent read access 1000000 points, 800^3
+ - Dense           | alloc: 0         | run: 13        | total: 13        | mem: 2040330340     | rss: 2052907008     | check sum: 1000000
+ - Sparse 8        | alloc: 0         | run: 72        | total: 72        | mem: 2064000400     | rss: 2092580864     | check sum: 1000000
+ - VDB 8           | alloc: 0         | run: 129       | total: 129       | mem: 2143866376     | rss: 2184454144     | check sum: 1000000
+ - Sparse 16       | alloc: 0         | run: 56        | total: 56        | mem: 2050000400     | rss: 2064580608     | check sum: 1000000
+ - VDB 16          | alloc: 0         | run: 89        | total: 89        | mem: 2116935060     | rss: 2133016576     | check sum: 1000000
+ - Sparse 32       | alloc: 0         | run: 51        | total: 51        | mem: 2048250400     | rss: 2061082624     | check sum: 1000000
+ - VDB 32          | alloc: 0         | run: 69        | total: 69        | mem: 2112854536     | rss: 2125873152     | check sum: 1000000
+Random incoherent point interpolation 800^3
+ - Dense           | alloc: 0         | run: 122       | total: 122       | mem: 2048000744     | rss: 2085240832     | check sum: 1000000
+ - Sparse 8        | alloc: 0         | run: 257       | total: 257       | mem: 2064000400     | rss: 2104606720     | check sum: 1000000
+ - VDB 8           | alloc: 0         | run: 384       | total: 384       | mem: 2143866376     | rss: 2196484096     | check sum: 1000000
+ - Sparse 16       | alloc: 0         | run: 213       | total: 213       | mem: 2050000400     | rss: 2076610560     | check sum: 1000000
+ - VDB 16          | alloc: 0         | run: 349       | total: 349       | mem: 2116935060     | rss: 2145050624     | check sum: 1000000
+ - Sparse 32       | alloc: 0         | run: 191       | total: 191       | mem: 2048250400     | rss: 2073112576     | check sum: 1000000
+ - VDB 32          | alloc: 0         | run: 289       | total: 289       | mem: 2112854536     | rss: 2137915392     | check sum: 1000000
+Uniform raymarching - #rays:10000, step size: 0.5, resolution: 800^3
+ - Dense           | alloc: 0         | run: 1392      | total: 1392      | mem: 2048000744     | rss: 2073300992     | check sum: 18341298
+ - Sparse 8        | alloc: 0         | run: 1792      | total: 1792      | mem: 2064000400     | rss: 2080661504     | check sum: 18341298
+ - VDB 8           | alloc: 0         | run: 2032      | total: 2032      | mem: 2143866376     | rss: 2172538880     | check sum: 18341298
+ - Sparse 16       | alloc: 0         | run: 1638      | total: 1638      | mem: 2050000400     | rss: 2052661248     | check sum: 18341298
+ - VDB 16          | alloc: 0         | run: 1906      | total: 1906      | mem: 2116935060     | rss: 2121101312     | check sum: 18341298
+ - Sparse 32       | alloc: 0         | run: 1566      | total: 1566      | mem: 2048250400     | rss: 2049163264     | check sum: 18341298
+ - VDB 32          | alloc: 0         | run: 1899      | total: 1899      | mem: 2112854536     | rss: 2113961984     | check sum: 18341298
+Dense level set sphere 1000^3
+ - Dense           | alloc: 881       | run: 6126      | total: 7007      | mem: 4000000744     | rss: 4001300480     | check sum: 18446744073689848021
+ - Sparse 8        | alloc: 6         | run: 14125     | total: 14131     | mem: 4031250400     | rss: 4063166464     | check sum: 18446744073689848021
+ - VDB 8           | alloc: 0         | run: 12580     | total: 12580     | mem: 4181641752     | rss: 4237012992     | check sum: 18446744073689848021
+ - Sparse 16       | alloc: 0         | run: 14735     | total: 14735     | mem: 4100771200     | rss: 4105441280     | check sum: 18446744073689848021
+ - VDB 16          | alloc: 0         | run: 12854     | total: 12854     | mem: 4232230112     | rss: 4239904768     | check sum: 18446744073689848021
+ - Sparse 32       | alloc: 0         | run: 13322     | total: 13322     | mem: 4295491984     | rss: 4296687616     | check sum: 18446744073689848021
+ - VDB 32          | alloc: 0         | run: 9759      | total: 9759      | mem: 4430382420     | rss: 4431974400     | check sum: 18446744073689848021
+Narrow band level set sphere 1000^3
+ - Dense           | alloc: 881       | run: 607       | total: 1488      | mem: 4000000744     | rss: 4001075200     | check sum: 198
+ - Sparse 8        | alloc: 2         | run: 738       | total: 740       | mem: 235339744      | rss: 237608960      | check sum: 198
+ - VDB 8           | alloc: 0         | run: 734       | total: 734       | mem: 222129312      | rss: 225603584      | check sum: 198
+ - Sparse 16       | alloc: 0         | run: 778       | total: 778       | mem: 357535104      | rss: 358555648      | check sum: 198
+ - VDB 16          | alloc: 0         | run: 785       | total: 785       | mem: 367178076      | rss: 368463872      | check sum: 198
+ - Sparse 32       | alloc: 0         | run: 878       | total: 878       | mem: 653525392      | rss: 654282752      | check sum: 198
+ - VDB 32          | alloc: 0         | run: 893       | total: 893       | mem: 674048652      | rss: 674873344      | check sum: 198
+Narrow band level set sphere 2000^3
+ - Sparse 8        | alloc: 58        | run: 3209      | total: 3267      | mem: 1073507344     | rss: 1080627200     | check sum: 203
+ - VDB 8           | alloc: 0         | run: 3219      | total: 3219      | mem: 896463604      | rss: 908431360      | check sum: 203
+ - Sparse 16       | alloc: 2         | run: 3401      | total: 3403      | mem: 1448777696     | rss: 1450844160     | check sum: 203
+ - VDB 16          | alloc: 0         | run: 3426      | total: 3426      | mem: 1473224520     | rss: 1476337664     | check sum: 203
+ - Sparse 32       | alloc: 0         | run: 3865      | total: 3865      | mem: 2624261504     | rss: 2625261568     | check sum: 203
+ - VDB 32          | alloc: 0         | run: 3916      | total: 3916      | mem: 2704707936     | rss: 2705952768     | check sum: 203
+Narrow band level set sphere 3000^3
+ - Sparse 8        | alloc: 197       | run: 7579      | total: 7776      | mem: 2699371520     | rss: 2714550272     | check sum: 199
+ - VDB 8           | alloc: 0         | run: 7591      | total: 7591      | mem: 2019993996     | rss: 2046099456     | check sum: 199
+ - Sparse 16       | alloc: 24        | run: 8018      | total: 8042      | mem: 3314007440     | rss: 3317821440     | check sum: 199
+ - VDB 16          | alloc: 0         | run: 8067      | total: 8067      | mem: 3333686868     | rss: 3339866112     | check sum: 199
+ - Sparse 32       | alloc: 1         | run: 9087      | total: 9088      | mem: 5912971536     | rss: 5914374144     | check sum: 199
+ - VDB 32          | alloc: 0         | run: 9174      | total: 9174      | mem: 6090356880     | rss: 6092304384     | check sum: 199
+Narrow band level set sphere 4000^3
+ - Sparse 8        | alloc: 467       | run: 13888     | total: 14355     | mem: 5304077712     | rss: 5330575360     | check sum: 199
+ - VDB 8           | alloc: 0         | run: 13894     | total: 13894     | mem: 3597529568     | rss: 3643482112     | check sum: 199
+ - Sparse 16       | alloc: 58        | run: 14754     | total: 14812     | mem: 5947503632     | rss: 5953753088     | check sum: 199
+ - VDB 16          | alloc: 0         | run: 14775     | total: 14775     | mem: 5921482352     | rss: 5931925504     | check sum: 199
+ - Sparse 32       | alloc: 7         | run: 16566     | total: 16573     | mem: 10477688800    | rss: 10479644672    | check sum: 199
+ - VDB 32          | alloc: 0         | run: 16726     | total: 16726     | mem: 10783949892    | rss: 10786873344    | check sum: 199
+

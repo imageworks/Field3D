@@ -1441,7 +1441,8 @@ int SparseField<Data_T>::releaseBlocks(Functor_T func)
   V3i validSize;
   V3i blockAllocSize(blockSize());
 
-  for (int i = 0, bx=0, by=0, bz=0; i < m_numBlocks; ++i, ++bx) {
+  int bx = 0, by = 0, bz = 0;
+  for (size_t i = 0; i < m_numBlocks; ++i, ++bx) {
     if (bx >= m_blockRes.x) {
       bx = 0;
       ++by;

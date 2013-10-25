@@ -127,7 +127,7 @@ IF ( CMAKE_HOST_WIN32 )
   SET ( Field3D_BIN_Libraries Field3D ${Boost_LIBRARIES} )
 ENDIF ()
 
-TARGET_LINK_LIBRARIES ( Field3D ${Field3D_DSO_Libraries} )
+TARGET_LINK_LIBRARIES ( Field3D ${Field3D_DSO_Libraries} ${Boost_LIBRARIES})
 
 # Parase version and soversion from export/ns.h
 

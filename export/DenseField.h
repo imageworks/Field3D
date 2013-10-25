@@ -248,7 +248,7 @@ template <class Data_T>
 class DenseField<Data_T>::const_iterator
 {
 public:
-#ifdef WIN32
+#if defined(WIN32) || __MAC_OS_X_VERSION_MIN_REQUIRED >= 1090
   typedef std::forward_iterator_tag iterator_category;
   typedef Data_T value_type;
   typedef ptrdiff_t difference_type;
@@ -343,7 +343,7 @@ template <class Data_T>
 class DenseField<Data_T>::iterator
 {
 public:
-#ifdef WIN32
+#if defined(WIN32) || __MAC_OS_X_VERSION_MIN_REQUIRED >= 1090
   typedef std::forward_iterator_tag iterator_category;
   typedef Data_T value_type;
   typedef ptrdiff_t difference_type;

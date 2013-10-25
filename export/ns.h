@@ -77,4 +77,8 @@
 #  define FIELD3D_API
 #endif
 
+#ifdef __APPLE__
+#include <Availability.h>
+#endif
+
 //----------------------------------------------------------------------------//

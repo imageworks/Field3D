@@ -800,6 +800,15 @@ template <class Data_T>
 class SparseField<Data_T>::const_iterator
 {
  public:
+#if defined(WIN32) || __MAC_OS_X_VERSION_MIN_REQUIRED >= 1090
+  typedef std::forward_iterator_tag iterator_category;
+  typedef Data_T value_type;
+  typedef ptrdiff_t difference_type;
+  typedef ptrdiff_t distance_type;
+  typedef Data_T *pointer;
+  typedef Data_T& reference;
+#endif
+
   typedef SparseField<Data_T> class_type;
   const_iterator(const class_type &field,
                  const Box3i &window,
@@ -973,6 +982,15 @@ template <class Data_T>
 class SparseField<Data_T>::iterator
 {
  public:
+#if defined(WIN32) || __MAC_OS_X_VERSION_MIN_REQUIRED >= 1090
+  typedef std::forward_iterator_tag iterator_category;
+  typedef Data_T value_type;
+  typedef ptrdiff_t difference_type;
+  typedef ptrdiff_t distance_type;
+  typedef Data_T *pointer;
+  typedef Data_T& reference;
+#endif
+
   typedef SparseField<Data_T> class_type;
   iterator(class_type &field,
            const Box3i &window,

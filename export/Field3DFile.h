@@ -1292,7 +1292,7 @@ Field3DInputFile::readVectorLayer(const std::string &intPartitionName,
 template <class Data_T>
 File::Partition::Ptr
 Field3DOutputFile::createNewPartition(const std::string &partitionName,
-                                      const std::string &layerName,
+                                      const std::string & /* layerName */,
                                       typename Field<Data_T>::Ptr field)
 {
   using namespace Hdf5Util;

@@ -87,15 +87,15 @@ bool SparseFileManager::doLimitMemUse() const
 void SparseFileManager::setMaxMemUse(float maxMemUse) 
 {
   m_maxMemUse = maxMemUse;
-  m_maxMemUseInBytes = static_cast<int>(m_maxMemUse * 1024*1024);
+  m_maxMemUseInBytes = static_cast<int64_t>(m_maxMemUse * 1024 * 1024);
 }
 
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-int SparseFileManager::deallocateBlock(const SparseFile::CacheBlock &cb)
+int64_t SparseFileManager::deallocateBlock(const SparseFile::CacheBlock &cb)
 {
-  int bytesFreed = 0;
+  int64_t bytesFreed = 0;
   SparseFile::Reference<Data_T> &reference = m_fileData.ref<Data_T>(cb.refIdx);
 
   // Note: we don't need to lock the block's mutex because
@@ -141,7 +141,7 @@ void SparseFileManager::deallocateBlock(CacheList::iterator &it)
 {
   SparseFile::CacheBlock &cb = *it;
   SparseFile::Reference<Data_T> &reference = m_fileData.ref<Data_T>(cb.refIdx);
-  int bytesFreed = reference.blockSize(cb.blockIdx);
+  int64_t bytesFreed = reference.blockSize(cb.blockIdx);
   m_memUse -= bytesFreed;
   reference.unloadBlock(cb.blockIdx);
   it = m_blockCacheList.erase(it);
@@ -149,7 +149,7 @@ void SparseFileManager::deallocateBlock(CacheList::iterator &it)
 
 //----------------------------------------------------------------------------//
 
-void SparseFileManager::deallocateBlocks(int bytesNeeded)
+void SparseFileManager::deallocateBlocks(int64_t bytesNeeded)
 {
   boost::mutex::scoped_lock lock_A(m_mutex);
 
@@ -163,7 +163,7 @@ void SparseFileManager::deallocateBlocks(int bytesNeeded)
 
     // if bytesFreed is set to >0, then we've already freed a block
     // and advanced the "clock hand" iterator
-    int bytesFreed = 0;
+    int64_t bytesFreed = 0;
 
     switch(cb.blockType) {
     case DataTypeHalf:

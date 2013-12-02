@@ -226,6 +226,7 @@ def setupEnv(env, pathToRoot = "."):
     else:
         env.Append(CCFLAGS = ["-g", "-O3"])
     env.Append(CCFLAGS = ["-Wall"])
+    env.Append(CCFLAGS = ["-Wextra"])
     # Set number of jobs to use
     env.SetOption('num_jobs', numCPUs())
     # 64 bit setup

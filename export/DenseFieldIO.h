@@ -265,7 +265,7 @@ bool DenseFieldIO::writeInternal(hid_t layerGroup,
 template <class Data_T>
 bool DenseFieldIO::writeData(hid_t dataSet, 
                              typename DenseField<Data_T>::Ptr field,
-                             Data_T dummy)
+                             Data_T /* dummy */)
 { 
   using namespace Hdf5Util;
 

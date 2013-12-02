@@ -307,7 +307,7 @@ Field3DFileBase::~Field3DFileBase()
 
 std::string 
 Field3DFileBase::intPartitionName(const std::string &partitionName,
-                                  const std::string &layerName,
+                                  const std::string & /* layerName */,
                                   FieldRes::Ptr field)
 {
   // Loop over existing partitions and see if there's a matching mapping
@@ -783,7 +783,7 @@ bool Field3DInputFile::readPartitionAndLayerInfo()
 
 //----------------------------------------------------------------------------//
 
-herr_t Field3DInputFile::parsePartition(hid_t loc_id, 
+herr_t Field3DInputFile::parsePartition(hid_t /* loc_id */, 
                                         const std::string itemName)
 {
   // Add the partition ---
@@ -1110,7 +1110,7 @@ namespace InputFile {
 //----------------------------------------------------------------------------//
 
 herr_t parsePartitions(hid_t loc_id, const char *itemName, 
-                       const H5L_info_t *linfo, void *opdata)
+                       const H5L_info_t * /* linfo */, void *opdata)
 {
   herr_t          status;
   H5O_info_t      infobuf;
@@ -1148,7 +1148,7 @@ herr_t parsePartitions(hid_t loc_id, const char *itemName,
 //----------------------------------------------------------------------------//
 
 herr_t parseLayers(hid_t loc_id, const char *itemName, 
-                   const H5L_info_t *linfo, void *opdata)
+                   const H5L_info_t * /* linfo */, void *opdata)
 {
   herr_t          status;
   H5O_info_t      infobuf;

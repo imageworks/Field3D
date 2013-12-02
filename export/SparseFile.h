@@ -418,12 +418,12 @@ private:
 
   //! Utility function to reclaim the specified number of bytes by
   //! deallocating unneeded blocks
-  void deallocateBlocks(int bytesNeeded);
+  void deallocateBlocks(int64_t bytesNeeded);
 
   //! Utility function to attempt to deallocate a single block and
   //! advance the "hand"
   template <class Data_T>
-  int deallocateBlock(const SparseFile::CacheBlock &cb);
+  int64_t deallocateBlock(const SparseFile::CacheBlock &cb);
 
   //! Utility function to deallocate a single block
   template <class Data_T>
@@ -433,10 +433,10 @@ private:
   float m_maxMemUse;
 
   //! Max amount om memory to use in bytes
-  int m_maxMemUseInBytes;
+  int64_t m_maxMemUseInBytes;
 
   //! Current amount of memory in use in bytes
-  int m_memUse;
+  int64_t m_memUse;
 
   //! Whether to limit memory use of sparse fields from disk. Enables the
   //! cache and dynamic loading when true.
@@ -976,7 +976,7 @@ SparseFileManager::removeFieldFromCache(int refIdx)
   CacheList::iterator end = m_blockCacheList.end();
   CacheList::iterator next;
 
-  int bytesFreed = 0;
+  int64_t bytesFreed = 0;
 
   while (it != end) {
     if (it->blockType == blockType && it->refIdx == refIdx) {

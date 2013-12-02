@@ -1086,8 +1086,12 @@ inline V3d discToCont(const V3i &discCoord)
 template <class Iter_T>
 void advance(Iter_T &iter, int num) 
 {
-  if (num <= 0) return;
-  for (int i=0; i<num; ++i, ++iter);
+  if (num <= 0) {
+    return;
+  }
+  for (int i=0; i<num; ++i, ++iter) {
+    // Empty
+  }
 }
 
 //----------------------------------------------------------------------------//
@@ -1096,9 +1100,12 @@ void advance(Iter_T &iter, int num)
 template <class Iter_T>
 void advance(Iter_T &iter, int num, const Iter_T &end) 
 {
-  if (num <= 0) 
+  if (num <= 0) {
     return;
-  for (int i=0; i<num && iter != end; ++i, ++iter);
+  }
+  for (int i=0; i<num && iter != end; ++i, ++iter) {
+    // Empty
+  }
 }
 
 //----------------------------------------------------------------------------//

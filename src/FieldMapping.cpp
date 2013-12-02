@@ -178,7 +178,7 @@ std::string NullFieldMapping::className() const
 //----------------------------------------------------------------------------//
 
 bool NullFieldMapping::isIdentical(FieldMapping::Ptr other, 
-                                   double tolerance) const
+                                   double /* tolerance */) const
 {
   // For null mappings it's simple - if the other one is also a null mapping
   // then true, otherwise it's false.

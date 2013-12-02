@@ -76,8 +76,8 @@ const std::string MACFieldIO::k_wDataStr("w_data");
 //----------------------------------------------------------------------------//
 
 FieldBase::Ptr
-MACFieldIO::read(hid_t layerGroup, const std::string &filename, 
-                 const std::string &layerPath,
+MACFieldIO::read(hid_t layerGroup, const std::string & /* filename */, 
+                 const std::string & /* layerPath */,
                  DataTypeEnum typeEnum)
 {
   Box3i extents, dataW;

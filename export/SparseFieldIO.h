@@ -409,7 +409,7 @@ bool SparseFieldIO::readData(hid_t location,
     readSimpleData<char>(location, "block_is_allocated_data", isAllocated);
     for (int i = 0; i < numBlocks; ++i) {
       blocks[i].isAllocated = isAllocated[i];
-      if (isAllocated[i]) {
+      if (!dynamicLoading && isAllocated[i]) {
         blocks[i].resize(valuesPerBlock);
       }
     }

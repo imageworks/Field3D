@@ -149,6 +149,14 @@ public:
   //! Returns the resolution of a given MIP level
   virtual V3i mipResolution(size_t level) const = 0;
 
+  //! Whether a given MIP level is loaded
+  virtual bool levelLoaded(const size_t level) const = 0;
+
+  //! Given a voxel space coordinate in the 0-level field, computes the 
+  //! coordinate in another level
+  virtual void getVsMIPCoord(const V3f &vsP, const size_t level, 
+                             V3f &outVsP) const = 0;
+
   // Main methods --------------------------------------------------------------
 
   //! Sets the lowest MIP level to use. Defaults to zero, but can be set higher 

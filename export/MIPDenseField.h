@@ -52,6 +52,7 @@
 #include "DenseField.h"
 #include "EmptyField.h"
 #include "MIPField.h"
+#include "MIPInterp.h"
 
 //----------------------------------------------------------------------------//
 
@@ -73,8 +74,6 @@ DECLARE_FIELD3D_GENERIC_EXCEPTION(MIPDenseFieldException, Exception)
 // Forward declarations 
 //----------------------------------------------------------------------------//
 
-template <class T>
-class LinearMIPDenseFieldInterp; 
 template <class T>
 class CubicMIPDenseFieldInterp; 
 
@@ -106,7 +105,7 @@ class CubicMIPDenseFieldInterp;
 
 template <class Data_T>
 class MIPDenseField
-  : public MIPField<Data_T>, public boost::noncopyable
+  : public MIPField<Data_T>
 {
 public:
 
@@ -115,8 +114,8 @@ public:
   typedef boost::intrusive_ptr<MIPDenseField> Ptr;
   typedef std::vector<Ptr> Vec;
 
-  typedef LinearMIPDenseFieldInterp<Data_T> LinearInterp;
-  typedef CubicMIPDenseFieldInterp<Data_T> CubicInterp;
+  typedef MIPLinearInterp<MIPDenseField<Data_T> > LinearInterp;
+  typedef CubicMIPDenseFieldInterp<Data_T>        CubicInterp;
 
   typedef DenseField<Data_T> ContainedType;
 
@@ -136,17 +135,33 @@ public:
   //! Constructs an empty MIP field
   MIPDenseField();
 
+  //! Copy constructor. We need this because a) we own a mutex and b) we own
+  //! shared pointers and shallow copies are not good enough.
+  MIPDenseField(const MIPDenseField &other);
+
+  //! Assignment operator
+  const MIPDenseField& operator = (const MIPDenseField &rhs);
+
   // \}
 
+  // From FieldRes base class --------------------------------------------------
+
+  //! \name From FieldRes
+  //! \{  
+  //! Returns -current- memory use, rather than the amount used if all
+  //! levels were loaded.
+  virtual long long int memSize() const;
+  //! We need to know if the mapping changed so that we may update the
+  //! MIP levels' mappings
+  virtual void mappingChanged();
+  //! \}
+  
   // From Field base class -----------------------------------------------------
 
   //! \name From Field
   //! \{  
   //! For a MIP field, the common value() call accesses data at level 0 only.
   virtual Data_T value(int i, int j, int k) const;
-  //! Returns -current- memory use, rather than the amount used if all
-  //! levels were loaded.
-  virtual long long int memSize() const;
   //! \}
 
   // RTTI replacement ----------------------------------------------------------
@@ -167,7 +182,10 @@ public:
   // From MIPField -------------------------------------------------------------
 
   virtual Data_T mipValue(size_t level, int i, int j, int k) const;
-  virtual V3i mipResolution(size_t level) const;
+  virtual V3i    mipResolution(size_t level) const;
+  virtual bool   levelLoaded(const size_t level) const;
+  virtual void   getVsMIPCoord(const V3f &vsP, const size_t level, 
+                               V3f &outVsP) const;
 
   // Concrete voxel access -----------------------------------------------------
 
@@ -183,7 +201,9 @@ public:
   { return staticClassName(); }
   
   virtual FieldBase::Ptr clone() const
-  { return Ptr(); }
+  { 
+    return Ptr(new MIPDenseField(*this));
+  }
 
   //! \}
 
@@ -203,7 +223,9 @@ public:
                      const typename LazyLoadAction<DenseType>::Vec &actions);
 
   //! Returns a pointer to a MIP level
-  DensePtr mipLevel(size_t level);
+  DensePtr mipLevel(const size_t level) const;
+  //! Returns a pointer to a MIP level
+  const DenseType* rawMipLevel(const size_t level) const;
 
 protected:
 
@@ -228,12 +250,18 @@ protected:
   mutable std::vector<DenseField<Data_T>*> m_rawFields;
   //! Resolution of each MIP level.
   mutable std::vector<V3i> m_mipRes;
+  //! Relative resolution of each MIP level. Pre-computed to avoid
+  //! int-to-float conversions
+  mutable std::vector<V3f> m_relativeResolution;
   //! Mutex lock around IO. Used to make sure only one thread reads MIP 
-  //! level data at a time
-  mutable boost::mutex m_ioMutex;
+  //! level data at a time. When a field is cloned, the two new fields
+  //! will share the mutex, since they point to the same file.
+  boost::shared_ptr<boost::mutex> m_ioMutex;
 
   // Utility methods -----------------------------------------------------------
 
+  //! Copies from a second MIPDenseField
+  const MIPDenseField& init(const MIPDenseField &rhs);
   //! Updates the mapping, extents and data window to match the given field.
   //! Used so that the MIPField will appear to have the same mapping in space
   //! as the level-0 field.
@@ -265,9 +293,65 @@ typedef MIPDenseField<V3d>    MIPDenseField3d;
 
 template <class Data_T>
 MIPDenseField<Data_T>::MIPDenseField()
-  : base()
+  : base(),
+    m_ioMutex(new boost::mutex)
 {
   m_fields.resize(base::m_numLevels);
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+MIPDenseField<Data_T>::MIPDenseField(const MIPDenseField &other)
+  : base(other)
+{
+  init(other);
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+const MIPDenseField<Data_T>& 
+MIPDenseField<Data_T>::operator = (const MIPDenseField &rhs)
+{
+  base::operator=(rhs);
+  return init(rhs);
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+const MIPDenseField<Data_T>& 
+MIPDenseField<Data_T>::init(const MIPDenseField &rhs)
+{
+  // If any of the fields aren't yet loaded, we can rely on the same load 
+  // actions as the other one
+  m_loadActions = rhs.m_loadActions;
+  // Copy all the regular data members
+  m_mipRes = rhs.m_mipRes;
+  m_relativeResolution = rhs.m_relativeResolution;
+  // The contained fields must be individually cloned if they have already
+  // been loaded
+  m_fields.resize(rhs.m_fields.size());
+  m_rawFields.resize(rhs.m_rawFields.size());
+  for (size_t i = 0, end = m_fields.size(); i < end; ++i) {
+    // Update the field pointer
+    if (rhs.m_fields[i]) {
+      FieldBase::Ptr baseClone = rhs.m_fields[i]->clone();
+      DensePtr clone = field_dynamic_cast<DenseType>(baseClone);
+      if (clone) {
+        m_fields[i] = clone;
+      } else {
+        std::cerr << "MIPDenseField::op=(): Failed to clone." << std::endl;
+      }
+    }
+    // Update the raw pointer
+    m_rawFields[i] = m_fields[i].get();
+  }
+  // New mutex
+  m_ioMutex.reset(new boost::mutex);
+  // Done
+  return *this;
 }
 
 //----------------------------------------------------------------------------//
@@ -296,10 +380,15 @@ void MIPDenseField<Data_T>::setup(const DenseVec &fields)
   base::m_lowestLevel = 0;
   updateMapping(fields[0]);
   updateAuxMembers();
-  // Update mip res from real fields
+  // Resize vectors
   m_mipRes.resize(base::m_numLevels);
+  m_relativeResolution.resize(base::m_numLevels);
+  // For each MIP level
   for (size_t i = 0; i < fields.size(); i++) {
+  // Update MIP res from real fields
     m_mipRes[i] = m_fields[i]->extents().size() + V3i(1);
+    // Update relative resolutions
+    m_relativeResolution[i] = V3f(m_mipRes[i]) / m_mipRes[0];
   } 
 }
 
@@ -328,10 +417,14 @@ void MIPDenseField<Data_T>::setupLazyLoad
   m_fields.resize(base::m_numLevels);
   updateMapping(proxies[0]);
   updateAuxMembers();
-  // Update mip res from proxy fields
+  // Resize vectors
   m_mipRes.resize(base::m_numLevels);
+  m_relativeResolution.resize(base::m_numLevels);
   for (size_t i = 0; i < proxies.size(); i++) {
+    // Update mip res from proxy fields
     m_mipRes[i] = proxies[i]->extents().size() + V3i(1);
+    // Update relative resolutions
+    m_relativeResolution[i] = V3f(m_mipRes[i]) / m_mipRes[0];
   }
 }
 
@@ -339,15 +432,28 @@ void MIPDenseField<Data_T>::setupLazyLoad
 
 template <class Data_T>
 typename MIPDenseField<Data_T>::DensePtr 
-MIPDenseField<Data_T>::mipLevel(size_t level)
+MIPDenseField<Data_T>::mipLevel(const size_t level) const
 {
   assert(level < base::m_numLevels);
   // Ensure level is loaded.
   if (!m_rawFields[level]) {
     loadLevelFromDisk(level);
-  } else {
-  }
+  } 
   return m_fields[level];
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+const typename MIPDenseField<Data_T>::DenseType* 
+MIPDenseField<Data_T>::rawMipLevel(const size_t level) const
+{
+  assert(level < base::m_numLevels);
+  // Ensure level is loaded.
+  if (!m_rawFields[level]) {
+    loadLevelFromDisk(level);
+  } 
+  return m_rawFields[level];
 }
 
 //----------------------------------------------------------------------------//
@@ -375,6 +481,18 @@ long long int MIPDenseField<Data_T>::memSize() const
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
+void MIPDenseField<Data_T>::mappingChanged() 
+{ 
+  for (size_t i = 0; i < m_fields.size(); i++) {
+    if (m_fields[i]) {
+      m_fields[i]->setMapping(base::mapping());
+    }
+  }
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
 Data_T MIPDenseField<Data_T>::mipValue(size_t level,
                                        int i, int j, int k) const
 {
@@ -388,6 +506,24 @@ V3i MIPDenseField<Data_T>::mipResolution(size_t level) const
 {
   assert(level < base::m_numLevels);
   return m_mipRes[level];
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+bool MIPDenseField<Data_T>::levelLoaded(const size_t level) const
+{
+  assert(level < base::m_numLevels);
+  return m_rawFields[level] != NULL;
+}
+
+//----------------------------------------------------------------------------//
+
+template <typename Data_T>
+void MIPDenseField<Data_T>::getVsMIPCoord(const V3f &vsP, const size_t level, 
+                                          V3f &outVsP) const
+{
+  outVsP = vsP * m_relativeResolution[level];
 }
 
 //----------------------------------------------------------------------------//
@@ -433,7 +569,7 @@ void MIPDenseField<Data_T>::loadLevelFromDisk(size_t level) const
 {
   // Double-check locking
   if (!m_rawFields[level]) {
-    boost::mutex::scoped_lock lock(m_ioMutex);
+    boost::mutex::scoped_lock lock(*m_ioMutex);
     if (!m_rawFields[level]) {
       // Execute the lazy load action
       m_fields[level] = m_loadActions[level]->load();
@@ -441,6 +577,8 @@ void MIPDenseField<Data_T>::loadLevelFromDisk(size_t level) const
       m_loadActions[level].reset();
       // Update aux data
       updateAuxMembers();
+      // Update the mapping of the loaded field
+      m_fields[level]->setMapping(base::mapping());
     }
   }
 }

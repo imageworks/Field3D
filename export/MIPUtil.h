@@ -104,7 +104,7 @@ bool resample(typename Field3D::SparseField<Data_T>::Ptr source,
 
 template <class MIPField_T>
 typename MIPField_T::Ptr
-makeMIP(typename MIPField_T::ContainedType::Ptr base) 
+makeMIP(typename MIPField_T::ContainedType::Ptr base, const int minSize = 32) 
 {
   typedef typename MIPField_T::value_type    Data_T;
   typedef typename MIPField_T::ContainedType Src_T;
@@ -115,9 +115,6 @@ makeMIP(typename MIPField_T::ContainedType::Ptr base)
   if (base->extents() != base->dataWindow()) {
     return MIPPtr();
   }
-  
-  // Min size. The loop will stop once this resolution is found.
-  const int minSize = 32;
   
   // Initialize output vector with base resolution
   SrcVec result;

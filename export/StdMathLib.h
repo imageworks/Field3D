@@ -39,6 +39,7 @@
 #define _INCLUDED_Field3D_StdMathLib_H_
 
 #include <OpenEXR/half.h> 
+#include <OpenEXR/ImathHalfLimits.h>
 #include <OpenEXR/ImathBox.h> 
 #include <OpenEXR/ImathBoxAlgo.h>
 #include <OpenEXR/ImathColor.h>

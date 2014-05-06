@@ -52,6 +52,7 @@
 #include "SparseField.h"
 #include "EmptyField.h"
 #include "MIPField.h"
+#include "MIPInterp.h"
 
 //----------------------------------------------------------------------------//
 
@@ -73,8 +74,6 @@ DECLARE_FIELD3D_GENERIC_EXCEPTION(MIPSparseFieldException, Exception)
 // Forward declarations 
 //----------------------------------------------------------------------------//
 
-template <class T>
-class LinearMIPSparseFieldInterp; 
 template <class T>
 class CubicMIPSparseFieldInterp; 
 
@@ -106,7 +105,7 @@ class CubicMIPSparseFieldInterp;
 
 template <class Data_T>
 class MIPSparseField
-  : public MIPField<Data_T>, public boost::noncopyable
+  : public MIPField<Data_T>
 {
 public:
 
@@ -115,8 +114,8 @@ public:
   typedef boost::intrusive_ptr<MIPSparseField> Ptr;
   typedef std::vector<Ptr> Vec;
 
-  typedef LinearMIPSparseFieldInterp<Data_T> LinearInterp;
-  typedef CubicMIPSparseFieldInterp<Data_T> CubicInterp;
+  typedef MIPLinearInterp<MIPSparseField<Data_T> > LinearInterp;
+  typedef CubicMIPSparseFieldInterp<Data_T>        CubicInterp;
 
   typedef Data_T value_type;
   typedef SparseField<Data_T> ContainedType;
@@ -137,17 +136,33 @@ public:
   //! Constructs an empty MIP field
   MIPSparseField();
 
+  //! Copy constructor. We need this because a) we own a mutex and b) we own
+  //! shared pointers and shallow copies are not good enough.
+  MIPSparseField(const MIPSparseField &other);
+
+  //! Assignment operator
+  const MIPSparseField& operator = (const MIPSparseField &rhs);
+
   // \}
 
+  // From FieldRes base class --------------------------------------------------
+
+  //! \name From FieldRes
+  //! \{  
+  //! Returns -current- memory use, rather than the amount used if all
+  //! levels were loaded.
+  virtual long long int memSize() const;
+  //! We need to know if the mapping changed so that we may update the
+  //! MIP levels' mappings
+  virtual void mappingChanged();
+  //! \}
+  
   // From Field base class -----------------------------------------------------
 
   //! \name From Field
   //! \{  
   //! For a MIP field, the common value() call accesses data at level 0 only.
   virtual Data_T value(int i, int j, int k) const;
-  //! Returns -current- memory use, rather than the amount used if all
-  //! levels were loaded.
-  virtual long long int memSize() const;
   //! \}
 
   // RTTI replacement ----------------------------------------------------------
@@ -168,7 +183,10 @@ public:
   // From MIPField -------------------------------------------------------------
 
   virtual Data_T mipValue(size_t level, int i, int j, int k) const;
-  virtual V3i mipResolution(size_t level) const;
+  virtual V3i    mipResolution(size_t level) const;
+  virtual bool   levelLoaded(const size_t level) const;
+  virtual void   getVsMIPCoord(const V3f &vsP, const size_t level, 
+                               V3f &outVsP) const;
 
   // Concrete voxel access -----------------------------------------------------
 
@@ -184,7 +202,9 @@ public:
   { return staticClassName(); }
   
   virtual FieldBase::Ptr clone() const
-  { return Ptr(); }
+  { 
+    return Ptr(new MIPSparseField(*this));
+  }
 
   //! \}
 
@@ -204,7 +224,9 @@ public:
                      const typename LazyLoadAction<SparseType>::Vec &actions);
 
   //! Returns a pointer to a MIP level
-  SparsePtr mipLevel(size_t level);
+  SparsePtr mipLevel(const size_t level) const;
+  //! Returns a raw pointer to a MIP level
+  const SparseType* rawMipLevel(const size_t level) const;
 
 protected:
 
@@ -229,12 +251,18 @@ protected:
   mutable std::vector<SparseField<Data_T>*> m_rawFields;
   //! Resolution of each MIP level.
   mutable std::vector<V3i> m_mipRes;
+  //! Relative resolution of each MIP level. Pre-computed to avoid
+  //! int-to-float conversions
+  mutable std::vector<V3f> m_relativeResolution;
   //! Mutex lock around IO. Used to make sure only one thread reads MIP 
-  //! level data at a time
-  mutable boost::mutex m_ioMutex;
+  //! level data at a time. When a field is cloned, the two new fields
+  //! will share the mutex, since they point to the same file.
+  boost::shared_ptr<boost::mutex> m_ioMutex;
 
   // Utility methods -----------------------------------------------------------
 
+  //! Copies from a second MIPSparseField
+  const MIPSparseField& init(const MIPSparseField &rhs);
   //! Updates the mapping, extents and data window to match the given field.
   //! Used so that the MIPField will appear to have the same mapping in space
   //! as the level-0 field.
@@ -266,9 +294,65 @@ typedef MIPSparseField<V3d>    MIPSparseField3d;
 
 template <class Data_T>
 MIPSparseField<Data_T>::MIPSparseField()
-  : base()
+  : base(),
+    m_ioMutex(new boost::mutex)
 {
   m_fields.resize(base::m_numLevels);
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+MIPSparseField<Data_T>::MIPSparseField(const MIPSparseField &other)
+  : base(other)
+{
+  init(other);
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+const MIPSparseField<Data_T>& 
+MIPSparseField<Data_T>::operator = (const MIPSparseField &rhs)
+{
+  base::operator=(rhs);
+  return init(rhs);
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+const MIPSparseField<Data_T>& 
+MIPSparseField<Data_T>::init(const MIPSparseField &rhs)
+{
+  // If any of the fields aren't yet loaded, we can rely on the same load 
+  // actions as the other one
+  m_loadActions = rhs.m_loadActions;
+  // Copy all the regular data members
+  m_mipRes = rhs.m_mipRes;
+  m_relativeResolution = rhs.m_relativeResolution;
+  // The contained fields must be individually cloned if they have already
+  // been loaded
+  m_fields.resize(rhs.m_fields.size());
+  m_rawFields.resize(rhs.m_rawFields.size());
+  for (size_t i = 0, end = m_fields.size(); i < end; ++i) {
+    // Update the field pointer
+    if (rhs.m_fields[i]) {
+      FieldBase::Ptr baseClone = rhs.m_fields[i]->clone();
+      SparsePtr clone = field_dynamic_cast<SparseType>(baseClone);
+      if (clone) {
+        m_fields[i] = clone;
+      } else {
+        std::cerr << "MIPSparseField::op=(): Failed to clone." << std::endl;
+      }
+    }
+    // Update the raw pointer
+    m_rawFields[i] = m_fields[i].get();
+  }
+  // New mutex
+  m_ioMutex.reset(new boost::mutex);
+  // Done
+  return *this;
 }
 
 //----------------------------------------------------------------------------//
@@ -297,10 +381,15 @@ void MIPSparseField<Data_T>::setup(const SparseVec &fields)
   base::m_lowestLevel = 0;
   updateMapping(fields[0]);
   updateAuxMembers();
-  // Update mip res from real fields
+  // Resize vectors
   m_mipRes.resize(base::m_numLevels);
+  m_relativeResolution.resize(base::m_numLevels);
+  // For each MIP level
   for (size_t i = 0; i < fields.size(); i++) {
+    // Update MIP res from real fields
     m_mipRes[i] = m_fields[i]->extents().size() + V3i(1);
+    // Update relative resolutions
+    m_relativeResolution[i] = V3f(m_mipRes[i]) / m_mipRes[0];
   } 
 }
 
@@ -329,10 +418,14 @@ void MIPSparseField<Data_T>::setupLazyLoad
   m_fields.resize(base::m_numLevels);
   updateMapping(proxies[0]);
   updateAuxMembers();
-  // Update mip res from proxy fields
+  // Resize vectors
   m_mipRes.resize(base::m_numLevels);
+  m_relativeResolution.resize(base::m_numLevels);
   for (size_t i = 0; i < proxies.size(); i++) {
+    // Update mip res from proxy fields
     m_mipRes[i] = proxies[i]->extents().size() + V3i(1);
+    // Update relative resolutions
+    m_relativeResolution[i] = V3f(m_mipRes[i]) / m_mipRes[0];
   }
 }
 
@@ -340,15 +433,28 @@ void MIPSparseField<Data_T>::setupLazyLoad
 
 template <class Data_T>
 typename MIPSparseField<Data_T>::SparsePtr 
-MIPSparseField<Data_T>::mipLevel(size_t level)
+MIPSparseField<Data_T>::mipLevel(size_t level) const
 {
   assert(level < base::m_numLevels);
   // Ensure level is loaded.
   if (!m_rawFields[level]) {
     loadLevelFromDisk(level);
-  } else {
-  }
+  } 
   return m_fields[level];
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+const typename MIPSparseField<Data_T>::SparseType* 
+MIPSparseField<Data_T>::rawMipLevel(size_t level) const
+{
+  assert(level < base::m_numLevels);
+  // Ensure level is loaded.
+  if (!m_rawFields[level]) {
+    loadLevelFromDisk(level);
+  } 
+  return m_rawFields[level];
 }
 
 //----------------------------------------------------------------------------//
@@ -376,6 +482,18 @@ long long int MIPSparseField<Data_T>::memSize() const
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
+void MIPSparseField<Data_T>::mappingChanged() 
+{ 
+  for (size_t i = 0; i < m_fields.size(); i++) {
+    if (m_fields[i]) {
+      m_fields[i]->setMapping(base::mapping());
+    }
+  }
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
 Data_T MIPSparseField<Data_T>::mipValue(size_t level,
                                               int i, int j, int k) const
 {
@@ -389,6 +507,24 @@ V3i MIPSparseField<Data_T>::mipResolution(size_t level) const
 {
   assert(level < base::m_numLevels);
   return m_mipRes[level];
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+bool MIPSparseField<Data_T>::levelLoaded(const size_t level) const
+{
+  assert(level < base::m_numLevels);
+  return m_rawFields[level] != NULL;
+}
+
+//----------------------------------------------------------------------------//
+
+template <typename Data_T>
+void MIPSparseField<Data_T>::getVsMIPCoord(const V3f &vsP, const size_t level, 
+                                           V3f &outVsP) const
+{
+  outVsP = vsP * m_relativeResolution[level];
 }
 
 //----------------------------------------------------------------------------//
@@ -434,7 +570,7 @@ void MIPSparseField<Data_T>::loadLevelFromDisk(size_t level) const
 {
   // Double-check locking
   if (!m_rawFields[level]) {
-    boost::mutex::scoped_lock lock(m_ioMutex);
+    boost::mutex::scoped_lock lock(*m_ioMutex);
     if (!m_rawFields[level]) {
       // Execute the lazy load action
       m_fields[level] = m_loadActions[level]->load();
@@ -442,6 +578,8 @@ void MIPSparseField<Data_T>::loadLevelFromDisk(size_t level) const
       m_loadActions[level].reset();
       // Update aux data
       updateAuxMembers();
+      // Update the mapping of the loaded field
+      m_fields[level]->setMapping(base::mapping());
     }
   }
 }

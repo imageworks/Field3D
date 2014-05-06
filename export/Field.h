@@ -221,7 +221,7 @@ public:
   DEFINE_FIELD_RTTI_ABSTRACT_CLASS;
 
   virtual std::string dataTypeString() const
-    { return std::string("FieldRes"); }
+  { return std::string("FieldRes"); }
 
   static const char *staticClassName()
   {
@@ -280,6 +280,10 @@ public:
   //! combined memory use.
   virtual long long int memSize() const
   { return sizeof(*this); }
+
+  //! Tells the subclass that the mapping changed
+  virtual void mappingChanged()
+  { /* Empty */ }
 
 protected:
 
@@ -342,6 +346,8 @@ inline void FieldRes::setMapping(FieldMapping::Ptr mapping)
     Msg::print(Msg::SevWarning, 
                "Tried to call FieldRes::setMapping with null pointer");
   }
+  // Tell subclasses about the mapping change
+  mappingChanged();
 }
 
 //----------------------------------------------------------------------------//

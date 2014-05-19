@@ -52,8 +52,7 @@
 #include "Field3D/FieldInterp.h"
 #include "Field3D/InitIO.h"
 #include "Field3D/MACField.h"
-#include "Field3D/MIPDenseField.h"
-#include "Field3D/MIPSparseField.h"
+#include "Field3D/MIPField.h"
 #include "Field3D/MIPUtil.h"
 #include "Field3D/SparseField.h"
 #include "Field3D/Types.h"
@@ -143,7 +142,7 @@ void testBasicField()
   typedef FIELD3D_VEC3_T<Data_T> Vec3_T;
 
   Msg::print("Basic Field tests for type " + 
-             string(SField::classType()));
+             string(SField::staticClassType()));
 
   string currentTest;
 
@@ -573,7 +572,7 @@ void testEmptyField()
   typedef FIELD3D_VEC3_T<Data_T> Vec3_T;
 
   Msg::print("Basic Field tests for type " + 
-             string(EmptyField<Data_T>::classType())); 
+             string(EmptyField<Data_T>::staticClassType())); 
 
 
   string currentTest;
@@ -692,7 +691,7 @@ void testFieldMapping()
   typedef FIELD3D_VEC3_T<Data_T> Vec3_T;
 
   Msg::print("FieldMapping tests for type " + 
-             string(DenseField<Data_T>::classType()));
+             string(DenseField<Data_T>::staticClassType()));
 
   string currentTest;
 
@@ -840,7 +839,7 @@ void testLinearInterp()
   typedef Field_T<Vec3_T> VField;
 
   Msg::print("Linear interpolation tests for type " +
-             string(SField::classType()));
+             string(SField::staticClassType()));
 
   string currentTest = "Simple linear inter test";
 
@@ -871,7 +870,7 @@ void testFastLinearInterp()
   typedef Field_T<Vec3_T> VField;
 
   Msg::print("Linear fast interpolation tests for type " + 
-             string(SField::classType()));
+             string(SField::staticClassType()));
 
   string currentTest = "Simple linear inter test";
 
@@ -902,7 +901,7 @@ void testCubicInterp()
   typedef Field_T<Vec3_T> VField;
 
   Msg::print("Cubic interpolation tests for type " + 
-             string(SField::classType()));
+             string(SField::staticClassType()));
 
   string currentTest = "Simple Cubic inter test";
 
@@ -935,7 +934,7 @@ void testFastCubicInterp()
   typedef Field_T<Vec3_T> VField;
 
   Msg::print("Cubic fast interpolation tests for type " + 
-             string(SField::classType()));
+             string(SField::staticClassType()));
 
   string currentTest = "Simple Cubic inter test";
 
@@ -968,7 +967,7 @@ void testField3DFile()
   typedef Field_T<Vec3_T> VField;
 
   Msg::print("Field3DFile tests for type " + 
-             string(SField::classType()));
+             string(SField::staticClassType()));
 
   string currentTest;
 
@@ -989,7 +988,7 @@ void testField3DFile()
   {
     Msg::print(currentTest);
     ScopedPrintTimer t;
-    string filename(getTempFile("test_" + string(SField::classType()) + ".f3d"));
+    string filename(getTempFile("test_" + string(SField::staticClassType()) + ".f3d"));
     Box3i extents(V3i(0), V3i(160));
     Box3i dataWindow(V3i(20, 10, 0), V3i(100, 100, 100));
 
@@ -1200,12 +1199,12 @@ void testLayerFetching()
   typedef Field_T<Vec3_T> VField;
 
   Msg::print("Testing layer fetching for " + 
-             string(SField::classType()));
+             string(SField::staticClassType()));
 
   ScopedPrintTimer t;    
 
   string filename(getTempFile("testLayerFetching_" + 
-                  string(SField::classType()) + ".f3d"));
+                  string(SField::staticClassType()) + ".f3d"));
   Box3i extents(V3i(0), V3i(160));
   Box3i dataWindow(V3i(20, 10, 50), V3i(100, 100, 100));
 
@@ -1301,12 +1300,12 @@ void testReadAsDifferentType()
   typedef Field_T<Vec3_T> VField;
 
   Msg::print("Testing on-the-fly conversion for " +
-             string(SField::classType()));
+             string(SField::staticClassType()));
 
   ScopedPrintTimer t;    
 
   string filename(getTempFile("testReadAsDifferentType_" + 
-                  string(SField::classType()) + ".f3d"));
+                  string(SField::staticClassType()) + ".f3d"));
   Box3i extents(V3i(0), V3i(160));
   Box3i dataWindow(V3i(20, 10, 50), V3i(100, 100, 100));
 
@@ -1830,10 +1829,10 @@ void testDuplicatePartitions()
   typedef Field_T<Vec3_T> VField;
 
   Msg::print("Testing duplicate partition names for " + 
-             string(SField::classType()));
+             string(SField::staticClassType()));
 
   string filename(getTempFile("testDuplicatePartitions_" +
-                  string(SField::classType()) + ".f3d"));
+                  string(SField::staticClassType()) + ".f3d"));
 
   Box3i extents(V3i(0), V3i(160));
   Box3i dataWindow(V3i(20, 10, 50), V3i(100, 100, 100));
@@ -2327,7 +2326,7 @@ void testMIPField()
   typedef MIP_T<Data_T> FieldType;
 
   string TName(DataTypeTraits<Data_T>::name());
-  Msg::print(string("Testing ") + MIP_T<Data_T>::classType());
+  Msg::print(string("Testing ") + MIP_T<Data_T>::staticClassType());
 
   typename Field_T<Data_T>::Ptr level0(new Field_T<Data_T>);
   typename Field_T<Data_T>::Ptr level1(new Field_T<Data_T>);
@@ -2352,7 +2351,7 @@ void testMIPField()
   mipField->attribute = "density";
   
   Field3DOutputFile out;
-  string filename(getTempFile(string(MIP_T<Data_T>::classType()) + ".f3d")); 
+  string filename(getTempFile(string(MIP_T<Data_T>::staticClassType()) + ".f3d")); 
 
   out.create(filename);
   out.writeScalarLayer<float>(mipField);
@@ -2381,7 +2380,7 @@ template <template <typename T> class MIP_T,
 void testMIPFieldColor()
 {
   string TName(DataTypeTraits<Data_T>::name());
-  Msg::print(string("Testing ") + MIP_T<Data_T>::classType());
+  Msg::print(string("Testing ") + MIP_T<Data_T>::staticClassType());
 
   // typename Field_T<Data_T>::Ptr level0(new Field_T<Data_T>);
   typename Field_T<Data_T>::Ptr level1(new Field_T<Data_T>);
@@ -2418,7 +2417,7 @@ void testMIPFieldColor()
   mipField->attribute = "emission";
   
   Field3DOutputFile out;
-  string filename(getTempFile(string(MIP_T<Data_T>::classType()) + ".f3d")); 
+  string filename(getTempFile(string(MIP_T<Data_T>::staticClassType()) + ".f3d")); 
 
   out.create(filename);
   out.writeVectorLayer<float>(mipField);
@@ -2426,33 +2425,33 @@ void testMIPFieldColor()
 
 //----------------------------------------------------------------------------//
 
-template <template <typename T> class MIP_T, 
-          template <typename T> class Field_T, 
+template <template <typename T> class Field_T, 
           class Data_T>
 void testMIPMake()
 {
-  typedef MIP_T<Data_T> FieldType;
+  typedef MIPField<Field_T<Data_T> > MIPType;
 
   string TName(DataTypeTraits<Data_T>::name());
-  Msg::print(string("Testing MIP Make") + MIP_T<Data_T>::classType());
+  Msg::print(string("Testing MIP Make ") + MIPType::staticClassType());
 
   typename Field_T<Data_T>::Ptr level0(new Field_T<Data_T>);
 
-  level0->setSize(V3i(400));
+  level0->setSize(V3i(200));
   
   int val = 0;
   for (typename Field_T<Data_T>::iterator i = level0->begin(), end = level0->end();
        i != end; ++i) {
     *i = val;
-    val = val++ % 128;
+    val = (val + 1) % 128;
   }
 
-  typename MIP_T<Data_T>::Ptr mipField = makeMIP<MIP_T<Data_T> >(level0);
+  typename MIPType::Ptr mipField = makeMIP<MIPType>(*level0);
   mipField->name = "mip";
   mipField->attribute = "density";
   
   Field3DOutputFile out;
-  string filename(getTempFile("testMIPMake.f3d")); 
+  string filename(getTempFile("testMIPMake_" + 
+                              string(MIPType::staticClassType()) + ".f3d")); 
 
   out.create(filename);
   out.writeScalarLayer<float>(mipField);
@@ -2460,11 +2459,11 @@ void testMIPMake()
   Field3DInputFile in;
   in.open(filename);
   typename Field<Data_T>::Vec fields = in.readScalarLayers<Data_T>();
-  mipField = field_dynamic_cast<MIP_T<Data_T> >(fields[0]);
+  mipField = field_dynamic_cast<MIPType>(fields[0]);
 
   BOOST_CHECK_EQUAL(fields.size(), 1);
   BOOST_CHECK_EQUAL(mipField != NULL, true);
-  BOOST_CHECK_EQUAL(mipField->numLevels(), 5);
+  BOOST_CHECK_EQUAL(mipField->numLevels(), 4);
   bool matchLevel0 = isIdentical<Data_T>(mipField->mipLevel(0), level0);
   BOOST_CHECK(matchLevel0);
 }
@@ -2624,7 +2623,8 @@ init_unit_test_suite(int argc, char* argv[])
   test->add(BOOST_TEST_CASE((&testMIPFieldColor<MIPDenseField, DenseField, V3f>)));
   test->add(BOOST_TEST_CASE((&testMIPField<MIPSparseField, SparseField, float>)));
   test->add(BOOST_TEST_CASE((&testMIPFieldColor<MIPSparseField, SparseField, V3f>)));
-  test->add(BOOST_TEST_CASE((&testMIPMake<MIPDenseField, DenseField, float>)));
+  test->add(BOOST_TEST_CASE((&testMIPMake<DenseField, float>)));
+  test->add(BOOST_TEST_CASE((&testMIPMake<SparseField, float>)));
 #endif
 
   return test;

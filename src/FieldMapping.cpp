@@ -687,8 +687,8 @@ void FrustumFieldMapping::computeVoxelSize()
 
   m_wsVoxelSize.resize(static_cast<int>(m_res.z),V3d(0.0));
 
-  int i = m_origin.x + m_res.x / 2;
-  int j = m_origin.y + m_res.y / 2;
+  int i = static_cast<int>(m_origin.x + m_res.x / 2);
+  int j = static_cast<int>(m_origin.y + m_res.y / 2);
 
   // Do all z slices except last
   int zMin = static_cast<int>(m_origin.z);
@@ -712,7 +712,7 @@ void FrustumFieldMapping::computeVoxelSize()
   // Duplicate last value since there are no further slices to differentiate
   // against
   if (m_res.z >= 2) {
-    m_wsVoxelSize[m_res.z - 1] = m_wsVoxelSize[m_res.z - 2];
+    m_wsVoxelSize[static_cast<int>(m_res.z - 1)] = m_wsVoxelSize[static_cast<int>(m_res.z - 2)];
   }
 
 }

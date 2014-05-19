@@ -58,7 +58,7 @@ FIELD3D_NAMESPACE_OPEN
 std::vector<std::string> 
 split(const std::string &s)
 {
-  return split(s, ",");
+  return split(s, " ");
 }
 
 //----------------------------------------------------------------------------//
@@ -101,7 +101,7 @@ match(const std::string &name, const std::string &attribute,
     }
 
     // Check exclusion string
-    bool isExclusion = i[0] == '-';
+    bool isExclusion = i[0] == '-' || i[0] == '^';
     // Update string
     const std::string pattern = isExclusion ? i.substr(1) : i;
 
@@ -161,7 +161,7 @@ match(const std::string &attribute, const std::vector<std::string> &patterns,
     }
 
     // Check exclusion string
-    bool isExclusion = i[0] == '-';
+    bool isExclusion = i[0] == '-' || i[0] == '^';
     // Update string
     std::string pattern = isExclusion ? i.substr(1) : i;
 

@@ -88,7 +88,7 @@ public:
     return "FieldInterp";
   }
   
-  static const char* classType()
+  static const char* staticClassType()
   {
     return ms_classType.name();
   }
@@ -152,7 +152,7 @@ class LinearFieldInterp : public FieldInterp<Data_T>
     return "LinearFieldInterp";
   }
 
-  static const char* classType()
+  static const char* staticClassType()
   {
     return ms_classType.name();
   }
@@ -211,7 +211,7 @@ class CubicFieldInterp : public FieldInterp<Data_T>
     return "CubicFieldInterp";
   }
 
-  static const char* classType()
+  static const char* staticClassType()
   {
     return ms_classType.name();
   }
@@ -269,7 +269,7 @@ public:
     return "LinearGenericFieldInterp";
   }
   
-  static const char* classType()
+  static const char* staticClassType()
   {
     return ms_classType.name();
   }
@@ -329,7 +329,7 @@ public:
   }
   
   //! classType for RTTI replacement
-  static const char* classType()
+  static const char* staticClassType()
   {
     return ms_classType.name();
   }
@@ -391,7 +391,7 @@ public:
     return "CubicGenericFieldInterp";
   }
 
-  static const char* classType()
+  static const char* staticClassType()
   {
     return ms_classType.name();    
   }
@@ -450,7 +450,7 @@ public:
     return "CubicMACFieldInterp";
   }
 
-  static const char* classType()
+  static const char* staticClassType()
   {
     return CubicMACFieldInterp<Data_T>::ms_classType.name();
   }
@@ -509,7 +509,7 @@ public:
     return "ProceduralFieldLookup";
   }
 
-  static const char* classType()
+  static const char* staticClassType()
   {
     return ProceduralFieldLookup<Data_T>::ms_classType.name();
   }

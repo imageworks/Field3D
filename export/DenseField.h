@@ -127,7 +127,7 @@ public:
     return "DenseField";
   }
 
-  static const char *classType()
+  static const char *staticClassType()
   {
     return DenseField<Data_T>::ms_classType.name();
   } 
@@ -191,8 +191,7 @@ public:
   //! \name From FieldBase
   //! \{
 
-  virtual std::string className() const
-  { return staticClassName(); }
+  FIELD3D_CLASSNAME_CLASSTYPE_IMPLEMENTATION;
   
   virtual FieldBase::Ptr clone() const
   { return Ptr(new DenseField(*this)); }

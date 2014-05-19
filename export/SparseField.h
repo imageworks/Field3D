@@ -101,7 +101,7 @@ public:
     return "LinearSparseFieldInterp";
   }
 
-  static const char* classType()
+  static const char* staticClassType()
   {
     return ms_classType.name();
   }
@@ -344,7 +344,7 @@ public:
     return "SparseField";
   }
 
-  static const char *classType()
+  static const char *staticClassType()
   {
     return SparseField<Data_T>::ms_classType.name();
   }
@@ -439,6 +439,7 @@ public:
   //! \{
   virtual Data_T value(int i, int j, int k) const;
   virtual long long int memSize() const;
+  virtual size_t voxelCount() const;
   //! \}
 
   // From WritableField base class ---------------------------------------------
@@ -463,8 +464,8 @@ public:
 
   //! \name From FieldBase
   //! \{
-  virtual std::string className() const
-  { return staticClassName(); }
+  
+  FIELD3D_CLASSNAME_CLASSTYPE_IMPLEMENTATION;
 
   virtual FieldBase::Ptr clone() const
   { return Ptr(new SparseField(*this)); }
@@ -1616,6 +1617,23 @@ long long int SparseField<Data_T>::memSize() const
   }
 
   return sizeof(*this) + dataSize + blockSize;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+size_t SparseField<Data_T>::voxelCount() const
+{
+  size_t count           = 0;
+  const size_t blockSize = (1 << m_blockOrder << m_blockOrder << m_blockOrder);
+
+  for (size_t i = 0; i < m_numBlocks; ++i) {
+    if (m_blocks[i].isAllocated) {
+      count += blockSize;
+    }
+  }
+
+  return count;
 }
 
 //----------------------------------------------------------------------------//

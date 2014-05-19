@@ -72,7 +72,7 @@ FIELD3D_NAMESPACE_OPEN
 #define DEFINE_MATCH_RTTI_CALL                        \
   bool matchRTTI(const char *typenameStr)             \
   {                                                   \
-    if (strcmp(typenameStr,classType()) == 0) {       \
+    if (strcmp(typenameStr,staticClassType()) == 0) {       \
       return true;                                    \
     }                                                 \
     return base::matchRTTI(typenameStr);              \
@@ -166,12 +166,12 @@ public:
   //! This needs to be implemented in -all- subclasses, even abstract ones.
   bool matchRTTI(const char *typenameStr)
   {
-    if (strcmp(classType(), typenameStr) == 0)
+    if (strcmp(staticClassType(), typenameStr) == 0)
       return true;
     return false;
   }
 
-  static const char *classType()
+  static const char *staticClassType()
   {
     return "RefBase";
   }
@@ -226,7 +226,7 @@ field_dynamic_cast(RefBase::Ptr field)
   if (!field) 
     return NULL;
 
-  const char *tgtTypeString =  Field_T::classType();
+  const char *tgtTypeString =  Field_T::staticClassType();
   
   if (field->checkRTTI(tgtTypeString)) {
     return static_cast<Field_T*>(field.get());

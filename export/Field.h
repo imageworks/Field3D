@@ -120,7 +120,7 @@ public:
     return "FieldBase";
   }
 
-  static const char* classType()
+  static const char* staticClassType()
   {
     return staticClassName();
   }
@@ -133,9 +133,12 @@ public:
   //! Returns the class name of the object. Used by the class pool and when
   //! writing the data to disk.
   //! \note This is different from classType for any templated class,
-  //! as classType() will include the template parameter(s) but className
+  //! as staticClassType() will include the template parameter(s) but className
   //! remains just the name of the template itself.
   virtual std::string className() const = 0;
+
+  //! Returns the full class type string. 
+  virtual std::string classType() const = 0;
 
   //! Returns a pointer to a copy of the field, pure virtual so ensure
   //! derived classes properly implement it
@@ -228,7 +231,7 @@ public:
     return "FieldRes";
   }
 
-  static const char *classType()
+  static const char *staticClassType()
   {
     return staticClassName();
   }
@@ -284,6 +287,15 @@ public:
   //! Tells the subclass that the mapping changed
   virtual void mappingChanged()
   { /* Empty */ }
+
+  //! Counts the number of voxels. For most fields, this is just the volume
+  //! of the data window, but sparse data structures can override this to 
+  //! return a better value
+  virtual size_t voxelCount() const
+  { 
+    V3i res = m_dataWindow.size() + V3i(1);
+    return res.x * res.y * res.z;
+  }
 
 protected:
 
@@ -405,7 +417,7 @@ public:
     return "Field";
   }
 
-  static const char* classType()
+  static const char* staticClassType()
   {
     return Field<Data_T>::ms_classType.name();
   }
@@ -463,6 +475,12 @@ private:
 
 //----------------------------------------------------------------------------//
 
+#define FIELD3D_CLASSNAME_CLASSTYPE_IMPLEMENTATION  \
+  virtual std::string className() const             \
+  { return staticClassName(); }                     \
+  virtual std::string classType() const             \
+  { return staticClassType(); }                     \
+  
 #define FIELD3D_CLASSTYPE_TEMPL_INSTANTIATION(field)                  \
   template <typename Data_T>                                          \
   TemplatedFieldType<field<Data_T> > field<Data_T>::ms_classType =    \
@@ -626,7 +644,7 @@ public:
     return "WritableField";
   }
 
-  static const char* classType()
+  static const char* staticClassType()
   {
     return WritableField<Data_T>::ms_classType.name();
   }
@@ -836,7 +854,7 @@ public:
     return "ResizableField";
   }
   
-  static const char* classType()
+  static const char* staticClassType()
   {
     return ResizableField<Data_T>::ms_classType.name();
   }
@@ -1084,6 +1102,20 @@ inline V3d discToCont(const V3i &discCoord)
 {
   return V3d(discToCont(discCoord.x), discToCont(discCoord.y),
              discToCont(discCoord.z));  
+}
+
+//----------------------------------------------------------------------------//
+
+inline Box3i clipBounds(const Box3i &bbox, const Box3i &bounds)
+{
+  Box3i result;
+  result.min.x = std::max(bbox.min.x, bounds.min.x);
+  result.min.y = std::max(bbox.min.y, bounds.min.y);
+  result.min.z = std::max(bbox.min.z, bounds.min.z);
+  result.max.x = std::min(bbox.max.x, bounds.max.x);
+  result.max.y = std::min(bbox.max.y, bounds.max.y);
+  result.max.z = std::min(bbox.max.z, bounds.max.z);
+  return result;
 }
 
 //----------------------------------------------------------------------------//

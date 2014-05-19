@@ -139,7 +139,7 @@ public:
     return "ProceduralField";
   }
 
-  static const char *classType()
+  static const char *staticClassType()
   {
     return ProceduralField<Data_T>::ms_classType.name();
   }
@@ -156,8 +156,7 @@ public:
 
   // From FieldBase ------------------------------------------------------------
 
-  virtual std::string className() const
-  { return staticClassName(); }
+  FIELD3D_CLASSNAME_CLASSTYPE_IMPLEMENTATION
 
   // From Field ----------------------------------------------------------------
 

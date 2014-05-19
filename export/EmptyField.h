@@ -126,8 +126,12 @@ public:
   typedef EmptyField<Data_T> class_type;
   DEFINE_FIELD_RTTI_CONCRETE_CLASS
 
-  //! RTTI replacement
-  static const char *classType()
+  static const char *staticClassName()
+  {
+    return staticClassType();
+  }
+  
+  static const char *staticClassType()
   {
     return "EmptyField";
   }
@@ -144,8 +148,7 @@ public:
   //! \name From FieldBase
   //! \{
 
-  virtual std::string className() const
-  { return std::string(classType()); }
+  FIELD3D_CLASSNAME_CLASSTYPE_IMPLEMENTATION
 
   virtual FieldBase::Ptr clone() const
   { return Ptr(new EmptyField(*this)); }

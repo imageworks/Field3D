@@ -35,19 +35,15 @@
 
 //----------------------------------------------------------------------------//
 
-/*! \file InitIO.cpp
-  Contains implementation of initIO function.
+/*! \file MIPUtil.cpp
+  Contains implementations of resampling-related functions.
 */
 
 //----------------------------------------------------------------------------//
 
-#include "InitIO.h"
+#include "MIPUtil.h"
 
-#include "DenseFieldIO.h"
-#include "SparseFieldIO.h"
-#include "MACFieldIO.h"
-#include "FieldMappingIO.h"
-#include "MIPFieldIO.h"
+#include <boost/foreach.hpp>
 
 //----------------------------------------------------------------------------//
 
@@ -55,26 +51,59 @@ FIELD3D_NAMESPACE_OPEN
 
 //----------------------------------------------------------------------------//
 
-void initIO() 
-{
-  static boost::mutex mutex;
-  boost::mutex::scoped_lock lock(mutex);
+namespace detail {
 
-  ClassFactory &factory = ClassFactory::singleton();
+  //--------------------------------------------------------------------------//
 
-  factory.registerFieldIO(DenseFieldIO::create);
-  factory.registerFieldIO(SparseFieldIO::create);
-  factory.registerFieldIO(MACFieldIO::create);
-  factory.registerFieldIO(MIPFieldIO::create);
+  V3i mipResolution(const V3i &baseRes, const size_t level)
+  {
+    const float factor = 1.0 / (1 << level);
+    const V3f   floatRes(baseRes);
+    return V3i(static_cast<int>(ceil(floatRes.x * factor)),
+               static_cast<int>(ceil(floatRes.y * factor)),
+               static_cast<int>(ceil(floatRes.z * factor)));
+  }
 
-  factory.registerFieldMappingIO(NullFieldMappingIO::create);
-  factory.registerFieldMappingIO(MatrixFieldMappingIO::create);
-  factory.registerFieldMappingIO(FrustumFieldMappingIO::create);
-}
+  //--------------------------------------------------------------------------//
+
+  FieldMapping::Ptr adjustedMIPFieldMapping(const FieldMapping::Ptr mapping, 
+                                            const V3i &baseRes,
+                                            const size_t level)
+  {
+    typedef MatrixFieldMapping::MatrixCurve MatrixCurve;
+
+    if (MatrixFieldMapping::Ptr mfm = 
+        field_dynamic_cast<MatrixFieldMapping>(mapping)) {
+      // Determine padding
+      const int mult          = 1 << level;
+      const V3i currentRes    = mipResolution(baseRes, level);
+      const V3i currentAtBase = currentRes * mult;
+      const V3f padding       = V3f(currentAtBase) / V3f(baseRes);
+      // Grab the matrices
+      const MatrixCurve::SampleVec lsToWsSamples = mfm->localToWorldSamples();
+      // New mapping to construct
+      MatrixFieldMapping::Ptr newMapping(new MatrixFieldMapping);
+      // For each matrix, append the padding
+      BOOST_FOREACH (const MatrixCurve::Sample &sample, lsToWsSamples) {
+        M44d lsToWs = sample.second;
+        M44d scaling;
+        scaling.setScale(padding);
+        newMapping->setLocalToWorld(sample.first, scaling * lsToWs);
+      }
+      // Done
+      return newMapping;
+    } else {
+      // For non-uniform grids, there is nothing we can do. 
+      return mapping;
+    }
+  }
+
+  //--------------------------------------------------------------------------//
+
+} // namespace detail
 
 //----------------------------------------------------------------------------//
 
 FIELD3D_NAMESPACE_SOURCE_CLOSE
 
 //----------------------------------------------------------------------------//
-

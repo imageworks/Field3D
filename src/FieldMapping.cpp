@@ -138,7 +138,7 @@ FieldMapping::~FieldMapping()
 
 std::string FieldMapping::className() const
 {
-  return  std::string(classType());
+  return  std::string(staticClassType());
 }
 
 //----------------------------------------------------------------------------//
@@ -172,7 +172,7 @@ void FieldMapping::voxelToLocal(const V3d &vsP, V3d &lsP) const
 
 std::string NullFieldMapping::className() const
 {
-  return std::string(classType());
+  return std::string(staticClassType());
 }
 
 //----------------------------------------------------------------------------//
@@ -248,7 +248,7 @@ void MatrixFieldMapping::extentsChanged()
 
 std::string MatrixFieldMapping::className() const
 {
-  return std::string(classType());
+  return std::string(staticClassType());
 }
 
 //----------------------------------------------------------------------------//
@@ -608,7 +608,7 @@ void FrustumFieldMapping::localToWorld(const V3d &lsP, V3d &wsP, float time) con
 
 std::string FrustumFieldMapping::className() const
 {
-  return std::string(classType());
+  return std::string(staticClassType());
 }
 
 //----------------------------------------------------------------------------//

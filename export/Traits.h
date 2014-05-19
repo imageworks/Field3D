@@ -132,6 +132,32 @@ private:
 };
 
 //----------------------------------------------------------------------------//
+// NestedFieldType
+//----------------------------------------------------------------------------//
+
+//! Used to return a string for the name of a nested templated field
+template <typename Field_T>
+struct NestedFieldType
+{
+  const char *name()
+  {
+    return m_name.c_str();
+  }
+  NestedFieldType()
+  {
+    typedef typename Field_T::NestedType    NestedType;
+    typedef typename NestedType::value_type value_type;
+
+    m_name = Field_T::staticClassName();
+    m_name += 
+      std::string("<") + NestedType::staticClassName() + "<" +
+      DataTypeTraits<value_type>::name() + ">>";
+  }
+private:
+  std::string m_name;
+};
+
+//----------------------------------------------------------------------------//
 // Template specializations
 //----------------------------------------------------------------------------//
 

@@ -75,7 +75,7 @@ public:
   DEFINE_FIELD_RTTI_ABSTRACT_CLASS;
     
   //! RTTI replacement
-  static const char *classType()
+  static const char *staticClassType()
   {
     return "FieldMappingIO";
   }
@@ -139,7 +139,7 @@ public:
   typedef NullFieldMappingIO class_type;
   DEFINE_FIELD_RTTI_CONCRETE_CLASS;
     
-  static const char *classType()
+  static const char *staticClassType()
   {
     return "NullFieldMappingIO";
   }
@@ -202,7 +202,7 @@ public:
   typedef MatrixFieldMappingIO class_type;
   DEFINE_FIELD_RTTI_CONCRETE_CLASS;
     
-  static const char *classType()
+  static const char *staticClassType()
   {
     return "MatrixFieldMappingIO";
   }
@@ -265,7 +265,7 @@ public:
   typedef FrustumFieldMappingIO class_type;
   DEFINE_FIELD_RTTI_CONCRETE_CLASS;
     
-  static const char *classType()
+  static const char *staticClassType()
   {
     return "FrustumFieldMappingIO";
   }

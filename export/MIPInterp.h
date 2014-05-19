@@ -64,9 +64,9 @@ public:
 
   // Typedefs ---
 
-  typedef typename MIPField_T::ContainedType FieldType;
-  typedef typename FieldType::LinearInterp   LinearInterpType;
-  typedef typename FieldType::value_type     value_type;
+  typedef typename MIPField_T::NestedType  FieldType;
+  typedef typename FieldType::LinearInterp LinearInterpType;
+  typedef typename FieldType::value_type   value_type;
 
   // Ctors ---
 

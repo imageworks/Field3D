@@ -117,7 +117,7 @@ public:
     return "MACField";
   }
 
-  static const char* classType()
+  static const char* staticClassType()
   {
     return MACField<Data_T>::ms_classType.name();
   }
@@ -266,8 +266,7 @@ public:
   //! \name From FieldBase
   //! \{
 
-  virtual std::string className() const
-  { return staticClassName(); }
+  FIELD3D_CLASSNAME_CLASSTYPE_IMPLEMENTATION;
 
   virtual FieldBase::Ptr clone() const
   { return Ptr(new MACField(*this)); }

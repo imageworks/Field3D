@@ -89,7 +89,7 @@ public:
   typedef DenseFieldIO class_type;
   DEFINE_FIELD_RTTI_CONCRETE_CLASS;
 
-  static const char* classType()
+  static const char* staticClassType()
   {
     return "DenseFieldIO";
   }

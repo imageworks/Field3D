@@ -90,7 +90,7 @@ public:
   typedef SparseFieldIO class_type;
   DEFINE_FIELD_RTTI_CONCRETE_CLASS;
 
-  const char *classType() const
+  const char *staticClassType() const
   {
     return "SparseFieldIO";
   }

@@ -36,18 +36,25 @@
 //----------------------------------------------------------------------------//
 
 /*! \file MIPField.h
-  \brief Contains MIPField class
-  \ingroup field
+  \brief Contains the MIPField class.
 */
 
 //----------------------------------------------------------------------------//
 
-#ifndef _INCLUDED_Field3D_MIPField_H_
-#define _INCLUDED_Field3D_MIPField_H_
+#ifndef _INCLUDED_MIPField_H_
+#define _INCLUDED_MIPField_H_
 
-#include "Field.h"
-#include "RefCount.h"
-#include "Types.h"
+#include <vector>
+
+#include <boost/lexical_cast.hpp>
+#include <boost/thread/mutex.hpp>
+
+#include "EmptyField.h"
+#include "MIPBase.h"
+#include "MIPInterp.h"
+#include "MIPUtil.h"
+#include "DenseField.h"
+#include "SparseField.h"
 
 //----------------------------------------------------------------------------//
 
@@ -56,163 +63,635 @@
 FIELD3D_NAMESPACE_OPEN
 
 //----------------------------------------------------------------------------//
-// LazyLoadAction
+// Exceptions
 //----------------------------------------------------------------------------//
 
-/*! \class LazyLoadAction
-  This run-time functor holds an action that executes the loading of a field.
-  The template argument is the return type of the functor;
- */
+namespace Exc {
+
+DECLARE_FIELD3D_GENERIC_EXCEPTION(MIPFieldException, Exception)
+
+} // namespace Exc
 
 //----------------------------------------------------------------------------//
+// Forward declarations 
+//----------------------------------------------------------------------------//
 
-template <class Field_T>
-class LazyLoadAction
-{
-public:
-  
-  // Typedefs ------------------------------------------------------------------
-
-  typedef boost::shared_ptr<LazyLoadAction<Field_T> > Ptr;
-  typedef std::vector<Ptr> Vec;
-  
-  virtual ~LazyLoadAction()
-  { }
-
-  // To be implemented by subclasses -------------------------------------------
-  
-  //! Performs the loading of the pre-determined field and returns a pointer 
-  //! to it
-  virtual typename Field_T::Ptr load() const = 0;
-
-};
+template <class T>
+class CubicMIPFieldInterp; 
 
 //----------------------------------------------------------------------------//
 // MIPField
 //----------------------------------------------------------------------------//
 
 /*! \class MIPField
+  \ingroup field
+  \brief This subclass stores a MIP representation of a Field_T field
 
-  Some assumptions:
+  Each level in the MIPField is stored as a SparseField, and each level
+  shares the same FieldMapping definition, even though their resolution is
+  different.
 
-  MIP fields are neither Resizable nor Writable. They are constructed from an
-  existing field such as DenseField, SparseField, etc.
+  The class is lazy loading, such that no MIP levels are read from disk until
+  they are needed. On top of this, standard SparseField caching (memory 
+  limiting) is available, and operates the same as normal SparseFields. 
 
-  The highest resolution representation is level 0.
+  The class is thread safe, and ensures that data is read from disk from in one
+  single thread, using the double-checked locking mechanism.
 
-  All MIPField subclasses are delayed-read, so as not to touch high res
-  data unless needed.
-
-  The base class provides mipValue() and mipLValue(). It is assumed that
-  concrete subclasses provide fastMipValue() and fastMipLValue().
-
-
- */
+  Interpolation into a MIP field may be done either directly to a single level,
+  or by blending between two MIP levels. When blending, each field is assumed
+  to match the other levels only in local-space.
+*/
 
 //----------------------------------------------------------------------------//
 
-template <class Data_T>
-class MIPField : public Field<Data_T>
+template <class Field_T>
+class MIPField : public MIPBase<typename Field_T::value_type>
 {
-
 public:
 
   // Typedefs ------------------------------------------------------------------
+  
+  typedef typename Field_T::value_type        Data_T;
+  typedef Field_T                             NestedType;
 
-  typedef boost::intrusive_ptr<MIPField> Ptr;
+  typedef boost::intrusive_ptr<MIPField>      Ptr;
+  typedef std::vector<Ptr>                    Vec;
+
+  typedef MIPLinearInterp<MIPField<Field_T> > LinearInterp;
+  typedef CubicMIPFieldInterp<Data_T>         CubicInterp;
+
+  typedef Data_T                              value_type;
+
+  typedef EmptyField<Data_T>                  ProxyField;
+  typedef typename ProxyField::Ptr            ProxyPtr;
+  typedef std::vector<ProxyPtr>               ProxyVec;
+
+  typedef typename Field_T::Ptr               FieldPtr;
+  typedef std::vector<FieldPtr>               FieldVec;
+
+  // Constructors --------------------------------------------------------------
+
+  //! \name Constructors & destructor
+  //! \{
+
+  //! Constructs an empty MIP field
+  MIPField();
+
+  //! Copy constructor. We need this because a) we own a mutex and b) we own
+  //! shared pointers and shallow copies are not good enough.
+  MIPField(const MIPField &other);
+
+  //! Assignment operator
+  const MIPField& operator = (const MIPField &rhs);
+
+  // \}
+
+  // From FieldRes base class --------------------------------------------------
+
+  //! \name From FieldRes
+  //! \{  
+  //! Returns -current- memory use, rather than the amount used if all
+  //! levels were loaded.
+  virtual long long int memSize() const;
+  //! We need to know if the mapping changed so that we may update the
+  //! MIP levels' mappings
+  virtual void mappingChanged();
+  //! \}
+  
+  // From Field base class -----------------------------------------------------
+
+  //! \name From Field
+  //! \{  
+  //! For a MIP field, the common value() call accesses data at level 0 only.
+  virtual Data_T value(int i, int j, int k) const;
+  virtual size_t voxelCount() const;
+  //! \}
 
   // RTTI replacement ----------------------------------------------------------
 
-  typedef MIPField<Data_T> class_type;
-  DEFINE_FIELD_RTTI_ABSTRACT_CLASS;
+  typedef MIPField<Field_T> class_type;
+  DEFINE_FIELD_RTTI_CONCRETE_CLASS
 
   static const char *staticClassName()
   {
     return "MIPField";
   }
-  
-  static const char* classType()
+
+  static const char *staticClassType()
   {
-    return MIPField<Data_T>::ms_classType.name();
+    return MIPField<Field_T>::ms_classType.name();
   }
+    
+  // From MIPField -------------------------------------------------------------
+
+  virtual Data_T mipValue(size_t level, int i, int j, int k) const;
+  virtual V3i    mipResolution(size_t level) const;
+  virtual bool   levelLoaded(const size_t level) const;
+  virtual void   getVsMIPCoord(const V3f &vsP, const size_t level, 
+                               V3f &outVsP) const;
+  virtual typename Field<Data_T>::Ptr mipLevel(const size_t level) const;
+
+  // Concrete voxel access -----------------------------------------------------
+
+  //! Read access to voxel at a given MIP level. 
+  Data_T fastMipValue(size_t level, int i, int j, int k) const;
+
+  // From FieldBase ------------------------------------------------------------
+
+  //! \name From FieldBase
+  //! \{
+
+  FIELD3D_CLASSNAME_CLASSTYPE_IMPLEMENTATION;
   
-  // Constructors --------------------------------------------------------------
+  virtual FieldBase::Ptr clone() const
+  { 
+    return Ptr(new MIPField(*this));
+  }
 
-  MIPField();
-  
-  // To be implemented by subclasses -------------------------------------------
-
-  //! Read access to a voxel in a given MIP level
-  //! \param level The MIP level to read from
-  virtual Data_T mipValue(size_t level, int i, int j, int k) const = 0;
-
-  //! Returns the resolution of a given MIP level
-  virtual V3i mipResolution(size_t level) const = 0;
-
-  //! Whether a given MIP level is loaded
-  virtual bool levelLoaded(const size_t level) const = 0;
-
-  //! Given a voxel space coordinate in the 0-level field, computes the 
-  //! coordinate in another level
-  virtual void getVsMIPCoord(const V3f &vsP, const size_t level, 
-                             V3f &outVsP) const = 0;
+  //! \}
 
   // Main methods --------------------------------------------------------------
 
-  //! Sets the lowest MIP level to use. Defaults to zero, but can be set higher 
-  //! to prevent high resolution levels from being accessed.
-  void setLowestLevel(size_t level);
-  //! Lowest MIP level to use.
-  size_t lowestLevel() const
-  { return m_lowestLevel; }
-  //! Number of MIP levels
-  size_t numLevels() const
-  { return m_numLevels; }
+  //! Clears all the levels of the MIP field.
+  void clear();
+  //! Sets up the MIP field given a set of non-MIP fields
+  //! This call performs sanity checking to ensure that MIP properties are
+  //! satisfied for each level.
+  //! In this case, all MIP levels are available in memory.
+  //! \note The MIP level order is implied to be zero-first.
+  void setup(const FieldVec &fields);
+  //! Sets up the MIP field in lazy-load mode
+  //! \param mipGroupPath Path in F3D file to read data from.
+  void setupLazyLoad(const ProxyVec &proxies,
+                     const typename LazyLoadAction<Field_T>::Vec &actions);
+
+#if 0
+  //! Returns a pointer to a MIP level
+  FieldPtr mipLevel(const size_t level) const;
+#endif
+  //! Returns a raw pointer to a MIP level
+  const Field_T* rawMipLevel(const size_t level) const;
 
 protected:
 
-  // Static data members -------------------------------------------------------
-
-  static TemplatedFieldType<MIPField<Data_T> > ms_classType;
-
   // Typedefs ------------------------------------------------------------------
 
-  typedef Field<Data_T> base;
+  typedef MIPBase<Data_T> base;
+
+  // Static data members -------------------------------------------------------
+
+  static NestedFieldType<MIPField<Field_T> > ms_classType;
+
+  // Preventing instantiation of this helper class -----------------------------
+
+  
 
   // Data members --------------------------------------------------------------
 
-  //! Number of MIP levels. The default is 1.
-  size_t m_numLevels;
-  //! The lowest MIP level to use. Defaults to 0, but can be set higher to
-  //! prevent high resolution levels from being accessed.
-  size_t m_lowestLevel;
+  //! Storage of all MIP levels. Some or all of the pointers may be NULL.
+  //! This is mutable because it needs updating during lazy loading of data.
+  mutable std::vector<FieldPtr> m_fields;
+  //! Lazy load actions. Only used if setupLazyLoad() has been called.
+  mutable typename LazyLoadAction<Field_T>::Vec m_loadActions;
+  //! Raw pointers to MIP levels.
+  //! \note Important note: This is also used as the double-checked locking
+  //! indicator.
+  mutable std::vector<Field_T*> m_rawFields;
+  //! Resolution of each MIP level.
+  mutable std::vector<V3i> m_mipRes;
+  //! Relative resolution of each MIP level. Pre-computed to avoid
+  //! int-to-float conversions
+  mutable std::vector<V3f> m_relativeResolution;
+  //! Mutex lock around IO. Used to make sure only one thread reads MIP 
+  //! level data at a time. When a field is cloned, the two new fields
+  //! will share the mutex, since they point to the same file.
+  boost::shared_ptr<boost::mutex> m_ioMutex;
 
+  // Utility methods -----------------------------------------------------------
+
+  //! Copies from a second MIPField
+  const MIPField& init(const MIPField &rhs);
+  //! Updates the mapping, extents and data window to match the given field.
+  //! Used so that the MIPField will appear to have the same mapping in space
+  //! as the level-0 field.
+  void updateMapping(FieldRes::Ptr field);
+  //! Updates the dependent data members based on m_field
+  void updateAuxMembers() const;
+  //! Loads the given level from disk
+  void loadLevelFromDisk(size_t level) const;
+  //! Sanity checks to ensure that the provided Fields are a MIP representation
+  template <typename T>
+  void sanityChecks(const T &fields);
+
+};
+
+//----------------------------------------------------------------------------//
+// Helper classes
+//----------------------------------------------------------------------------//
+
+template <typename Data_T>
+class MIPSparseField : public MIPField<SparseField<Data_T> >
+{
+  
+};
+
+//----------------------------------------------------------------------------//
+
+template <typename Data_T>
+class MIPDenseField : public MIPField<DenseField<Data_T> >
+{
+  
 };
 
 //----------------------------------------------------------------------------//
 // MIPField implementations
 //----------------------------------------------------------------------------//
 
-template <typename Data_T>
-MIPField<Data_T>::MIPField()
-  : m_numLevels(1), m_lowestLevel(0)
+template <class Field_T>
+MIPField<Field_T>::MIPField()
+  : base(),
+    m_ioMutex(new boost::mutex)
 {
-  
+  m_fields.resize(base::m_numLevels);
 }
 
 //----------------------------------------------------------------------------//
 
-template <typename Data_T>
-void MIPField<Data_T>::setLowestLevel(size_t level)
+template <class Field_T>
+MIPField<Field_T>::MIPField(const MIPField &other)
+  : base(other)
 {
-  m_lowestLevel = level;
+  init(other);
 }
 
 //----------------------------------------------------------------------------//
-// Static member initialization
+
+template <class Field_T>
+const MIPField<Field_T>& 
+MIPField<Field_T>::operator = (const MIPField &rhs)
+{
+  base::operator=(rhs);
+  return init(rhs);
+}
+
 //----------------------------------------------------------------------------//
 
-FIELD3D_CLASSTYPE_TEMPL_INSTANTIATION(MIPField);
+template <class Field_T>
+const MIPField<Field_T>& 
+MIPField<Field_T>::init(const MIPField &rhs)
+{
+  // If any of the fields aren't yet loaded, we can rely on the same load 
+  // actions as the other one
+  m_loadActions = rhs.m_loadActions;
+  // Copy all the regular data members
+  m_mipRes = rhs.m_mipRes;
+  m_relativeResolution = rhs.m_relativeResolution;
+  // The contained fields must be individually cloned if they have already
+  // been loaded
+  m_fields.resize(rhs.m_fields.size());
+  m_rawFields.resize(rhs.m_rawFields.size());
+  for (size_t i = 0, end = m_fields.size(); i < end; ++i) {
+    // Update the field pointer
+    if (rhs.m_fields[i]) {
+      FieldBase::Ptr baseClone = rhs.m_fields[i]->clone();
+      FieldPtr clone = field_dynamic_cast<Field_T>(baseClone);
+      if (clone) {
+        m_fields[i] = clone;
+      } else {
+        std::cerr << "MIPField::op=(): Failed to clone." << std::endl;
+      }
+    }
+    // Update the raw pointer
+    m_rawFields[i] = m_fields[i].get();
+  }
+  // New mutex
+  m_ioMutex.reset(new boost::mutex);
+  // Done
+  return *this;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Field_T>
+void MIPField<Field_T>::clear()
+{
+  m_fields.clear();
+  m_rawFields.clear();
+  base::m_numLevels = 0;
+  base::m_lowestLevel = 0;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Field_T>
+void MIPField<Field_T>::setup(const FieldVec &fields)
+{
+  // Clear existing data
+  clear();
+  // Run sanity checks. This will throw an exception if the fields are invalid.
+  sanityChecks(fields);
+  // Update state of object
+  m_fields = fields;
+  base::m_numLevels = fields.size();
+  base::m_lowestLevel = 0;
+  updateMapping(fields[0]);
+  updateAuxMembers();
+  // Resize vectors
+  m_mipRes.resize(base::m_numLevels);
+  m_relativeResolution.resize(base::m_numLevels);
+  // For each MIP level
+  for (size_t i = 0; i < fields.size(); i++) {
+    // Update MIP res from real fields
+    m_mipRes[i] = m_fields[i]->extents().size() + V3i(1);
+    // Update relative resolutions
+    m_relativeResolution[i] = V3f(m_mipRes[i]) / m_mipRes[0];
+  } 
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Field_T>
+void MIPField<Field_T>::setupLazyLoad
+(const ProxyVec &proxies,
+ const typename LazyLoadAction<Field_T>::Vec &actions)
+{
+  using namespace Exc;
+
+  // Clear existing data
+  clear();
+  // Check same number of proxies and actions
+  if (proxies.size() != actions.size()) {
+    throw MIPFieldException("Incorrect number of lazy load actions");
+  }  
+  // Run sanity checks. This will throw an exception if the fields are invalid.
+  sanityChecks(proxies);
+  // Store the lazy load actions
+  m_loadActions = actions;
+  // Update state of object
+  base::m_numLevels = proxies.size();
+  base::m_lowestLevel = 0;
+  m_fields.resize(base::m_numLevels);
+  updateMapping(proxies[0]);
+  updateAuxMembers();
+  // Resize vectors
+  m_mipRes.resize(base::m_numLevels);
+  m_relativeResolution.resize(base::m_numLevels);
+  for (size_t i = 0; i < proxies.size(); i++) {
+    // Update mip res from proxy fields
+    m_mipRes[i] = proxies[i]->extents().size() + V3i(1);
+    // Update relative resolutions
+    m_relativeResolution[i] = V3f(m_mipRes[i]) / m_mipRes[0];
+  }
+}
+
+//----------------------------------------------------------------------------//
+
+#if 0
+
+template <class Field_T>
+typename MIPField<Field_T>::FieldPtr 
+MIPField<Field_T>::mipLevel(size_t level) const
+{
+  assert(level < base::m_numLevels);
+  // Ensure level is loaded.
+  if (!m_rawFields[level]) {
+    loadLevelFromDisk(level);
+  } 
+  return m_fields[level];
+}
+#endif
+
+//----------------------------------------------------------------------------//
+
+template <class Field_T>
+const Field_T* 
+MIPField<Field_T>::rawMipLevel(size_t level) const
+{
+  assert(level < base::m_numLevels);
+  // Ensure level is loaded.
+  if (!m_rawFields[level]) {
+    loadLevelFromDisk(level);
+  } 
+  return m_rawFields[level];
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Field_T>
+typename MIPField<Field_T>::Data_T 
+MIPField<Field_T>::value(int i, int j, int k) const
+{
+  return fastMipValue(0, i, j, k);
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Field_T>
+size_t
+MIPField<Field_T>::voxelCount() const
+{
+  size_t count = 0;
+  for (size_t i = 0; i < m_fields.size(); i++) {
+    if (m_fields[i]) {
+      count += m_fields[i]->voxelCount();
+    }
+  }
+  return count;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Field_T>
+long long int MIPField<Field_T>::memSize() const
+{ 
+  long long int mem = 0;
+  for (size_t i = 0; i < m_fields.size(); i++) {
+    if (m_fields[i]) {
+      mem += m_fields[i]->memSize();
+    }
+  }
+  return mem + sizeof(*this);
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Field_T>
+void MIPField<Field_T>::mappingChanged() 
+{ 
+  V3i baseRes = base::dataWindow().size() + V3i(1);
+  if (m_fields[0]) {
+    m_fields[0]->setMapping(base::mapping());
+  }
+  for (size_t i = 1; i < m_fields.size(); i++) {
+    if (m_fields[i]) {
+      FieldMapping::Ptr mapping = 
+        detail::adjustedMIPFieldMapping(base::mapping(), baseRes, i);
+      m_fields[i]->setMapping(mapping);
+    }
+  }
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Field_T>
+typename MIPField<Field_T>::Data_T 
+MIPField<Field_T>::mipValue(size_t level, int i, int j, int k) const
+{
+  return fastMipValue(level, i, j, k);
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Field_T>
+V3i MIPField<Field_T>::mipResolution(size_t level) const
+{
+  assert(level < base::m_numLevels);
+  return m_mipRes[level];
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Field_T>
+bool MIPField<Field_T>::levelLoaded(const size_t level) const
+{
+  assert(level < base::m_numLevels);
+  return m_rawFields[level] != NULL;
+}
+
+//----------------------------------------------------------------------------//
+
+template <typename Field_T>
+void MIPField<Field_T>::getVsMIPCoord(const V3f &vsP, const size_t level, 
+                                      V3f &outVsP) const
+{
+  outVsP = vsP * m_relativeResolution[level];
+}
+
+//----------------------------------------------------------------------------//
+
+template <typename Field_T>
+typename Field<typename MIPField<Field_T>::Data_T>::Ptr 
+MIPField<Field_T>::mipLevel(const size_t level) const
+{
+  assert(level < base::m_numLevels);
+  // Ensure level is loaded.
+  if (!m_rawFields[level]) {
+    loadLevelFromDisk(level);
+  } 
+  return m_fields[level];
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Field_T>
+typename MIPField<Field_T>::Data_T 
+MIPField<Field_T>::fastMipValue(size_t level, int i, int j, int k) const
+{
+  assert(level < base::m_numLevels);
+  // Ensure level is loaded.
+  if (!m_rawFields[level]) {
+    loadLevelFromDisk(level);
+  }
+  // Read from given level
+  return m_rawFields[level]->fastValue(i, j, k);
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Field_T>
+void MIPField<Field_T>::updateAuxMembers() const
+{
+  m_rawFields.resize(m_fields.size());
+  for (size_t i = 0; i < m_fields.size(); i++) {
+    m_rawFields[i] = m_fields[i].get();
+  }
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Field_T>
+void MIPField<Field_T>::updateMapping(FieldRes::Ptr field)
+{
+  base::m_extents = field->extents();
+  base::m_dataWindow = field->dataWindow();
+  base::setMapping(field->mapping());
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Field_T>
+void MIPField<Field_T>::loadLevelFromDisk(size_t level) const
+{
+  // Double-check locking
+  if (!m_rawFields[level]) {
+    boost::mutex::scoped_lock lock(*m_ioMutex);
+    if (!m_rawFields[level]) {
+      // Execute the lazy load action
+      m_fields[level] = m_loadActions[level]->load();
+      // Remove lazy load action
+      m_loadActions[level].reset();
+      // Update aux data
+      updateAuxMembers();
+      // Update the mapping of the loaded field
+      m_fields[level]->setMapping(base::mapping());
+    }
+  }
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Field_T>
+template <class T>
+void
+MIPField<Field_T>::sanityChecks(const T &fields)
+{
+  using boost::lexical_cast;
+  using std::string;
+  using Exc::MIPFieldException;
+
+  // Check zero length
+  if (fields.size() == 0) {
+    throw MIPFieldException("Zero fields in input");
+  }
+  // Check all non-null
+  for (size_t i = 0; i < fields.size(); i++) {
+    if (!fields[i]) {
+      throw MIPFieldException("Found null pointer in input");
+    }
+  }
+  // Check decreasing resolution at higher levels
+  V3i prevSize = fields[0]->extents().size();
+  for (size_t i = 1; i < fields.size(); i++) {
+    V3i size = fields[i]->extents().size();
+    if (size.x > prevSize.x || 
+        size.y > prevSize.y ||
+        size.z > prevSize.z) {
+      throw MIPFieldException("Field " + 
+                                   lexical_cast<string>(i) + 
+                                   " had greater resolution than previous"
+                                   " level");
+    }
+    if (size.x >= prevSize.x &&
+        size.y >= prevSize.y &&
+        size.z >= prevSize.z) {
+      throw MIPFieldException("Field " + 
+                                   lexical_cast<string>(i) + 
+                                   " did not decrease in resolution from "
+                                   " previous level");
+    }
+    prevSize = size;
+  }
+  // All good.
+}
+
+//----------------------------------------------------------------------------//
+// Static data member instantiation
+//----------------------------------------------------------------------------//
+
+template <typename Field_T>
+NestedFieldType<MIPField<Field_T> > MIPField<Field_T>::ms_classType =
+  NestedFieldType<MIPField<Field_T> >();
 
 //----------------------------------------------------------------------------//
 
@@ -221,4 +700,3 @@ FIELD3D_NAMESPACE_HEADER_CLOSE
 //----------------------------------------------------------------------------//
 
 #endif // Include guard
-

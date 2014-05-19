@@ -94,7 +94,7 @@ public:
   typedef FieldIO class_type;
   DEFINE_FIELD_RTTI_ABSTRACT_CLASS;
 
-  static const char * classType()
+  static const char * staticClassType()
   {
     return "FieldIO";
   }

@@ -392,7 +392,7 @@ bool SparseFieldIO::readData(hid_t location,
   // Set up the dynamic read info ---
 
   if (dynamicLoading) {
-      // Set up the field reference
+    // Set up the field reference
     result->addReference(filename, layerPath,
                          valuesPerBlock,
                          occupiedBlocks);

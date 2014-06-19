@@ -49,6 +49,7 @@
 #include <string>
 
 #include <boost/intrusive_ptr.hpp>
+#include <boost/thread/mutex.hpp>
 
 #include <hdf5.h>
 
@@ -222,13 +223,16 @@ public:
   {
     using namespace Hdf5Util;
 
+    // Lock HDF5 access
+    boost::mutex::scoped_lock lock(ms_hdf5Mutex);
+
     hid_t file = H5Fopen(m_filename.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
     if (file < 0)
       throw Exc::NoSuchFileException(m_filename);
     H5ScopedGopen levelGroup(file, m_path);
     FieldIO::Ptr io = 
       ClassFactory::singleton().createFieldIO(Field_T::staticClassName());
-    FieldBase::Ptr field = io->read(levelGroup, "", "", m_typeEnum);
+    FieldBase::Ptr field = io->read(levelGroup, m_filename, m_path, m_typeEnum);
     return field_dynamic_cast<Field_T>(field);
   }
 
@@ -242,6 +246,9 @@ private:
   const std::string m_path;
   //! Data type enum
   const DataTypeEnum m_typeEnum;
+
+  //! HDF5 access mutex
+  static boost::mutex ms_hdf5Mutex;
 
 };
 
@@ -407,6 +414,13 @@ MIPFieldIO::readInternal(hid_t layerGroup,
 
   return result;
 }
+
+//----------------------------------------------------------------------------//
+// Template instantiations
+//----------------------------------------------------------------------------//
+
+template <typename Field_T> 
+boost::mutex GenericLazyLoadAction<Field_T>::ms_hdf5Mutex;
 
 //----------------------------------------------------------------------------//
 

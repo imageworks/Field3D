@@ -634,7 +634,10 @@ void MIPField<Field_T>::loadLevelFromDisk(size_t level) const
       // Update aux data
       updateAuxMembers();
       // Update the mapping of the loaded field
-      m_fields[level]->setMapping(base::mapping());
+      V3i baseRes = base::dataWindow().size() + V3i(1);
+      FieldMapping::Ptr mapping = 
+        detail::adjustedMIPFieldMapping(base::mapping(), baseRes, level);
+      m_fields[level]->setMapping(mapping);
     }
   }
 }

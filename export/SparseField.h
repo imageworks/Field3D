@@ -48,6 +48,7 @@
 
 #include <vector>
 
+#include <boost/thread/mutex.hpp>
 #include <boost/lexical_cast.hpp>
 
 #include "Field.h"
@@ -145,15 +146,24 @@ public:
 
     // If in the middle of a block, optimize lookup stencil
     if (vi < blockSize - 1 && vj < blockSize - 1 && vk < blockSize - 1) {
-      // Only do work if the block is allocated
-      const Data_T * const p = field.blockData(bi, bj, bk);
-      if (p) {
-        const Data_T * const c111 = p + vi + vj * blockSize + vk * blockSize * blockSize;
+      if (field.blockIsAllocated(bi, bj, bk)) {
+        // Ensure block data is active and kept alive
+        const int blockId        = field.blockId(bi, bj, bk);
+        const bool isDynamicLoad = field.isDynamicLoad();
+        if (isDynamicLoad) {
+          field.incBlockRef(blockId);
+          field.activateBlock(blockId);
+        }
+        // Only do work if the block is allocated
+        const Data_T * const p = field.blockData(bi, bj, bk);
+        const Data_T * const c111 = 
+          p + vi + vj * blockSize + vk * blockSize * blockSize;
         const Data_T * const c121 = c111 + blockSize * (c2.y - c1.y);
-        const Data_T * const c112 = c111 + blockSize * blockSize * (c2.z - c1.z);
+        const Data_T * const 
+          c112 = c111 + blockSize * blockSize * (c2.z - c1.z);
         const Data_T * const c122 = c112 + blockSize * (c2.y - c1.y);
         int xInc = c2.x - c1.x;
-        return static_cast<Data_T>
+        Data_T value = static_cast<Data_T>
           (f1.x * (f1.y * (f1.z * *c111 +
                            f2.z * *c112) +
                    f2.y * (f1.z * *c121 +
@@ -162,6 +172,12 @@ public:
                            f2.z * *(c112 + xInc)) +
                    f2.y * (f1.z * *(c121 + xInc) +
                            f2.z * *(c122 + xInc))));
+        // Decrement the block ref count
+        if (isDynamicLoad) {
+          field.decBlockRef(blockId);
+        }
+        // Done.
+        return value;
       } else {
         return static_cast<Data_T>(field.getBlockEmptyValue(bi, bj, bk));
       }
@@ -204,7 +220,6 @@ FIELD3D_CLASSTYPE_TEMPL_INSTANTIATION(LinearSparseFieldInterp);
 //! \ingroup field_int
 namespace Sparse {
 
-
 //! \class SparseBlock
 //! \ingroup field_int
 //! Storage for one individual block of a SparseField
@@ -243,6 +258,9 @@ struct SparseBlock : boost::noncopyable
   //! Alloc data
   void resize(int n)
   {
+    // First hold lock
+    boost::mutex::scoped_lock lock(ms_resizeMutex);
+    // Perform work
     if (data) {
       delete[] data;
     }
@@ -254,17 +272,19 @@ struct SparseBlock : boost::noncopyable
   //! Remove data
   void clear()
   {
+    // First hold lock
+    boost::mutex::scoped_lock lock(ms_resizeMutex);
+    // Perform work
     if (data) {
       delete[] data;
       data = NULL;
     }
-    isAllocated = false;
   }
 
   //! Copy data from another block
   void copy(const SparseBlock &other, size_t n)
   {
-    if(other.isAllocated) {
+    if (other.isAllocated) {
       if (!data) {
         resize(n);
       }
@@ -272,10 +292,9 @@ struct SparseBlock : boost::noncopyable
       while (p != end) {
         *p++ = *o++;
       }
-    }
-    else
+    } else {
       clear();
-
+    }
   }
 
   // Data members --------------------------------------------------------------
@@ -297,6 +316,13 @@ private:
   SparseBlock(const SparseBlock&);
   //! Non-copyable
   const SparseBlock& operator=(const SparseBlock&);
+
+  // Data members --------------------------------------------------------------
+
+  //! Prevents concurrent allocation of blocks. There should be little 
+  //! contention, and this prevents multiple threads from trying to allocate
+  //! the same field 
+  static boost::mutex ms_resizeMutex;
 
 };
 
@@ -432,6 +458,19 @@ public:
     j -= base::m_dataWindow.min.y;
     k -= base::m_dataWindow.min.z;
   }
+
+  //! Whether the field is dynamically loaded
+  bool isDynamicLoad() const
+  { return m_fileManager != NULL; }
+
+  //! Increments the block ref count for the given block
+  void incBlockRef(const int blockId) const;
+
+  //! Activates a given block
+  void activateBlock(const int blockId) const;
+
+  //! Decrements the block ref count for the given block
+  void decBlockRef(const int blockId) const;
 
   // From Field base class -----------------------------------------------------
 
@@ -602,6 +641,13 @@ private:
 //----------------------------------------------------------------------------//
 
 FIELD3D_CLASSTYPE_TEMPL_INSTANTIATION(SparseField);
+
+namespace Sparse {
+
+template <typename Data_T>
+boost::mutex SparseBlock<Data_T>::ms_resizeMutex;
+
+}
 
 //----------------------------------------------------------------------------//
 // Typedefs
@@ -1610,7 +1656,7 @@ long long int SparseField<Data_T>::memSize() const
   long long int dataSize = 0;
 
   for (size_t i = 0; i < m_numBlocks; ++i) {
-    if (m_blocks[i].isAllocated) {
+    if (m_blocks[i].data) {
       dataSize += (1 << m_blockOrder << m_blockOrder << m_blockOrder) *
         sizeof(Data_T);
     }
@@ -1810,6 +1856,30 @@ void SparseField<Data_T>::getVoxelInBlock(int i, int j, int k,
   vi = i & ((1 << m_blockOrder) - 1);
   vj = j & ((1 << m_blockOrder) - 1);
   vk = k & ((1 << m_blockOrder) - 1);
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+void SparseField<Data_T>::incBlockRef(const int blockId) const
+{
+  m_fileManager->incBlockRef<Data_T>(m_fileId, blockId);
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+void SparseField<Data_T>::activateBlock(const int blockId) const
+{
+  m_fileManager->activateBlock<Data_T>(m_fileId, blockId);
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+void SparseField<Data_T>::decBlockRef(const int blockId) const
+{
+  m_fileManager->decBlockRef<Data_T>(m_fileId, blockId);
 }
 
 //----------------------------------------------------------------------------//

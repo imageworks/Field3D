@@ -49,21 +49,13 @@
 
 //----------------------------------------------------------------------------//
 
-#if 0
-#define PRINT_VAR(var, indent) cout << indent << #var << ": " << var << endl;
-#else
-#define PRINT_VAR(var, indent) ; 
-#endif
-
-//----------------------------------------------------------------------------//
-
 /* TODO LIST
 
- * Implement dumb, dense resampling
- * For SparseField, only write non-zero results
- * Implement more filters
+ * x Implement dumb, dense resampling
+ * x For SparseField, only write non-zero results
+ * x Implement more filters
  * For SparseField, be smart about which blocks are computed
- * Multi-threading using boost
+ * x Multi-threading using boost
  * Multi-threading using TBB
 
  */
@@ -87,14 +79,6 @@ FIELD3D_NAMESPACE_OPEN
 template <typename Field_T, typename FilterOp_T>
 bool resample(const Field_T &src, Field_T &tgt, const V3i &newRes,
               const FilterOp_T &filter);
-
-//! Resamples the source field into the target field, using separable
-//! execution, which is faster than resample().
-//! \note The extents of the field will be reset to match the data window.
-//! This should 
-template <typename Field_T, typename FilterOp_T>
-bool separableResample(const Field_T &src, Field_T &tgt, const V3i &newRes,
-                       const FilterOp_T &filter);
 
 //----------------------------------------------------------------------------//
 // BoxFilter
@@ -298,6 +282,56 @@ namespace detail {
 
   //--------------------------------------------------------------------------//
 
+  //! Resamples the source field into the target field, using separable
+  //! execution, which is faster than resample().
+  //! \note The extents of the field will be reset to match the data window.
+  template <typename Field_T, typename FilterOp_T>
+  bool separableResample(const Field_T &src, Field_T &tgt, const V3i &newRes,
+                         const FilterOp_T &filterOp)
+  {
+    using namespace detail;
+  
+    typedef typename Field_T::value_type T;
+
+    if (!filterOp.isSeparable()) {
+      return false;
+    }
+
+    if (!src.dataWindow().hasVolume()) {
+      return false;
+    }
+
+    if (src.dataWindow().min != V3i(0)) {
+      return false;
+    }
+
+    // Temporary field for y component
+    Field_T tmp;
+
+    // Cache the old resolution
+    V3i oldRes = src.dataWindow().size() + V3i(1);
+    V3i xRes(newRes.x, oldRes.y, oldRes.z);
+    V3i yRes(newRes.x, newRes.y, oldRes.z);
+    V3i zRes(newRes.x, newRes.y, newRes.z);
+
+    // X axis (src into tgt)
+    separable(src, tgt, xRes, filterOp, 0);
+    // Y axis (tgt into temp)
+    separable(tgt, tmp, yRes, filterOp, 1);
+    // Z axis (temp into tgt)
+    separable(tmp, tgt, zRes, filterOp, 2);
+
+    // Update final target with mapping and metadata
+    tgt.name      = src.name;
+    tgt.attribute = src.attribute;
+    tgt.setMapping(src.mapping());
+    tgt.copyMetadata(src);
+
+    return true;
+  }
+
+  //--------------------------------------------------------------------------//
+
 } // namespace detail
 
 //----------------------------------------------------------------------------//
@@ -313,7 +347,7 @@ bool resample(const Field_T &src, Field_T &tgt, const V3i &newRes,
   typedef typename Field_T::value_type T;
 
   if (filterOp.isSeparable()) {
-    return separableResample(src, tgt, newRes, filterOp);
+    return detail::separableResample(src, tgt, newRes, filterOp);
   }
 
   if (!src.dataWindow().hasVolume()) {
@@ -382,53 +416,6 @@ bool resample(const Field_T &src, Field_T &tgt, const V3i &newRes,
       }
     }
   }
-
-  return true;
-}
-
-//----------------------------------------------------------------------------//
-
-template <typename Field_T, typename FilterOp_T>
-bool separableResample(const Field_T &src, Field_T &tgt, const V3i &newRes,
-                       const FilterOp_T &filterOp)
-{
-  using namespace detail;
-  
-  typedef typename Field_T::value_type T;
-
-  if (!filterOp.isSeparable()) {
-    return false;
-  }
-
-  if (!src.dataWindow().hasVolume()) {
-    return false;
-  }
-
-  if (src.dataWindow().min != V3i(0)) {
-    return false;
-  }
-
-  // Temporary field for y component
-  Field_T tmp;
-
-  // Cache the old resolution
-  V3i oldRes = src.dataWindow().size() + V3i(1);
-  V3i xRes(newRes.x, oldRes.y, oldRes.z);
-  V3i yRes(newRes.x, newRes.y, oldRes.z);
-  V3i zRes(newRes.x, newRes.y, newRes.z);
-
-  // X axis (src into tgt)
-  separable(src, tgt, xRes, filterOp, 0);
-  // Y axis (tgt into temp)
-  separable(tgt, tmp, yRes, filterOp, 1);
-  // Z axis (temp into tgt)
-  separable(tmp, tgt, zRes, filterOp, 2);
-
-  // Update final target with mapping and metadata
-  tgt.name      = src.name;
-  tgt.attribute = src.attribute;
-  tgt.setMapping(src.mapping());
-  tgt.copyMetadata(src);
 
   return true;
 }

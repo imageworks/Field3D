@@ -2297,7 +2297,7 @@ void testThreadField()
   {
     {
       Msg::print("Testing " + src->className()+ " with " 
-                 + lexical_cast<string>(*i) + " # of theards.");
+                 + lexical_cast<string>(*i) + " # of threads.");
       ScopedPrintTimer t(*i);
       CopyThreaded<SField> vol( *i );
       vol.simpleFunc(src, dest);
@@ -2432,7 +2432,6 @@ void testMIPMake()
   typedef MIPField<Field_T<Data_T> > MIPType;
 
   string TName(DataTypeTraits<Data_T>::name());
-  Msg::print(string("Testing MIP Make ") + MIPType::staticClassType());
 
   typename Field_T<Data_T>::Ptr level0(new Field_T<Data_T>);
 
@@ -2445,27 +2444,45 @@ void testMIPMake()
     val = (val + 1) % 128;
   }
 
-  typename MIPType::Ptr mipField = makeMIP<MIPType>(*level0);
-  mipField->name = "mip";
-  mipField->attribute = "density";
+  std::vector<int> numThreads;
+  numThreads.push_back(1);
+  numThreads.push_back(4);
+  numThreads.push_back(8);
+
+  for (std::vector<int>::const_iterator i = numThreads.begin(), 
+         end = numThreads.end(); i != end; ++i) 
+  {
+    Msg::print("Testing makeMIP" + 
+               string(MIPType::staticClassType()) + " with " 
+               + lexical_cast<string>(*i) + " # of threads.");
+    typename MIPType::Ptr mipField = makeMIP<MIPType>(*level0, 32, *i);
+    mipField->name = "mip";
+    mipField->attribute = "density";
   
-  Field3DOutputFile out;
-  string filename(getTempFile("testMIPMake_" + 
-                              string(MIPType::staticClassType()) + ".f3d")); 
+    std::stringstream base;
+    base << "testMIPMake_";
+    base << string(MIPType::staticClassType()) << "_";
+    base << *i << ".f3d";
 
-  out.create(filename);
-  out.writeScalarLayer<float>(mipField);
+    Field3DOutputFile out;
+    string filename(getTempFile(base.str())); 
 
-  Field3DInputFile in;
-  in.open(filename);
-  typename Field<Data_T>::Vec fields = in.readScalarLayers<Data_T>();
-  mipField = field_dynamic_cast<MIPType>(fields[0]);
+    out.create(filename);
+    out.writeScalarLayer<Data_T>(mipField);
+    out.close();
 
-  BOOST_CHECK_EQUAL(fields.size(), 1);
-  BOOST_CHECK_EQUAL(mipField != NULL, true);
-  BOOST_CHECK_EQUAL(mipField->numLevels(), 4);
-  bool matchLevel0 = isIdentical<Data_T>(mipField->mipLevel(0), level0);
-  BOOST_CHECK(matchLevel0);
+    Field3DInputFile in;
+    in.open(filename);
+    typename Field<Data_T>::Vec fields = in.readScalarLayers<Data_T>();
+    mipField = field_dynamic_cast<MIPType>(fields[0]);
+
+    BOOST_CHECK_EQUAL(fields.size(), 1);
+    BOOST_CHECK_EQUAL(mipField != NULL, true);
+    BOOST_CHECK_EQUAL(mipField->numLevels(), 4);
+    bool matchLevel0 = isIdentical<Data_T>(mipField->mipLevel(0), level0);
+    BOOST_CHECK(matchLevel0);
+
+  }
 }
 
 //----------------------------------------------------------------------------//

@@ -11,7 +11,7 @@ sys.path.append(pathToRoot)
 
 from BuildSupport import *
 
-appName = "f3dinfo"
+appName = "f3dmakemip"
 buildPath = buildDir()
 binPath   = join(buildPath, appName)
 
@@ -23,7 +23,7 @@ appEnv = env.Clone()
 setupEnv(appEnv, pathToRoot)
 addField3DInstall(appEnv, pathToRoot)
 
-appEnv.Append(LIBS = ["boost_program_options-mt", "boost_regex-mt"])
+appEnv.Append(LIBS = ["boost_program_options-mt"])
 
 appEnv.VariantDir(buildPath, ".", duplicate = 0)
 files = Glob(join(buildPath, "*.cpp"))

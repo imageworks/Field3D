@@ -23,7 +23,7 @@ appEnv = env.Clone()
 setupEnv(appEnv, pathToRoot)
 addField3DInstall(appEnv, pathToRoot)
 
-appEnv.Append(LIBS = ["boost_program_options"])
+appEnv.Append(LIBS = ["boost_program_options-mt"])
 
 appEnv.VariantDir(buildPath, ".", duplicate = 0)
 files = Glob(join(buildPath, "*.cpp"))

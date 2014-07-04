@@ -135,8 +135,13 @@ namespace {
    */
   bool fileExists(const std::string &filename)
   {
+#ifdef WIN32
+    struct __stat64 statbuf;
+    return (_stat64(filename.c_str(), &statbuf) != -1);
+#else
     struct stat statbuf;
     return (stat(filename.c_str(), &statbuf) != -1);
+#endif
   }
 
   /*! \brief wrapper around fileExists. Throws instead if the file

@@ -33,10 +33,10 @@
 //
 //-*****************************************************************************
 
-#include <Alembic/Ogawa/Foundation.h>
-#include <Alembic/Ogawa/IGroup.h>
-#include <Alembic/Ogawa/IData.h>
-#include <Alembic/Ogawa/IStreams.h>
+#include "Foundation.h"
+#include "IGroup.h"
+#include "IData.h"
+#include "IStreams.h"
 
 namespace Alembic {
 namespace Ogawa {

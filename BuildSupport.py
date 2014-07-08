@@ -144,6 +144,7 @@ def getMathHeader():
 def setupLibBuildEnv(env, pathToRoot = "."):
     # Project headers
     env.Append(CPPPATH = [join(pathToRoot, export)])
+    env.Append(CPPPATH = [join(pathToRoot, include)])
     # Check if Site.py exists
     siteExists = False
     if os.path.exists(join(pathToRoot, siteFile)):

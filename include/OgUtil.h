@@ -12,8 +12,8 @@
 
 #include <OpenEXR/ImathVec.h>
 
-#include "external/Ogawa/All.h"
-#include "external/Ogawa/UtilFoundation.h"
+#include "All.h"
+#include "UtilFoundation.h"
 
 //----------------------------------------------------------------------------//
 // Defines
@@ -56,10 +56,12 @@ typedef double                  float64_t;
 typedef Field3D::V3h            vec16_t;
 typedef Field3D::V3f            vec32_t;
 typedef Field3D::V3d            vec64_t;
+typedef Field3D::V3i            veci32_t;
 #else
 typedef Imath::Vec3<float16_t>  vec16_t;
 typedef Imath::Vec3<float32_t>  vec32_t;
 typedef Imath::Vec3<float64_t>  vec64_t;
+typedef Imath::Vec3<int32_t>    veci32_t;
 #endif
 
 //----------------------------------------------------------------------------//
@@ -78,7 +80,7 @@ enum OgGroupType {
 
 //! Enumerates the various uses for Ogawa-level groups. 
 //! \warning Do not under any circumstances alter the order of these! If you
-//! need to add more types, append them at the end, before F3DInvalidDataType.
+//! need to add more types, append them at the end, before F3DNumDataTypes.
 enum OgDataType {
 
   // Signed and unsigned integers from char to long
@@ -103,6 +105,7 @@ enum OgDataType {
   F3DVec16,
   F3DVec32,
   F3DVec64,
+  F3DVecI32,
 
   F3DNumDataTypes, 
 
@@ -145,6 +148,7 @@ F3D_DECLARE_OG_TRAITS(float64_t, F3DFloat64, "float64_t");
 F3D_DECLARE_OG_TRAITS(vec16_t,   F3DVec16,   "vec16_t");
 F3D_DECLARE_OG_TRAITS(vec32_t,   F3DVec32,   "vec32_t");
 F3D_DECLARE_OG_TRAITS(vec64_t,   F3DVec64,   "vec64_t");
+F3D_DECLARE_OG_TRAITS(veci32_t,  F3DVecI32,  "veci32_t");
 
 //----------------------------------------------------------------------------//
 // Helper functions

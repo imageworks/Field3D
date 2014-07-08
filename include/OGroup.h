@@ -36,9 +36,9 @@
 #ifndef _Alembic_Ogawa_OGroup_h_
 #define _Alembic_Ogawa_OGroup_h_
 
-#include <Alembic/Ogawa/Foundation.h>
-#include <Alembic/Ogawa/OStream.h>
-#include <Alembic/Ogawa/OData.h>
+#include "Foundation.h"
+#include "OStream.h"
+#include "OData.h"
 
 namespace Alembic {
 namespace Ogawa {

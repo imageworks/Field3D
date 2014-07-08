@@ -33,7 +33,7 @@
 //
 //-*****************************************************************************
 
-#include <Alembic/Ogawa/IArchive.h>
+#include "IArchive.h"
 
 namespace Alembic {
 namespace Ogawa {

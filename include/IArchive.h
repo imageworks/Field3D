@@ -36,9 +36,9 @@
 #ifndef _Alembic_Ogawa_IArchive_h_
 #define _Alembic_Ogawa_IArchive_h_
 
-#include <Alembic/Ogawa/Foundation.h>
-#include <Alembic/Ogawa/IStreams.h>
-#include <Alembic/Ogawa/IGroup.h>
+#include "Foundation.h"
+#include "IStreams.h"
+#include "IGroup.h"
 
 #include <istream>
 

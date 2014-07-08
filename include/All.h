@@ -37,14 +37,14 @@
 #ifndef _Alembic_Ogawa_All_h_
 #define _Alembic_Ogawa_All_h_
 
-#include <Alembic/Ogawa/Foundation.h>
-#include <Alembic/Ogawa/IArchive.h>
-#include <Alembic/Ogawa/IData.h>
-#include <Alembic/Ogawa/IGroup.h>
-#include <Alembic/Ogawa/IStreams.h>
-#include <Alembic/Ogawa/OArchive.h>
-#include <Alembic/Ogawa/OData.h>
-#include <Alembic/Ogawa/OGroup.h>
-#include <Alembic/Ogawa/OStream.h>
+#include "Foundation.h"
+#include "IArchive.h"
+#include "IData.h"
+#include "IGroup.h"
+#include "IStreams.h"
+#include "OArchive.h"
+#include "OData.h"
+#include "OGroup.h"
+#include "OStream.h"
 
 #endif

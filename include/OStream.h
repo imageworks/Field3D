@@ -36,7 +36,7 @@
 #ifndef _Alembic_Ogawa_OStream_h_
 #define _Alembic_Ogawa_OStream_h_
 
-#include <Alembic/Ogawa/Foundation.h>
+#include "Foundation.h"
 
 #include <ostream>
 

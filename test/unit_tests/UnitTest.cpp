@@ -1345,6 +1345,8 @@ void testReadAsDifferentType()
 
   out.close();
 
+#if 0
+
   // Read it back out as the templated type
 
   Field3DInputFile in;
@@ -1368,6 +1370,8 @@ void testReadAsDifferentType()
   // Mess with the data, and make sure it fails this time
   mf1[0]->lvalue(30, 30, 60) = 9.9;
   BOOST_CHECK_EQUAL(isIdentical<Data_T>(mf1[0], sparse), false);
+
+#endif
 
 }
 
@@ -2487,15 +2491,15 @@ void testMIPMake()
 
 //----------------------------------------------------------------------------//
 
-#define DO_BASIC_TESTS         1
-#define DO_INTERP_TESTS        1
-#define DO_CUBIC_INTERP_TESTS  1
-#define DO_BASIC_FILE_TESTS    1 
-#define DO_ADVANCED_FILE_TESTS 1
-#define DO_SPARSE_BLOCK_TESTS  1
-#define DO_MAC_TESTS           1
-#define DO_THREAD_TESTS        1
-#define DO_MIP_TESTS           1
+#define DO_BASIC_TESTS         0
+#define DO_INTERP_TESTS        0
+#define DO_CUBIC_INTERP_TESTS  0
+#define DO_BASIC_FILE_TESTS    1
+#define DO_ADVANCED_FILE_TESTS 0
+#define DO_SPARSE_BLOCK_TESTS  0
+#define DO_MAC_TESTS           0
+#define DO_THREAD_TESTS        0
+#define DO_MIP_TESTS           0
 
 test_suite*
 init_unit_test_suite(int argc, char* argv[])

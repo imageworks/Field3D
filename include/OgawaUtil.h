@@ -5,9 +5,9 @@
 #include <iostream>
 #include <string>
 
-#include "external/Ogawa/All.h"
-#include "external/Ogawa/UtilFoundation.h"
-#include "external/Ogawa/UtilPlainOldDataType.h"
+#include "All.h"
+#include "UtilFoundation.h"
+#include "UtilPlainOldDataType.h"
 
 #include "OgIAttribute.h"
 #include "OgOAttribute.h"

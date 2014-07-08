@@ -1,8 +1,7 @@
 //----------------------------------------------------------------------------//
 
 /*
- * Copyright (c) 2014 Sony Pictures Imageworks Inc., 
- *                    Pixar Animation Studios Inc.
+ * Copyright (c) 2009 Sony Pictures Imageworks Inc
  *
  * All rights reserved.
  *
@@ -36,32 +35,27 @@
 
 //----------------------------------------------------------------------------//
 
-/*! \file Field3DFile.cpp
-  \brief Contains implementations of Field3DFile-related member functions
+/*! \file Field3DFileHDF5.cpp
+  \brief Contains implementations of Field3DFileHDF5-related member functions
   \ingroup field
 */
 
 //----------------------------------------------------------------------------//
-
-#include "Field3DFile.h"
 
 #include <sys/stat.h>
 #ifndef WIN32
 #include <unistd.h>
 #endif
 
+#include <hdf5.h>
+#include <H5Epublic.h>
+
 #include <boost/tokenizer.hpp>
 #include <boost/utility.hpp>
 
+#include "Field3DFileHDF5.h"
 #include "Field.h"
 #include "ClassFactory.h"
-#include "OArchive.h"
-#include "OgIAttribute.h"
-#include "OgIDataset.h"
-#include "OgIGroup.h"
-#include "OgOAttribute.h"
-#include "OgODataset.h"
-#include "OgOGroup.h"
 
 //----------------------------------------------------------------------------//
 
@@ -76,6 +70,8 @@ FIELD3D_NAMESPACE_OPEN
 //----------------------------------------------------------------------------//
 
 using namespace Exc;
+using namespace Hdf5Util;
+using namespace FileHDF5;
 
 //----------------------------------------------------------------------------//
 // Local namespace
@@ -94,9 +90,8 @@ namespace {
   //! This version is stored in every file to determine which library version
   //! produced it.
 
-  V3i k_currentFileVersion = V3i(FIELD3D_MAJOR_VER, 
-                                 FIELD3D_MINOR_VER, 
-                                 FIELD3D_MICRO_VER);
+  int k_currentFileVersion[3] =
+    { FIELD3D_MAJOR_VER, FIELD3D_MINOR_VER, FIELD3D_MICRO_VER };
   int k_minFileVersion[2] = { 0, 0 };
 
   // Function objects used only in this file -----------------------------------
@@ -112,7 +107,7 @@ namespace {
     return ret;
   }
 
-  //--------------------------------------------------------------------------//
+//----------------------------------------------------------------------------//
 
   //! Functor used with for_each to print a container
   template <class T>
@@ -131,7 +126,23 @@ namespace {
     int indent;
   };
 
-  //--------------------------------------------------------------------------//
+//----------------------------------------------------------------------------//
+
+  /*! \brief checks to see if a file/directory exists or not
+    \param[in] filename the file/directory to check
+    \retval true if it exists
+    \retval false if it does not exist
+   */
+  bool fileExists(const std::string &filename)
+  {
+#ifdef WIN32
+    struct __stat64 statbuf;
+    return (_stat64(filename.c_str(), &statbuf) != -1);
+#else
+    struct stat statbuf;
+    return (stat(filename.c_str(), &statbuf) != -1);
+#endif
+  }
 
   /*! \brief wrapper around fileExists. Throws instead if the file
     does not exist.
@@ -146,7 +157,7 @@ namespace {
     }
   }
 
-  //--------------------------------------------------------------------------//
+//----------------------------------------------------------------------------//
 
   bool isSupportedFileVersion(const int fileVersion[3],
                               const int minVersion[2])
@@ -183,15 +194,17 @@ namespace {
     return true;
   }
 
-  //--------------------------------------------------------------------------//
+//----------------------------------------------------------------------------//
+
+  static herr_t localPrintError( hid_t estack_id, void *stream )
+  {
+    printf("H5E message -----------------------\n");
+    return H5Eprint2(estack_id, static_cast<FILE*>(stream));
+  }
+  
+//----------------------------------------------------------------------------//
 
 } // end of local namespace
-
-//----------------------------------------------------------------------------//
-// File namespace
-//----------------------------------------------------------------------------//
-
-namespace File {
 
 //----------------------------------------------------------------------------//
 // Partition implementations
@@ -271,22 +284,28 @@ Partition::getVectorLayerNames(std::vector<std::string> &names) const
 }
 
 //----------------------------------------------------------------------------//
-
-} // namespace File
-
-//----------------------------------------------------------------------------//
-// Field3DFileBase implementations
+// Field3DFileHDF5Base implementations
 //----------------------------------------------------------------------------//
 
-Field3DFileBase::Field3DFileBase()
-  : m_metadata(this)
+Field3DFileHDF5Base::Field3DFileHDF5Base()
+  : m_file(-1), m_metadata(this)
 {
-  // Empty
+  GlobalLock lock(g_hdf5Mutex);
+
+  // Suppressing HDF error messages
+  // Explanation about the function for the error stack is here:
+  // http://www.hdfgroup.org/HDF5/doc/RM/RM_H5E.html#Error-SetAuto2
+  if (getenv("DEBUG_HDF")) {
+    cerr << "Field3DFileHDF5 -- HDF5 messages are on" << endl;
+    H5Eset_auto(H5E_DEFAULT, localPrintError, NULL);
+  } else {
+    H5Eset_auto(H5E_DEFAULT, NULL, NULL);
+  }
 }
 
 //----------------------------------------------------------------------------//
 
-Field3DFileBase::~Field3DFileBase()
+Field3DFileHDF5Base::~Field3DFileHDF5Base()
 {
   close();
 }
@@ -294,7 +313,7 @@ Field3DFileBase::~Field3DFileBase()
 //----------------------------------------------------------------------------//
 
 std::string 
-Field3DFileBase::intPartitionName(const std::string &partitionName,
+Field3DFileHDF5Base::intPartitionName(const std::string &partitionName,
                                   const std::string & /* layerName */,
                                   FieldRes::Ptr field)
 {
@@ -323,7 +342,7 @@ Field3DFileBase::intPartitionName(const std::string &partitionName,
 
 //----------------------------------------------------------------------------//
 
-File::Partition::Ptr Field3DFileBase::partition(const string &partitionName) 
+Partition::Ptr Field3DFileHDF5Base::partition(const string &partitionName) 
 {
   for (PartitionList::iterator i = m_partitions.begin();
        i != m_partitions.end(); ++i) {
@@ -331,13 +350,13 @@ File::Partition::Ptr Field3DFileBase::partition(const string &partitionName)
       return *i;
   }
 
-  return File::Partition::Ptr();
+  return Partition::Ptr();
 }
 
 //----------------------------------------------------------------------------//
 
-File::Partition::Ptr
-Field3DFileBase::partition(const string &partitionName) const
+Partition::Ptr
+Field3DFileHDF5Base::partition(const string &partitionName) const
 {
   for (PartitionList::const_iterator i = m_partitions.begin();
        i != m_partitions.end(); ++i) {
@@ -345,13 +364,13 @@ Field3DFileBase::partition(const string &partitionName) const
       return *i;
   }
 
-  return File::Partition::Ptr();
+  return Partition::Ptr();
 }
 
 //----------------------------------------------------------------------------//
 
 std::string 
-Field3DFileBase::removeUniqueId(const std::string &partitionName) const
+Field3DFileHDF5Base::removeUniqueId(const std::string &partitionName) const
 {
   size_t pos = partitionName.rfind(".");
   if (pos == partitionName.npos) {
@@ -364,7 +383,7 @@ Field3DFileBase::removeUniqueId(const std::string &partitionName) const
 //----------------------------------------------------------------------------//
 
 void 
-Field3DFileBase::getPartitionNames(vector<string> &names) const
+Field3DFileHDF5Base::getPartitionNames(vector<string> &names) const
 {
   names.clear();
 
@@ -381,14 +400,14 @@ Field3DFileBase::getPartitionNames(vector<string> &names) const
 //----------------------------------------------------------------------------//
 
 void 
-Field3DFileBase::getScalarLayerNames(vector<string> &names, 
+Field3DFileHDF5Base::getScalarLayerNames(vector<string> &names, 
                                      const string &partitionName) const
 {
   names.clear();
 
   for (int i = 0; i < numIntPartitions(partitionName); i++) {
     string internalName = makeIntPartitionName(partitionName, i);
-    File::Partition::Ptr part = partition(internalName);
+    Partition::Ptr part = partition(internalName);
     if (part)
       part->getScalarLayerNames(names);
   }
@@ -399,14 +418,14 @@ Field3DFileBase::getScalarLayerNames(vector<string> &names,
 //----------------------------------------------------------------------------//
 
 void 
-Field3DFileBase::getVectorLayerNames(vector<string> &names, 
+Field3DFileHDF5Base::getVectorLayerNames(vector<string> &names, 
                                      const string &partitionName) const
 {
   names.clear();
 
   for (int i = 0; i < numIntPartitions(partitionName); i++) {
     string internalName = makeIntPartitionName(partitionName, i);
-    File::Partition::Ptr part = partition(internalName);
+    Partition::Ptr part = partition(internalName);
     if (part)
       part->getVectorLayerNames(names);
   }
@@ -417,7 +436,7 @@ Field3DFileBase::getVectorLayerNames(vector<string> &names,
 //----------------------------------------------------------------------------//
 
 void 
-Field3DFileBase::getIntPartitionNames(vector<string> &names) const
+Field3DFileHDF5Base::getIntPartitionNames(vector<string> &names) const
 {
   names.clear();
 
@@ -430,12 +449,12 @@ Field3DFileBase::getIntPartitionNames(vector<string> &names) const
 //----------------------------------------------------------------------------//
 
 void 
-Field3DFileBase::getIntScalarLayerNames(vector<string> &names, 
+Field3DFileHDF5Base::getIntScalarLayerNames(vector<string> &names, 
                                         const string &intPartitionName) const
 {
   names.clear();
 
-  File::Partition::Ptr part = partition(intPartitionName);
+  Partition::Ptr part = partition(intPartitionName);
 
   if (!part) {
     Msg::print("getIntScalarLayerNames no partition: " + intPartitionName);
@@ -448,12 +467,12 @@ Field3DFileBase::getIntScalarLayerNames(vector<string> &names,
 //----------------------------------------------------------------------------//
 
 void 
-Field3DFileBase::getIntVectorLayerNames(vector<string> &names, 
+Field3DFileHDF5Base::getIntVectorLayerNames(vector<string> &names, 
                                         const string &intPartitionName) const
 {
   names.clear();
 
-  File::Partition::Ptr part = partition(intPartitionName);
+  Partition::Ptr part = partition(intPartitionName);
 
   if (!part) {
     Msg::print("getIntVectorLayerNames no partition: " + intPartitionName);    
@@ -465,7 +484,7 @@ Field3DFileBase::getIntVectorLayerNames(vector<string> &names,
 
 //----------------------------------------------------------------------------//
 
-void Field3DFileBase::clear()
+void Field3DFileHDF5Base::clear()
 {
   closeInternal();
   m_partitions.clear();
@@ -474,7 +493,7 @@ void Field3DFileBase::clear()
 
 //----------------------------------------------------------------------------//
 
-bool Field3DFileBase::close()
+bool Field3DFileHDF5Base::close()
 {
   closeInternal();
 
@@ -483,8 +502,7 @@ bool Field3DFileBase::close()
 
 //----------------------------------------------------------------------------//
 
-<<<<<<< HEAD
-void Field3DFileBase::closeInternal()
+void Field3DFileHDF5Base::closeInternal()
 {
   GlobalLock lock(g_hdf5Mutex);
 
@@ -499,10 +517,8 @@ void Field3DFileBase::closeInternal()
 
 //----------------------------------------------------------------------------//
 
-=======
->>>>>>> Ogawa code now has correct include paths. New Field3DFile compiles but only write root group.
 int 
-Field3DFileBase::numIntPartitions(const std::string &partitionName) const
+Field3DFileHDF5Base::numIntPartitions(const std::string &partitionName) const
 {
   int count = 0;
 
@@ -523,7 +539,7 @@ Field3DFileBase::numIntPartitions(const std::string &partitionName) const
 //----------------------------------------------------------------------------//
 
 string 
-Field3DFileBase::makeIntPartitionName(const std::string &partitionName,
+Field3DFileHDF5Base::makeIntPartitionName(const std::string &partitionName,
                                       int i) const
 {
   return partitionName + "." + boost::lexical_cast<std::string>(i);
@@ -532,7 +548,7 @@ Field3DFileBase::makeIntPartitionName(const std::string &partitionName,
 //----------------------------------------------------------------------------//
 
 void 
-Field3DFileBase::addGroupMembership(const GroupMembershipMap& groupMembers)
+Field3DFileHDF5Base::addGroupMembership(const GroupMembershipMap& groupMembers)
 {
   GroupMembershipMap::const_iterator i= groupMembers.begin();
   GroupMembershipMap::const_iterator end= groupMembers.end();
@@ -550,24 +566,24 @@ Field3DFileBase::addGroupMembership(const GroupMembershipMap& groupMembers)
 }
 
 //----------------------------------------------------------------------------//
-// Field3DInputFile implementations
+// Field3DInputFileHDF5 implementations
 //----------------------------------------------------------------------------//
 
-Field3DInputFile::Field3DInputFile() 
+Field3DInputFileHDF5::Field3DInputFileHDF5() 
 { 
   // Empty
 }
 
 //----------------------------------------------------------------------------//
 
-Field3DInputFile::~Field3DInputFile() 
+Field3DInputFileHDF5::~Field3DInputFileHDF5() 
 { 
   clear(); 
 }
 
 //----------------------------------------------------------------------------//
 
-bool Field3DInputFile::open(const string &filename)
+bool Field3DInputFileHDF5::open(const string &filename)
 {
   GlobalLock lock(g_hdf5Mutex);
 
@@ -578,18 +594,118 @@ bool Field3DInputFile::open(const string &filename)
   // Record filename
   m_filename = filename;
 
-  // Open the Ogawa archive
-  m_archive.reset(new Alembic::Ogawa::IArchive(filename));
+  try {
 
+    string version;
+
+    // Throws exceptions if the file doesn't exist.
+    // This was added because H5Fopen prints out a lot of junk
+    // to the terminal.
+    checkFile(filename);
+
+    m_file = H5Fopen(filename.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+
+    if (m_file < 0)
+      throw NoSuchFileException(filename);
+
+    int fileVersion[3];
+    try { 
+      if (!readAttribute(m_file, k_versionAttrName, 3, fileVersion[0])) {
+        //Msg::print(Msg::SevWarning, "Missing version_number attribute");
+      } else {
+        if (!isSupportedFileVersion(fileVersion, k_minFileVersion)) {
+          stringstream versionStr;
+          versionStr << fileVersion[0] << "."
+                     << fileVersion[1] << "."
+                     << fileVersion[2];
+          throw UnsupportedVersionException(versionStr.str());
+        }
+      }
+    }
+    catch (MissingAttributeException &) {
+      //Msg::print(Msg::SevWarning, "Missing version_number attribute");
+    }
+
+    try { 
+      if (H5Lexists(m_file, "field3d_global_metadata", H5P_DEFAULT)) {      
+        // read the metadata 
+        H5ScopedGopen metadataGroup(m_file, "field3d_global_metadata");
+        if (metadataGroup.id() > 0) {    
+          readMetadata(metadataGroup.id());
+        }
+      }
+    }
+    catch (...) {
+      Msg::print(Msg::SevWarning, 
+                 "Unknown error when reading file metadata ");
+      //throw BadFileHierarchyException(filename);
+    }
+
+    try {
+      if (!readPartitionAndLayerInfo()) {
+        success = false;
+      }
+    } 
+    catch (MissingGroupException &e) {
+      Msg::print(Msg::SevWarning, "Missing group: " + string(e.what()));
+      throw BadFileHierarchyException(filename);
+    }
+    catch (ReadMappingException &e) {
+      Msg::print(Msg::SevWarning, "Couldn't read mapping for partition: " 
+                + string(e.what()));
+      throw BadFileHierarchyException(filename);
+    }
+    catch (Exception &e) {
+      Msg::print(Msg::SevWarning, "Unknown error when reading file hierarchy: "
+                + string(e.what()));
+      throw BadFileHierarchyException(filename);
+    }
+    catch (...) {
+      Msg::print(Msg::SevWarning, 
+                 "Unknown error when reading file hierarchy. ");
+      throw BadFileHierarchyException(filename);
+    }
+
+  }
+  catch (NoSuchFileException &e) {
+    Msg::print(Msg::SevWarning, "Couldn't open file: " 
+              + string(e.what()) );
+    success = false;    
+  }
+  catch (MissingAttributeException &e) {
+    Msg::print(Msg::SevWarning, 
+               "In file: " + filename + " - "
+              + string(e.what()) );
+    success = false;
+  }
+  catch (UnsupportedVersionException &e) {    
+    Msg::print(Msg::SevWarning, 
+               "In file: " + filename + " - File version can not be read: " 
+              + string(e.what()));
+    success = false;    
+  }
+  catch (BadFileHierarchyException &) {
+    Msg::print(Msg::SevWarning, 
+               "In file: " + filename + " - Bad file hierarchy. ");
+    success = false;    
+  }
+  catch (...) {
+    Msg::print(Msg::SevWarning, 
+               "In file: " + filename + " Unknown exception ");
+    success = false;
+  }
+
+  if (!success)
+    close();
+  
   return success;
 }
 
 //----------------------------------------------------------------------------//
-<<<<<<< HEAD
 
-bool Field3DInputFile::readPartitionAndLayerInfo()
+bool Field3DInputFileHDF5::readPartitionAndLayerInfo()
 {
-  using namespace InputFile;
+  using namespace InputFileHDF5;
 
   GlobalLock lock(g_hdf5Mutex);
 
@@ -681,7 +797,7 @@ bool Field3DInputFile::readPartitionAndLayerInfo()
 
 //----------------------------------------------------------------------------//
 
-herr_t Field3DInputFile::parsePartition(hid_t /* loc_id */, 
+herr_t Field3DInputFileHDF5::parsePartition(hid_t /* loc_id */, 
                                         const std::string itemName)
 {
   // Add the partition ---
@@ -695,7 +811,7 @@ herr_t Field3DInputFile::parsePartition(hid_t /* loc_id */,
 //! \note Don't throw exceptions into the hdf5 lib.
 //! \todo Set some sort of flag if we fail during this call. We can't
 //! throw exceptions inside hdf5.
-herr_t Field3DInputFile::parseLayer(hid_t layerGroup, 
+herr_t Field3DInputFileHDF5::parseLayer(hid_t layerGroup, 
                                const std::string &partitionName,
                                const std::string &layerName)
 {
@@ -717,7 +833,7 @@ herr_t Field3DInputFile::parseLayer(hid_t layerGroup,
 
 //! \todo Replace char* with std::string
 bool  
-Field3DInputFile::
+Field3DInputFileHDF5::
 readMetadata(hid_t metadata_id, FieldBase::Ptr field) const
 {
   GlobalLock lock(g_hdf5Mutex);
@@ -828,7 +944,7 @@ readMetadata(hid_t metadata_id, FieldBase::Ptr field) const
 
 //! \todo Replace char* with std::string
 bool  
-Field3DInputFile::readMetadata(hid_t metadata_id)
+Field3DInputFileHDF5::readMetadata(hid_t metadata_id)
 {
   GlobalLock lock(g_hdf5Mutex);
 
@@ -937,7 +1053,7 @@ Field3DInputFile::readMetadata(hid_t metadata_id)
 //----------------------------------------------------------------------------//
 
 bool
-Field3DInputFile::
+Field3DInputFileHDF5::
 readGroupMembership(GroupMembershipMap &gpMembershipMap)
 {
   GlobalLock lock(g_hdf5Mutex);
@@ -1004,10 +1120,10 @@ readGroupMembership(GroupMembershipMap &gpMembershipMap)
 }
 
 //----------------------------------------------------------------------------//
-// Field3DFile-related callback functions
+// Field3DFileHDF5-related callback functions
 //----------------------------------------------------------------------------//
 
-namespace InputFile {
+namespace InputFileHDF5 {
 
 //----------------------------------------------------------------------------//
 
@@ -1038,7 +1154,7 @@ herr_t parsePartitions(hid_t loc_id, const char *itemName,
     { 
 
       // Get a pointer to the file data structure
-      Field3DInputFile* fileObject = static_cast<Field3DInputFile*>(opdata);
+      Field3DInputFileHDF5* fileObject = static_cast<Field3DInputFileHDF5*>(opdata);
       if (!fileObject) {
         return -1;
       }
@@ -1098,35 +1214,34 @@ herr_t parseLayers(hid_t loc_id, const char *itemName,
 
 //----------------------------------------------------------------------------//
 
-} // namespace InputFile
+} // namespace InputFileHDF5
 
 //----------------------------------------------------------------------------//
-=======
->>>>>>> Ogawa code now has correct include paths. New Field3DFile compiles but only write root group.
-// Field3DOutputFile implementations
+// Field3DOutputFileHDF5 implementations
 //----------------------------------------------------------------------------//
 
-Field3DOutputFile::Field3DOutputFile() 
+Field3DOutputFileHDF5::Field3DOutputFileHDF5() 
 { 
   // Empty
 }
 
 //----------------------------------------------------------------------------//
 
-Field3DOutputFile::~Field3DOutputFile() 
+Field3DOutputFileHDF5::~Field3DOutputFileHDF5() 
 { 
 
 }
 
 //----------------------------------------------------------------------------//
 
-bool Field3DOutputFile::create(const string &filename, CreateMode cm)
+//! \todo If the file can't be created hdf5 spits out an ugly error msg,
+//! we should make sure that doesn't happen.
+bool Field3DOutputFileHDF5::create(const string &filename, CreateMode cm)
 {
   GlobalLock lock(g_hdf5Mutex);
 
   closeInternal();
 
-<<<<<<< HEAD
   bool success = true;
 
   try {
@@ -1179,7 +1294,7 @@ bool Field3DOutputFile::create(const string &filename, CreateMode cm)
 
 //----------------------------------------------------------------------------//
 
-bool Field3DOutputFile::writeMapping(hid_t partitionGroup, 
+bool Field3DOutputFileHDF5::writeMapping(hid_t partitionGroup, 
                                      FieldMapping::Ptr mapping)
 {
   GlobalLock lock(g_hdf5Mutex);
@@ -1202,7 +1317,7 @@ bool Field3DOutputFile::writeMapping(hid_t partitionGroup,
 
 //----------------------------------------------------------------------------//
 
-bool Field3DOutputFile::writeMetadata(hid_t metadataGroup, FieldBase::Ptr field)
+bool Field3DOutputFileHDF5::writeMetadata(hid_t metadataGroup, FieldBase::Ptr field)
 {
   using namespace Hdf5Util;
 
@@ -1283,14 +1398,14 @@ bool Field3DOutputFile::writeMetadata(hid_t metadataGroup, FieldBase::Ptr field)
 
 //----------------------------------------------------------------------------//
 
-bool Field3DOutputFile::writeMetadata(hid_t metadataGroup)
+bool Field3DOutputFileHDF5::writeMetadata(hid_t metadataGroup)
 {
   using namespace Hdf5Util;
 
   {
-    FieldMetadata<Field3DFileBase>::StrMetadata::const_iterator i = 
+    FieldMetadata<Field3DFileHDF5Base>::StrMetadata::const_iterator i = 
       metadata().strMetadata().begin();
-    FieldMetadata<Field3DFileBase>::StrMetadata::const_iterator end = 
+    FieldMetadata<Field3DFileHDF5Base>::StrMetadata::const_iterator end = 
       metadata().strMetadata().end();
     for (; i != end; ++i) {
       if (!writeAttribute(metadataGroup, i->first, i->second))
@@ -1302,9 +1417,9 @@ bool Field3DOutputFile::writeMetadata(hid_t metadataGroup)
   }
 
   {
-    FieldMetadata<Field3DFileBase>::IntMetadata::const_iterator i = 
+    FieldMetadata<Field3DFileHDF5Base>::IntMetadata::const_iterator i = 
       metadata().intMetadata().begin();
-    FieldMetadata<Field3DFileBase>::IntMetadata::const_iterator end = 
+    FieldMetadata<Field3DFileHDF5Base>::IntMetadata::const_iterator end = 
       metadata().intMetadata().end();
     for (; i != end; ++i) {
       if (!writeAttribute(metadataGroup, i->first, 1, i->second))
@@ -1313,43 +1428,61 @@ bool Field3DOutputFile::writeMetadata(hid_t metadataGroup)
         return false;
       }
     }
-
-    //! \todo FINISH IMPLEMENTATION!!!
-
-=======
-  if (cm == FailOnExisting && fileExists(filename)) {
-    return false;
->>>>>>> Ogawa code now has correct include paths. New Field3DFile compiles but only write root group.
   }
 
-  // Create the Ogawa archive
-  m_archive.reset(new Alembic::Ogawa::OArchive(filename));
-
-  // Check that it's valid
-  if (!m_archive->isValid()) {
-    return false;
+  {
+    FieldMetadata<Field3DFileHDF5Base>::FloatMetadata::const_iterator i = 
+      metadata().floatMetadata().begin();
+    FieldMetadata<Field3DFileHDF5Base>::FloatMetadata::const_iterator end = 
+      metadata().floatMetadata().end();
+    for (; i != end; ++i) {
+      if (!writeAttribute(metadataGroup, i->first, 1, i->second))
+      {
+        Msg::print(Msg::SevWarning, "Writing attribute " + i->first);
+        return false;
+      }
+    }
   }
 
-  // Get the root
-  m_root.reset(new OgOGroup(*m_archive));
+  {
+    FieldMetadata<Field3DFileHDF5Base>::VecIntMetadata::const_iterator i = 
+      metadata().vecIntMetadata().begin();
+    FieldMetadata<Field3DFileHDF5Base>::VecIntMetadata::const_iterator end = 
+      metadata().vecIntMetadata().end();
+    for (; i != end; ++i) {
+      if (!writeAttribute(metadataGroup, i->first, 3, i->second.x))
+      {
+        Msg::print(Msg::SevWarning, "Writing attribute " + i->first);
+        return false;
+      }
+    }
+  }
 
-  // Create the version attribute
-#if 0
-  OgOAttribute<veci32_t> f3dVersion(*m_root, k_versionAttrName, 
-                                    k_currentFileVersion);
-#endif
+  {
+    FieldMetadata<Field3DFileHDF5Base>::VecFloatMetadata::const_iterator i = 
+      metadata().vecFloatMetadata().begin();
+    FieldMetadata<Field3DFileHDF5Base>::VecFloatMetadata::const_iterator end = 
+      metadata().vecFloatMetadata().end();
+    for (; i != end; ++i) {
+      if (!writeAttribute(metadataGroup, i->first, 3, i->second.x))
+      {
+        Msg::print(Msg::SevWarning, "Writing attribute " + i->first);
+        return false;
+      }
+    }
+
+  }
 
   return true;
+
 }
 
 //----------------------------------------------------------------------------//
 
 bool 
-Field3DOutputFile::writeGlobalMetadata()
+Field3DOutputFileHDF5::writeGlobalMetadata()
 {
   GlobalLock lock(g_hdf5Mutex);
-
-#if 0
 
   // Add metadata group and write it out  
   H5ScopedGcreate metadataGroup(m_file, "field3d_global_metadata");
@@ -1360,9 +1493,7 @@ Field3DOutputFile::writeGlobalMetadata()
   if (!writeMetadata(metadataGroup.id())) {
     Msg::print(Msg::SevWarning, "Error writing file metadata.");
     return false;
-  }   
- 
-#endif
+  }    
  
   return true;
 }
@@ -1370,11 +1501,8 @@ Field3DOutputFile::writeGlobalMetadata()
 //----------------------------------------------------------------------------//
 
 bool 
-Field3DOutputFile::writeGroupMembership()
+Field3DOutputFileHDF5::writeGroupMembership()
 {
-
-#if 0
-
   using namespace std;
   using namespace Hdf5Util;
 
@@ -1408,8 +1536,6 @@ Field3DOutputFile::writeGroupMembership()
       return false;
     }        
   }
-
-#endif
   
   return true;
 }
@@ -1417,7 +1543,7 @@ Field3DOutputFile::writeGroupMembership()
 //----------------------------------------------------------------------------//
 
 std::string
-Field3DOutputFile::incrementPartitionName(std::string &partitionName)
+Field3DOutputFileHDF5::incrementPartitionName(std::string &partitionName)
 {
   std::string myPartitionName = removeUniqueId(partitionName);
   int nextIdx = -1;
@@ -1432,11 +1558,10 @@ Field3DOutputFile::incrementPartitionName(std::string &partitionName)
 }
 
 //----------------------------------------------------------------------------//
-<<<<<<< HEAD
 // Debug
 //----------------------------------------------------------------------------//
 
-void Field3DFileBase::printHierarchy() const
+void Field3DFileHDF5Base::printHierarchy() const
 {
   // For each partition
   for (PartitionList::const_iterator i = m_partitions.begin();
@@ -1553,8 +1678,6 @@ bool writeFieldMapping(hid_t mappingGroup, FieldMapping::Ptr mapping)
 }
 
 //----------------------------------------------------------------------------//
-=======
->>>>>>> Ogawa code now has correct include paths. New Field3DFile compiles but only write root group.
 
 FIELD3D_NAMESPACE_SOURCE_CLOSE
 

@@ -33,7 +33,7 @@
 //
 //-*****************************************************************************
 
-#include <Alembic/Ogawa/OStream.h>
+#include "OStream.h"
 #include <fstream>
 #include <stdexcept>
 

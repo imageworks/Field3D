@@ -33,7 +33,7 @@
 //
 //-*****************************************************************************
 
-#include <Alembic/Ogawa/IStreams.h>
+#include "IStreams.h"
 #include <fstream>
 #include <stdexcept>
 

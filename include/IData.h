@@ -36,8 +36,8 @@
 #ifndef _Alembic_Ogawa_IData_h_
 #define _Alembic_Ogawa_IData_h_
 
-#include <Alembic/Ogawa/Foundation.h>
-#include <Alembic/Ogawa/IStreams.h>
+#include "Foundation.h"
+#include "IStreams.h"
 
 namespace Alembic {
 namespace Ogawa {

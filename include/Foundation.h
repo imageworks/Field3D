@@ -36,8 +36,8 @@
 #ifndef _Alembic_Ogawa_Foundation_h_
 #define _Alembic_Ogawa_Foundation_h_
 
-#include <Alembic/Util/Foundation.h>
-#include <Alembic/Util/PlainOldDataType.h>
+#include "UtilFoundation.h"
+#include "UtilPlainOldDataType.h"
 
 namespace Alembic {
 namespace Ogawa {

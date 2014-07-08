@@ -37,7 +37,7 @@
 #ifndef _Alembic_Util_PlainOldDataType_h_
 #define _Alembic_Util_PlainOldDataType_h_
 
-#include "external/Ogawa/UtilFoundation.h"
+#include "UtilFoundation.h"
 
 // stdint.h is not in anything prior to Visual Studio 2010
 #if !defined(_MSC_VER) || _MSC_VER >= 1600

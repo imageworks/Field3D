@@ -72,18 +72,20 @@ OgDataType readDataType(Alembic::Ogawa::IGroupPtr group, const size_t idx)
 
 //----------------------------------------------------------------------------//
 
-void writeString(Alembic::Ogawa::OGroupPtr group, const std::string &s)
+bool writeString(Alembic::Ogawa::OGroupPtr group, const std::string &s)
 {
   // Strings are written without zero terminator
-  group->addData(s.size() * sizeof(std::string::value_type), s.c_str());
+  Alembic::Ogawa::ODataPtr data = 
+    group->addData(s.size() * sizeof(std::string::value_type), s.c_str());
+  return data != NULL;
 }
 
 //----------------------------------------------------------------------------//
 
-void getGroupName(Alembic::Ogawa::IGroupPtr group, 
+bool getGroupName(Alembic::Ogawa::IGroupPtr group, 
                   std::string &name)
 {
-  readString(group, 0, name);
+  return readString(group, 0, name);
 }
 
 //----------------------------------------------------------------------------//

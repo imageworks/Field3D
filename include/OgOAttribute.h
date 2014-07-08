@@ -32,16 +32,28 @@ public:
   //! Creates the attribute and writes the data.
   OgOAttribute(OgOGroup &parent, const std::string &name, const T &value)
   {
+    using Field3D::Exc::OgOAttributeException;
+
     // Create a group to store the attribute data
     Alembic::Ogawa::OGroupPtr group = parent.addSubGroup();
     // Index 0 is the name
-    writeString(group, name);
+    if (!writeString(group, name)) {
+      throw OgOAttributeException("Couldn't write attribute name for " + name);
+    }
     // Index 1 is the type
-    writeData(group, F3DAttributeType);
+    if (!writeData(group, F3DAttributeType)) {
+      throw OgOAttributeException("Couldn't write attribute group type for " + 
+                                  name);
+    }
     // Index 2 is the data type
-    writeDataType<T>(group);
+    if (!writeDataType<T>(group)) {
+      throw OgOAttributeException("Couldn't write attribute data type for " + 
+                                  name);
+    }
     // Index 3 is the data
-    writeData<T>(group, value);
+    if (!writeData<T>(group, value)) {
+      throw OgOAttributeException("Couldn't write attribute data for " + name);
+    }
   }
 };
 

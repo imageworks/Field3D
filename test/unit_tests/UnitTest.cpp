@@ -1008,6 +1008,7 @@ void testField3DFile()
     mm->setLocalToWorld(mtx);
     sField->setMapping(mm);
     sField->clear(1.2);
+    sField->metadata().setFloatMetadata("testfloat", 1.0f);
 
     // Create the vector field
     typename VField::Ptr vField(new VField);
@@ -1015,6 +1016,7 @@ void testField3DFile()
     MatrixFieldMapping::Ptr mapping(new MatrixFieldMapping);
     vField->setMapping(mapping);
     vField->clear(Vec3_T(0.5));
+    vField->metadata().setFloatMetadata("testfloat", 1.0f);
 
     // Fill scalar fields with all data 
     std::for_each(sField->begin(), sField->end(), WriteSequence<Data_T>());

@@ -145,6 +145,10 @@ DECLARE_FIELD3D_GENERIC_EXCEPTION(WriteMACFieldDataException, Exception)
 DECLARE_FIELD3D_GENERIC_EXCEPTION(WriteMappingException, Exception)
 DECLARE_FIELD3D_GENERIC_EXCEPTION(WriteSimpleDataException, Exception)
 
+DECLARE_FIELD3D_GENERIC_EXCEPTION(OgOGroupException, Exception)
+DECLARE_FIELD3D_GENERIC_EXCEPTION(OgODatasetException, Exception)
+DECLARE_FIELD3D_GENERIC_EXCEPTION(OgOAttributeException, Exception)
+
 //----------------------------------------------------------------------------//
 
 } // namespace Exc

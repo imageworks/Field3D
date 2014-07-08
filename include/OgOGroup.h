@@ -8,6 +8,7 @@
 //----------------------------------------------------------------------------//
 
 #include "OgUtil.h"
+#include "Exception.h"
 
 //----------------------------------------------------------------------------//
 // OgOGroup
@@ -62,9 +63,13 @@ private:
   void addBaseData()
   {
     // Index 0 is the name
-    writeString(m_group, m_name);
+    if (!writeString(m_group, m_name)) {
+      throw Field3D::Exc::OgOGroupException("Failed to write group name.");
+    }
     // Index 1 is the type
-    writeData(m_group, F3DGroupType);
+    if (!writeData(m_group, F3DGroupType)) {
+      throw Field3D::Exc::OgOGroupException("Failed to write group type.");
+    }
   }
 
   // Data members --------------------------------------------------------------

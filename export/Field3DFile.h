@@ -115,8 +115,7 @@ class FIELD3D_API Partition : public RefBase
 {
 public:
 
-  typedef std::vector<Layer> ScalarLayerList;
-  typedef std::vector<Layer> VectorLayerList;
+  typedef std::vector<Layer> LayerList;
 
   typedef boost::intrusive_ptr<Partition> Ptr;
   typedef boost::intrusive_ptr<const Partition> CPtr;
@@ -149,20 +148,19 @@ public:
   
   // Main methods --------------------------------------------------------------
 
-  //! Adds a scalar layer
-  void addScalarLayer(const File::Layer &layer);
-  //! Adds a vector layer
-  void addVectorLayer(const File::Layer &layer);
+  //! Adds a layer
+  void addLayer(const File::Layer &layer);
 
-  //! Finds a scalar layer
-  const File::Layer* scalarLayer(const std::string &name) const;
-  //! Finds a vector layer
-  const File::Layer* vectorLayer(const std::string &name) const;
+  //! Finds a layer
+  const File::Layer* layer(const std::string &name) const;
   
-  //! Gets all the scalar layer names. 
-  void getScalarLayerNames(std::vector<std::string> &names) const;
-  //! Gets all the vector layer names
-  void getVectorLayerNames(std::vector<std::string> &names) const;
+  //! Gets all the layer names. 
+  void getLayerNames(std::vector<std::string> &names) const;
+
+  //! Returns a reference to the OgOGroup
+  OgOGroup& group() const;
+  //! Sets the group pointer
+  void setGroup(boost::shared_ptr<OgOGroup> ptr);
 
   // Public data members -------------------------------------------------------
 
@@ -175,10 +173,10 @@ private:
 
   // Private data members ------------------------------------------------------
 
-  //! The scalar-valued layers belonging to this partition
-  ScalarLayerList m_scalarLayers;
-  //! The vector-valued layers belonging to this partition
-  VectorLayerList m_vectorLayers;
+  //! The layers belonging to this partition
+  LayerList m_layers;
+  //! Group representing the partition
+  boost::shared_ptr<OgOGroup> m_group;
 
   // Typedefs ------------------------------------------------------------------
 
@@ -574,7 +572,14 @@ public:
 
   virtual void closeInternal()
   {
+    // The destruction of the various Ogawa components must happen in the
+    // right order
+    
+    // First, the partition groups
+    m_partitions.clear();
+    // Then the root group
     m_root.reset();
+    // Finally, the archive
     m_archive.reset();
   }
 
@@ -667,11 +672,9 @@ private:
   std::string incrementPartitionName(std::string &pname);
 
   //! Create newPartition given the input config
-  template <class Data_T>
   File::Partition::Ptr
   createNewPartition(const std::string &partitionName,
-                     const std::string &layerName,
-                     typename Field<Data_T>::Ptr field);
+                     const std::string &layerName, FieldRes::Ptr field);
   //! Writes the mapping to the given Og node.
   //! Mappings are assumed to be light-weight enough to be stored as 
   //! plain attributes under a group.
@@ -693,35 +696,7 @@ private:
 };
 
 //----------------------------------------------------------------------------//
-// Implementations (Temp)
-//----------------------------------------------------------------------------//
-
-template <class Data_T>
-bool Field3DOutputFile::writeLayer(const std::string &partitionName, 
-                                   const std::string &layerName, 
-                                   typename Field<Data_T>::Ptr layer)
-{
-  // Null pointer check
-  if (!layer) {
-    Msg::print(Msg::SevWarning,
-               "Called writeLayer with null pointer. Ignoring...");
-    return false;
-  }
-  
-  // Make sure archive is open
-  if (!m_archive) {
-    Msg::print(Msg::SevWarning, 
-               "Attempting to write layer without opening file first.");
-    return false;
-  }
-
-  // Get the partition name
-  // string partitionName = intPartitionName(userPartitionName, layerName, field);
- 
-
-  return true;
-}
-
+// Template implementations
 //----------------------------------------------------------------------------//
 
 template <class Data_T>

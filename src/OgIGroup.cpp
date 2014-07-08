@@ -12,7 +12,9 @@ OgIGroup::OgIGroup(Alembic::Ogawa::IArchive &archive)
   : OgIBase(archive.getGroup())
 {
   validate();
-  getGroupName(m_group, m_name);
+  if (m_group) {
+    getGroupName(m_group, m_name);
+  }
 }
 
 //----------------------------------------------------------------------------//
@@ -162,11 +164,12 @@ OgIGroup::OgIGroup(Alembic::Ogawa::IGroupPtr group)
 void OgIGroup::validate()
 {
   // If we don't have two children, we're invalid.
-  if (m_group->getNumChildren() < 2) {
+  if (m_group && m_group->getNumChildren() < 2) {
     m_group.reset();
+    return;
   }
   // If the two first children aren't data sets, we're invalid
-  if (!m_group->isChildData(0) || !m_group->isChildData(1)) {
+  if (m_group && (!m_group->isChildData(0) || !m_group->isChildData(1))) {
     m_group.reset();
   }
 }

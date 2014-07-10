@@ -232,9 +232,12 @@ private:
 
 //----------------------------------------------------------------------------//
 
-class FIELD3D_API Field3DFileHDF5Base
+class FIELD3D_API Field3DFileHDF5Base : public MetadataCallback
 {
 public:
+
+  friend class Field3DInputFile;
+  friend class Field3DOutputFile;
 
   // Structs -------------------------------------------------------------------
 
@@ -314,11 +317,11 @@ public:
   // Access to metadata --------------------------------------------------------  
 
   //! accessor to the m_metadata class
-  FieldMetadata<Field3DFileHDF5Base>& metadata()
+  FieldMetadata& metadata()
   { return m_metadata; }
 
   //! Read only access to the m_metadata class
-  const FieldMetadata<Field3DFileHDF5Base>& metadata() const
+  const FieldMetadata& metadata() const
   { return m_metadata; }
  
   //! This function should implemented by concrete classes to  
@@ -399,7 +402,7 @@ protected:
   GroupMembershipMap m_groupMembership;
 
   //! metadata
-  FieldMetadata<Field3DFileHDF5Base> m_metadata;
+  FieldMetadata m_metadata;
 
 private:
 
@@ -433,6 +436,9 @@ private:
 class FIELD3D_API Field3DInputFileHDF5 : public Field3DFileHDF5Base 
 {
 public:
+
+  friend class Field3DInputFile;
+  friend class Field3DOutputFile;
 
   // Ctors, dtor ---------------------------------------------------------------
 
@@ -757,6 +763,9 @@ private:
 class FIELD3D_API Field3DOutputFileHDF5 : public Field3DFileHDF5Base 
 {
 public:
+
+  friend class Field3DInputFile;
+  friend class Field3DOutputFile;
 
   // Enums ---------------------------------------------------------------------
 

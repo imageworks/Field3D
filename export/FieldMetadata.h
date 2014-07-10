@@ -64,8 +64,23 @@
 FIELD3D_NAMESPACE_OPEN
 
 //----------------------------------------------------------------------------//
+// MetadataCallback
+//----------------------------------------------------------------------------//
 
-template <class CallBack_T>
+class MetadataCallback
+{
+public:
+
+  //! Alerts the callback holder that the metadata has changed.
+  virtual void metadataHasChanged(const std::string &)
+  { /* Default does nothing. */ }
+  
+};
+
+//----------------------------------------------------------------------------//
+// FieldMetadata
+//----------------------------------------------------------------------------//
+
 class FieldMetadata
 {
  public:
@@ -83,7 +98,7 @@ class FieldMetadata
   //! \name Constructors & destructor
   //! \{
 
-  FieldMetadata(CallBack_T *owner) 
+  FieldMetadata(MetadataCallback *owner) 
     : m_owner(owner)
   { } 
   
@@ -186,151 +201,9 @@ class FieldMetadata
 
   //! Pointer to owner. It is assumed that this has a lifetime at least as
   //! long as the Metadata instance.
-  CallBack_T *m_owner;
+  MetadataCallback *m_owner;
 
 };
-
-//----------------------------------------------------------------------------//
-// FieldMetadata implementations
-//----------------------------------------------------------------------------//
-
-template <class CallBack_T>
-void FieldMetadata<CallBack_T>::setVecFloatMetadata(const std::string &name, 
-                                                    const V3f &val)
-{ 
-  m_vecFloatMetadata[name] = val; 
-  if (m_owner) {
-    m_owner->metadataHasChanged(name);
-  }
-}
-    
-//----------------------------------------------------------------------------//
-
-template <class CallBack_T>
-void FieldMetadata<CallBack_T>::setFloatMetadata(const std::string &name, 
-                                                 const float val)
-{ 
-  m_floatMetadata[name] = val; 
-  if (m_owner) {
-    m_owner->metadataHasChanged(name);
-  }
-}
-
-//----------------------------------------------------------------------------//
-
-template <class CallBack_T>
-void FieldMetadata<CallBack_T>::setVecIntMetadata(const std::string &name, 
-                                                  const V3i &val)
-{ 
-  m_vecIntMetadata[name] = val; 
-  if (m_owner) {
-    m_owner->metadataHasChanged(name);
-  }
-}
-
-//----------------------------------------------------------------------------//
-
-template <class CallBack_T>
-void FieldMetadata<CallBack_T>::setIntMetadata(const std::string &name, 
-                                               const int val)
-{ 
-  m_intMetadata[name] = val; 
-  if (m_owner) {
-    m_owner->metadataHasChanged(name);
-  }
-}
-
-//----------------------------------------------------------------------------//
-
-template <class CallBack_T>
-void FieldMetadata<CallBack_T>::setStrMetadata(const std::string &name, 
-                                               const std::string &val)
-{ 
-  m_strMetadata[name] = val; 
-  if (m_owner) {
-    m_owner->metadataHasChanged(name);
-  }
-}
-
-//----------------------------------------------------------------------------//
-
-template <class CallBack_T>
-V3f FieldMetadata<CallBack_T>::vecFloatMetadata(const std::string &name,
-                                                const V3f& defaultVal) const
-{
-  V3f retVal = defaultVal;
-  
-  VecFloatMetadata::const_iterator i = m_vecFloatMetadata.find(name);
-  if (i != m_vecFloatMetadata.end()) {
-    retVal = i->second;
-  } 
-
-  return retVal;
-}
-
-//----------------------------------------------------------------------------//
-
-template <class CallBack_T>
-float FieldMetadata<CallBack_T>::floatMetadata(const std::string &name, 
-                                               const float defaultVal) const
-{
-  float retVal = defaultVal;
-
-  FloatMetadata::const_iterator i = m_floatMetadata.find(name);
-  if (i != m_floatMetadata.end()) {
-    retVal = i->second;
-  } 
-
-  return retVal;
-}
-
-//----------------------------------------------------------------------------//
-
-template <class CallBack_T>
-V3i FieldMetadata<CallBack_T>::vecIntMetadata(const std::string &name,
-                                              const V3i& defaultVal) const
-{
-  V3i retVal = defaultVal;
-
-  VecIntMetadata::const_iterator i = m_vecIntMetadata.find(name);
-  if (i != m_vecIntMetadata.end()) {
-    retVal = i->second;
-  } 
-
-  return retVal;
-}
-
-//----------------------------------------------------------------------------//
-
-template <class CallBack_T>
-int FieldMetadata<CallBack_T>::intMetadata(const std::string &name, 
-                                           const int defaultVal) const
-{
-  int retVal = defaultVal;
-
-  IntMetadata::const_iterator i = m_intMetadata.find(name);
-  if (i != m_intMetadata.end()) {
-    retVal = i->second;
-  } 
-
-  return retVal;
-}
-
-//----------------------------------------------------------------------------//
-
-template <class CallBack_T>
-std::string FieldMetadata<CallBack_T>::strMetadata(const std::string &name, 
-                                       const std::string &defaultVal) const
-{
-  std::string retVal = defaultVal;
-
-  StrMetadata::const_iterator i = m_strMetadata.find(name);
-  if (i != m_strMetadata.end()) {
-    retVal = i->second;
-  } 
-
-  return retVal;
-}
 
 //----------------------------------------------------------------------------//
 

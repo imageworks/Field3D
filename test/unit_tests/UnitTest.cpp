@@ -959,7 +959,7 @@ void testFastCubicInterp()
 
 //----------------------------------------------------------------------------//
 
-template <template <typename T> class Field_T, class Data_T>
+template <template <typename T> class Field_T, class Data_T, bool DoOgawa_T>
 void testField3DFile()
 {
   typedef FIELD3D_VEC3_T<Data_T> Vec3_T;
@@ -968,6 +968,14 @@ void testField3DFile()
 
   Msg::print("Field3DFile tests for type " + 
              string(SField::staticClassType()));
+
+  if (DoOgawa_T) {
+    Field3DOutputFile::useOgawa(true);
+    Msg::print("  Using ogawa");
+  } else {
+    Field3DOutputFile::useOgawa(false);
+    Msg::print("  Using hdf5");
+  }
 
   string currentTest;
 
@@ -988,7 +996,13 @@ void testField3DFile()
   {
     Msg::print(currentTest);
     ScopedPrintTimer t;
-    string filename(getTempFile("test_" + string(SField::staticClassType()) + ".f3d"));
+    string basename = "test_" + string(SField::staticClassType());
+    if (DoOgawa_T) {
+      basename += "ogawa";
+    } else {
+      basename += "hdf5";
+    }
+    string filename(getTempFile(basename + ".f3d"));
     Box3i extents(V3i(0), V3i(160));
     Box3i dataWindow(V3i(20, 10, 0), V3i(100, 100, 100));
 
@@ -2578,12 +2592,18 @@ init_unit_test_suite(int argc, char* argv[])
 
 #if DO_BASIC_FILE_TESTS
 
-  test->add(BOOST_TEST_CASE((&testField3DFile<DenseField, half>)));
-  test->add(BOOST_TEST_CASE((&testField3DFile<SparseField, half>)));
-  test->add(BOOST_TEST_CASE((&testField3DFile<DenseField, float>)));
-  test->add(BOOST_TEST_CASE((&testField3DFile<SparseField, float>)));
-  test->add(BOOST_TEST_CASE((&testField3DFile<DenseField, double>)));
-  test->add(BOOST_TEST_CASE((&testField3DFile<SparseField, double>)));
+  test->add(BOOST_TEST_CASE((&testField3DFile<DenseField, half, true>)));
+  test->add(BOOST_TEST_CASE((&testField3DFile<SparseField, half, true>)));
+  test->add(BOOST_TEST_CASE((&testField3DFile<DenseField, float, true>)));
+  test->add(BOOST_TEST_CASE((&testField3DFile<SparseField, float, true>)));
+  test->add(BOOST_TEST_CASE((&testField3DFile<DenseField, double, true>)));
+  test->add(BOOST_TEST_CASE((&testField3DFile<SparseField, double, true>)));
+  test->add(BOOST_TEST_CASE((&testField3DFile<DenseField, half, false>)));
+  test->add(BOOST_TEST_CASE((&testField3DFile<SparseField, half, false>)));
+  test->add(BOOST_TEST_CASE((&testField3DFile<DenseField, float, false>)));
+  test->add(BOOST_TEST_CASE((&testField3DFile<SparseField, float, false>)));
+  test->add(BOOST_TEST_CASE((&testField3DFile<DenseField, double, false>)));
+  test->add(BOOST_TEST_CASE((&testField3DFile<SparseField, double, false>)));
   test->add(BOOST_TEST_CASE(&testUnnamedFieldError));
   test->add(BOOST_TEST_CASE(&testBasicFileOpen));
 

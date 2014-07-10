@@ -88,7 +88,7 @@ DECLARE_FIELD3D_GENERIC_EXCEPTION(ResizeException, Exception)
   for the metadata map
 */
 
-class FIELD3D_API FieldBase : public RefBase
+class FIELD3D_API FieldBase : public RefBase, public MetadataCallback
 {
 public:
 
@@ -152,17 +152,12 @@ public:
   //! \{
 
   //! accessor to the m_metadata class
-  FieldMetadata<FieldBase>& metadata()
+  FieldMetadata& metadata()
   { return m_metadata; }
 
   //! Read only access to the m_metadata class
-  const FieldMetadata<FieldBase>& metadata() const
+  const FieldMetadata& metadata() const
   { return m_metadata; }
-
-  //! This function should implemented by concrete classes to  
-  //! get the callback when metadata changes
-  virtual void metadataHasChanged(const std::string &/* name */) 
-  { /* Empty */ }
 
   //! Copies the metadata from a second field
   void copyMetadata(const FieldBase &field)
@@ -182,7 +177,7 @@ public:
   // Private data members ------------------------------------------------------
 
   //! metadata
-  FieldMetadata<FieldBase> m_metadata;
+  FieldMetadata m_metadata;
 
 };
 

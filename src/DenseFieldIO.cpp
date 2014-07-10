@@ -43,6 +43,8 @@
 
 #include "DenseFieldIO.h"
 
+#include "OgIO.h"
+
 //----------------------------------------------------------------------------//
 
 using namespace boost;
@@ -66,7 +68,11 @@ using namespace Hdf5Util;
 const int         DenseFieldIO::k_versionNumber(1);
 const std::string DenseFieldIO::k_versionAttrName("version");
 const std::string DenseFieldIO::k_extentsStr("extents");
+const std::string DenseFieldIO::k_extentsMinStr("extents_min");
+const std::string DenseFieldIO::k_extentsMaxStr("extents_max");
 const std::string DenseFieldIO::k_dataWindowStr("data_window");
+const std::string DenseFieldIO::k_dataWindowMinStr("data_window_min");
+const std::string DenseFieldIO::k_dataWindowMaxStr("data_window_max");
 const std::string DenseFieldIO::k_componentsStr("components");
 const std::string DenseFieldIO::k_bitsPerComponentStr("bits_per_component");
 const std::string DenseFieldIO::k_dataStr("data");
@@ -158,6 +164,103 @@ DenseFieldIO::read(hid_t layerGroup, const std::string &/*filename*/,
 
 //----------------------------------------------------------------------------//
 
+FieldBase::Ptr
+DenseFieldIO::read(OgIGroup &lg, const std::string &/*filename*/, 
+                   const std::string &/*layerPath*/, OgDataType typeEnum)
+{
+  Box3i extents, dataW;
+
+  if (!lg.isValid()) {
+    throw MissingGroupException("Invalid group in DenseFieldIO::read()");
+  }
+
+  // Check version ---
+
+  OgIAttribute<int> versionAttr = lg.findAttribute<int>(k_versionAttrName);
+  if (!versionAttr.isValid()) {
+    throw MissingAttributeException("Couldn't find attribute " + 
+                                    k_versionAttrName);
+  }
+
+  int version = versionAttr.value();
+  if (version != k_versionNumber) {
+    throw UnsupportedVersionException("DenseField version not supported: " + 
+                                      lexical_cast<std::string>(version));
+  }
+
+  // Get extents ---
+
+  OgIAttribute<veci32_t> extMinAttr = 
+    lg.findAttribute<veci32_t>(k_extentsMinStr);
+  OgIAttribute<veci32_t> extMaxAttr = 
+    lg.findAttribute<veci32_t>(k_extentsMaxStr);
+  if (!extMinAttr.isValid()) {
+    throw MissingAttributeException("Couldn't find attribute " + 
+                                    k_extentsMinStr);
+  }
+  if (!extMaxAttr.isValid()) {
+    throw MissingAttributeException("Couldn't find attribute " + 
+                                    k_extentsMaxStr);
+  }
+
+  extents.min = extMinAttr.value();
+  extents.max = extMaxAttr.value();
+
+  // Get data window ---
+
+  OgIAttribute<veci32_t> dwMinAttr = 
+    lg.findAttribute<veci32_t>(k_dataWindowMinStr);
+  OgIAttribute<veci32_t> dwMaxAttr = 
+    lg.findAttribute<veci32_t>(k_dataWindowMaxStr);
+  if (!dwMinAttr.isValid()) {
+    throw MissingAttributeException("Couldn't find attribute " + 
+                                    k_dataWindowMinStr);
+  }
+  if (!dwMaxAttr.isValid()) {
+    throw MissingAttributeException("Couldn't find attribute " + 
+                                    k_dataWindowMaxStr);
+  }
+
+  dataW.min = dwMinAttr.value();
+  dataW.max = dwMaxAttr.value();
+
+  // Get num components ---
+
+  OgIAttribute<int> numComponentsAttr = 
+    lg.findAttribute<int>(k_componentsStr);
+  if (!numComponentsAttr.isValid()) {
+    throw MissingAttributeException("Couldn't find attribute " + 
+                                    k_componentsStr);
+  }
+
+  // Read the data ---
+
+  FieldBase::Ptr result;
+  
+  OgDataType typeOnDisk = lg.datasetType(k_dataStr);
+
+  if (typeEnum == typeOnDisk) {
+    if (typeEnum == F3DFloat16) {
+      result = readData<float16_t>(lg, extents, dataW);
+    } else if (typeEnum == F3DFloat32) {
+      result = readData<float32_t>(lg, extents, dataW);
+    } else if (typeEnum == F3DFloat64) {
+      result = readData<float64_t>(lg, extents, dataW);
+    } else if (typeEnum == F3DVec16) {
+      result = readData<vec16_t>(lg, extents, dataW);
+    } else if (typeEnum == F3DVec32) {
+      result = readData<vec32_t>(lg, extents, dataW);
+    } else if (typeEnum == F3DVec64) {
+      result = readData<vec64_t>(lg, extents, dataW);
+    } 
+  }
+
+  return result;
+
+}
+
+//----------------------------------------------------------------------------//
+
 bool
 DenseFieldIO::write(hid_t layerGroup, FieldBase::Ptr field)
 {
@@ -169,6 +272,57 @@ DenseFieldIO::write(hid_t layerGroup, FieldBase::Ptr field)
                     1, k_versionNumber))
     throw WriteAttributeException("Couldn't write attribute " + 
                                   k_versionAttrName);
+
+  DenseField<half>::Ptr halfField = 
+    field_dynamic_cast<DenseField<half> >(field);
+  DenseField<float>::Ptr floatField = 
+    field_dynamic_cast<DenseField<float> >(field);
+  DenseField<double>::Ptr doubleField = 
+    field_dynamic_cast<DenseField<double> >(field);
+  DenseField<V3h>::Ptr vecHalfField = 
+    field_dynamic_cast<DenseField<V3h> >(field);
+  DenseField<V3f>::Ptr vecFloatField = 
+    field_dynamic_cast<DenseField<V3f> >(field);
+  DenseField<V3d>::Ptr vecDoubleField = 
+    field_dynamic_cast<DenseField<V3d> >(field);
+
+  bool success = true;
+
+  if (floatField) {
+    success = writeInternal<float>(layerGroup, floatField);
+  }
+  else if (halfField) {
+    success = writeInternal<half>(layerGroup, halfField);
+  }
+  else if (doubleField) {
+    success = writeInternal<double>(layerGroup, doubleField);
+  }
+  else if (vecFloatField) {
+    success = writeInternal<V3f>(layerGroup, vecFloatField);
+  }
+  else if (vecHalfField) {
+    success = writeInternal<V3h>(layerGroup, vecHalfField);
+  }
+  else if (vecDoubleField) {
+    success = writeInternal<V3d>(layerGroup, vecDoubleField);
+  }
+  else {
+    throw WriteLayerException("DenseFieldIO does not support the given "
+                              "DenseField template parameter");
+  }
+
+  return success;
+}
+
+//----------------------------------------------------------------------------//
+
+bool
+DenseFieldIO::write(OgOGroup &layerGroup, FieldBase::Ptr field)
+{
+  using namespace Exc;
+
+  // Add version attribute
+  OgOAttribute<int> version(layerGroup, k_versionAttrName, k_versionNumber);
 
   DenseField<half>::Ptr halfField = 
     field_dynamic_cast<DenseField<half> >(field);

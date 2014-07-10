@@ -56,6 +56,7 @@
 #include <typeinfo>
 
 #include "Field.h"
+#include "OgawaFwd.h"
 #include "Log.h"
 
 //----------------------------------------------------------------------------//
@@ -118,11 +119,22 @@ public:
                               const std::string &layerPath,
                               DataTypeEnum typeEnum) = 0;
 
+  //! Read the field at the given Ogawa group
+  //! \returns Pointer to the created field, or a null pointer if the field
+  //! couldn't be read.
+  virtual FieldBase::Ptr read(OgIGroup &layerGroup, const std::string &filename,
+                              const std::string &layerPath,
+                              OgDataType typeEnum) = 0;
+
   //! Write the field to the given layer group
   //! \returns Whether the operation was successful
   virtual bool write(hid_t layerGroup, FieldBase::Ptr field) = 0;
 
-  //! Returns the class name. This is used when registering the class to the
+   //! Write the field to the given layer group
+  //! \returns Whether the operation was successful
+  virtual bool write(OgOGroup &layerGroup, FieldBase::Ptr field) = 0;
+
+ //! Returns the class name. This is used when registering the class to the
   //! FieldIOFactory object.
   virtual std::string className() const = 0;
 

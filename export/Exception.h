@@ -145,9 +145,14 @@ DECLARE_FIELD3D_GENERIC_EXCEPTION(WriteMACFieldDataException, Exception)
 DECLARE_FIELD3D_GENERIC_EXCEPTION(WriteMappingException, Exception)
 DECLARE_FIELD3D_GENERIC_EXCEPTION(WriteSimpleDataException, Exception)
 
+DECLARE_FIELD3D_GENERIC_EXCEPTION(OgIGroupException, Exception)
+DECLARE_FIELD3D_GENERIC_EXCEPTION(OgIDatasetException, Exception)
+DECLARE_FIELD3D_GENERIC_EXCEPTION(OgIAttributeException, Exception)
 DECLARE_FIELD3D_GENERIC_EXCEPTION(OgOGroupException, Exception)
 DECLARE_FIELD3D_GENERIC_EXCEPTION(OgODatasetException, Exception)
 DECLARE_FIELD3D_GENERIC_EXCEPTION(OgOAttributeException, Exception)
+
+DECLARE_FIELD3D_GENERIC_EXCEPTION(ReadDataException, Exception)
 
 //----------------------------------------------------------------------------//
 

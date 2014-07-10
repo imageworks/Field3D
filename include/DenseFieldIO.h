@@ -57,6 +57,7 @@
 #include "FieldIO.h"
 #include "Field3DFile.h"
 #include "Hdf5Util.h"
+#include "OgIGroup.h"
 
 //----------------------------------------------------------------------------//
 
@@ -117,10 +118,22 @@ public:
                               const std::string &layerPath,
                               DataTypeEnum typeEnum);
 
+  //! Reads the field at the given location and tries to create a DenseField
+  //! object from it. Calls out to readData() for template-specific work.
+  //! \returns Null if no object was read
+  virtual FieldBase::Ptr read(OgIGroup &layerGroup, const std::string &filename,
+                              const std::string &layerPath,
+                              OgDataType typeEnum);
+
   //! Writes the given field to disk. This function calls out to writeInternal
   //! once the template type has been determined.
   //! \return true if successful, otherwise false
   virtual bool write(hid_t layerGroup, FieldBase::Ptr field);
+
+  //! Writes the given field to disk. This function calls out to writeInternal
+  //! once the template type has been determined.
+  //! \return true if successful, otherwise false
+  virtual bool write(OgOGroup &layerGroup, FieldBase::Ptr field);
 
   //! Returns the class name
   virtual std::string className() const
@@ -135,6 +148,11 @@ private:
   bool writeInternal(hid_t layerGroup, 
                      typename DenseField<Data_T>::Ptr field);
 
+  //! This call writes all the attributes and sets up the data space.
+  template <class Data_T>
+  bool writeInternal(OgOGroup &layerGroup, 
+                     typename DenseField<Data_T>::Ptr field);
+
   //! This call performs the actual writing of data to disk. 
   template <class Data_T>
   bool writeData(hid_t dataSet, typename DenseField<Data_T>::Ptr field,
@@ -142,15 +160,24 @@ private:
 
   //! This call performs the actual reading of data from disk.
   template <class Data_T>
-  typename DenseField<Data_T>::Ptr readData(hid_t dataSet, const Box3i &extents,
-                                            const Box3i &dataW);
+  typename DenseField<Data_T>::Ptr 
+  readData(hid_t dataSet, const Box3i &extents, const Box3i &dataW);
+
+  //! This call performs the actual reading of data from disk.
+  template <class Data_T>
+  typename DenseField<Data_T>::Ptr 
+  readData(OgIGroup &layerGroup, const Box3i &extents, const Box3i &dataW);
 
   // Strings -------------------------------------------------------------------
 
   static const int         k_versionNumber;
   static const std::string k_versionAttrName;
   static const std::string k_extentsStr;
+  static const std::string k_extentsMinStr;
+  static const std::string k_extentsMaxStr;
   static const std::string k_dataWindowStr;
+  static const std::string k_dataWindowMinStr;
+  static const std::string k_dataWindowMaxStr;
   static const std::string k_componentsStr;
   static const std::string k_bitsPerComponentStr;
   static const std::string k_dataStr;
@@ -272,6 +299,48 @@ bool DenseFieldIO::writeInternal(hid_t layerGroup,
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
+bool DenseFieldIO::writeInternal(OgOGroup &layerGroup, 
+                                 typename DenseField<Data_T>::Ptr field)
+{
+  using namespace Exc;
+
+  const int    components  = FieldTraits<Data_T>::dataDims();
+  const V3i&   memSize     = field->internalMemSize();
+  const int    bits        = DataTypeTraits<Data_T>::h5bits();
+  
+  Box3i ext(field->extents()), dw(field->dataWindow());
+
+  // Add extents attributes ---
+
+  OgOAttribute<veci32_t> extMinAttr(layerGroup, k_extentsMinStr, ext.min);
+  OgOAttribute<veci32_t> extMaxAttr(layerGroup, k_extentsMaxStr, ext.max);
+  
+  // Add data window attributes ---
+  
+  OgOAttribute<veci32_t> dwMinAttr(layerGroup, k_dataWindowMinStr, dw.min);
+  OgOAttribute<veci32_t> dwMaxAttr(layerGroup, k_dataWindowMaxStr, dw.max);
+
+  // Add components attribute ---
+
+  OgOAttribute<int> componentsAttr(layerGroup, k_componentsStr, components);
+
+  // Add the bits per component attribute ---
+
+  OgOAttribute<int> bitsAttr(layerGroup, k_bitsPerComponentStr, bits);
+
+  // Add data to file ---
+
+  const size_t length = memSize[0] * memSize[1] * memSize[2];
+
+  OgODataset<Data_T> data(layerGroup, k_dataStr);
+  data.addData(length, &(*field->begin()));
+
+  return true;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
 bool DenseFieldIO::writeData(hid_t dataSet, 
                              typename DenseField<Data_T>::Ptr field,
                              Data_T /* dummy */)
@@ -307,6 +376,32 @@ DenseFieldIO::readData(hid_t dataSet, const Box3i &extents, const Box3i &dataW)
       DataTypeTraits<Data_T>::name() + ">";
     throw Exc::Hdf5DataReadException("Couldn't read " + typeName + " data");
   } 
+
+  return field;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+typename DenseField<Data_T>::Ptr 
+DenseFieldIO::readData(OgIGroup &layerGroup, const Box3i &extents, 
+                       const Box3i &dataW)
+{
+  typename DenseField<Data_T>::Ptr field(new DenseField<Data_T>);
+  field->setSize(extents, dataW);
+
+  // Open the dataset
+  OgIDataset<Data_T> data = layerGroup.findDataset<Data_T>(k_dataStr);
+  if (!data.isValid()) {
+    throw Exc::ReadDataException("DenseFieldIO::readData() couldn't open "
+                                 "the dataset.");
+  }
+
+  // Read the data
+  if (!data.getData(0, &(*field->begin()), OGAWA_THREAD)) {
+    throw Exc::ReadDataException("DenseFieldIO::readData() couldn't read "
+                                 "the dataset.");
+  }
 
   return field;
 }

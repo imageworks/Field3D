@@ -1606,7 +1606,6 @@ readField(const std::string &className, hid_t layerGroup,
   typedef typename Field<Data_T>::Ptr FieldPtr;
 
   FieldIO::Ptr io = factory.createFieldIO(className);
-  assert(io != 0);
   if (!io) {
     Msg::print(Msg::SevWarning, "Unable to find class type: " + 
                className);

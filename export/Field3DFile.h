@@ -408,6 +408,19 @@ public:
 
   virtual void closeInternal()
   {
+    cleanup();
+  }
+
+  void cleanup()
+  {
+    // The destruction of the various Ogawa components must happen in the
+    // right order
+    
+    // First, the partition groups
+    m_partitions.clear();
+    // Then the root group
+    m_root.reset();
+    // Finally, the archive
     m_archive.reset();
   }
 
@@ -513,12 +526,23 @@ private:
   readLayer(const std::string &intPartitionName, 
             const std::string &layerName) const;
 
+  //! Sets up all the partitions and layers, but does not load any data
+  bool readPartitionAndLayerInfo();
+
+  //! Read metadata for this layer
+  bool readMetadata(OgIGroup &metadataGroup, FieldBase::Ptr field) const;
+
+  //! Read global metadata for this file
+  bool readMetadata(OgIGroup &metadataGroup);
+
   // Data members --------------------------------------------------------------
 
   //! Filename, only to be set by open().
   std::string m_filename;
   //! Pointer to the Ogawa archive
   boost::shared_ptr<Alembic::Ogawa::IArchive> m_archive;
+  //! Pointer to root group
+  boost::shared_ptr<OgIGroup> m_root;
 
 };
 
@@ -571,6 +595,11 @@ public:
   // From Field3DFileBase ------------------------------------------------------
 
   virtual void closeInternal()
+  {
+    cleanup();
+  }
+
+  void cleanup()
   {
     // The destruction of the various Ogawa components must happen in the
     // right order
@@ -678,7 +707,7 @@ private:
   //! Writes the mapping to the given Og node.
   //! Mappings are assumed to be light-weight enough to be stored as 
   //! plain attributes under a group.
-  bool writeMapping(OgOGroup &partitionLocation, FieldMapping::Ptr mapping);
+  bool writeMapping(OgOGroup &partitionGroup, FieldMapping::Ptr mapping);
   
   //! Writes metadata for this layer
   bool writeMetadata(OgOGroup &metadataGroup, FieldBase::Ptr layer);
@@ -767,16 +796,6 @@ Field3DInputFile::readLayers(const std::string &partitionName,
   }
   
   return ret;
-}
-
-//----------------------------------------------------------------------------//
-
-template <class Data_T>
-typename Field<Data_T>::Ptr
-Field3DInputFile::readLayer(const std::string &intPartitionName,
-                            const std::string &layerName) const
-{
-  return typename Field<Data_T>::Ptr();
 }
 
 //----------------------------------------------------------------------------//

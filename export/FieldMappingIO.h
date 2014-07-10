@@ -51,6 +51,7 @@
 #include <hdf5.h>
 
 #include "FieldMapping.h"
+#include "OgawaFwd.h"
 
 //----------------------------------------------------------------------------//
 
@@ -98,9 +99,18 @@ public:
   //! couldn't be read.
   virtual FieldMapping::Ptr read(hid_t mappingGroup) = 0;
 
+  //! Read the field at the given hdf5 group
+  //! \returns Pointer to the created field, or a null pointer if the field
+  //! couldn't be read.
+  virtual FieldMapping::Ptr read(OgIGroup &mappingGroup) = 0;
+
   //! Write the field to the given mapping group
   //! \returns Whether the operation was successful
   virtual bool write(hid_t mappingGroup, FieldMapping::Ptr mapping) = 0;
+
+  //! Write the field to the given mapping group
+  //! \returns Whether the operation was successful
+  virtual bool write(OgOGroup &mappingGroup, FieldMapping::Ptr mapping) = 0;
 
   //! Returns the class name. This is used when registering the class in the
   //! ClassFactory.
@@ -161,9 +171,18 @@ public:
   //! \returns Null if no object was read
   virtual FieldMapping::Ptr read(hid_t mappingGroup);
 
+  //! Reads the field mapping and tries to create a NullFieldMapping
+  //! object from it.
+  //! \returns Null if no object was read
+  virtual FieldMapping::Ptr read(OgIGroup &mappingGroup);
+
   //! Writes the given field mapping to disk.
   //! \return true if successful, otherwise false
   virtual bool write(hid_t mappingGroup, FieldMapping::Ptr mapping);
+
+  //! Writes the given field mapping to disk.
+  //! \return true if successful, otherwise false
+  virtual bool write(OgOGroup &mappingGroup, FieldMapping::Ptr mapping);
 
   //! Returns the class name
   virtual std::string className() const;
@@ -224,9 +243,18 @@ public:
   //! \returns Matrix if no object was read
   virtual FieldMapping::Ptr read(hid_t mappingGroup);
 
+  //! Reads the field mapping and tries to create a MatrixFieldMapping
+  //! object from it.
+  //! \returns Matrix if no object was read
+  virtual FieldMapping::Ptr read(OgIGroup &mappingGroup);
+
   //! Writes the given field mapping to disk.
   //! \return true if successful, otherwise false
   virtual bool write(hid_t mappingGroup, FieldMapping::Ptr mapping);
+
+  //! Writes the given field mapping to disk.
+  //! \return true if successful, otherwise false
+  virtual bool write(OgOGroup &mappingGroup, FieldMapping::Ptr mapping);
 
   //! Returns the class name
   virtual std::string className() const;
@@ -287,9 +315,18 @@ public:
   //! \returns Null pointer if no object was read
   virtual FieldMapping::Ptr read(hid_t mappingGroup);
 
+  //! Reads the field mapping and tries to create a FrustumFieldMapping
+  //! object from it.
+  //! \returns Null pointer if no object was read
+  virtual FieldMapping::Ptr read(OgIGroup &mappingGroup);
+
   //! Writes the given field mapping to disk.
   //! \return true if successful, otherwise false
   virtual bool write(hid_t mappingGroup, FieldMapping::Ptr mapping);
+
+  //! Writes the given field mapping to disk.
+  //! \return true if successful, otherwise false
+  virtual bool write(OgOGroup &mappingGroup, FieldMapping::Ptr mapping);
 
   //! Returns the class name
   virtual std::string className() const;

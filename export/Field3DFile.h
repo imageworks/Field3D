@@ -58,6 +58,7 @@
 
 #include "EmptyField.h"
 #include "Field.h"
+#include "Field3DFileHDF5.h"
 #include "FieldMetadata.h"
 #include "ClassFactory.h"
 #include "OgawaFwd.h"
@@ -70,6 +71,13 @@
 //----------------------------------------------------------------------------//
 
 FIELD3D_NAMESPACE_OPEN
+
+//----------------------------------------------------------------------------//
+// Forward declarations
+//----------------------------------------------------------------------------//
+
+class Field3DInputFileHDF5;
+class Field3DOutputFileHDF5;
 
 //----------------------------------------------------------------------------//
 // Layer
@@ -200,7 +208,7 @@ private:
 
 //----------------------------------------------------------------------------//
 
-class FIELD3D_API Field3DFileBase
+class FIELD3D_API Field3DFileBase : public MetadataCallback
 {
 public:
 
@@ -253,41 +261,35 @@ public:
   void getVectorLayerNames(std::vector<std::string> &names, 
                            const std::string &partitionName) const;
 
-  //! Returns a pointer to the given partition
-  //! \returns NULL if no partition was found of that name
-  File::Partition::Ptr getPartition(const std::string &partitionName) const
-  { return partition(partitionName); }
-
   //! \}
 
   //! \name Convenience methods for partitionName
   //! \{
-
-  //! Returns a unique partition name given the requested name. This ensures
-  //! that partitions with matching mappings get the same name but each
-  //! subsequent differing mapping gets a new, separate name
-  std::string intPartitionName(const std::string &partitionName,
-                               const std::string &layerName,
-                               FieldRes::Ptr field);
-
-  //! Strips any unique identifiers from the partition name and returns
-  //! the original name
-  std::string removeUniqueId(const std::string &partitionName) const;
 
   //! Add to the group membership
   void addGroupMembership(const GroupMembershipMap &groupMembers);
 
   //! \}
 
-  // Access to metadata --------------------------------------------------------  
+  // Access to metadata --------------------------------------------------------
 
   //! accessor to the m_metadata class
-  FieldMetadata<Field3DFileBase>& metadata()
-  { return m_metadata; }
+  FieldMetadata& metadata()
+  { 
+    if (m_hdf5Base) {
+      return m_hdf5Base->metadata();
+    }
+    return m_metadata; 
+  }
 
   //! Read only access to the m_metadata class
-  const FieldMetadata<Field3DFileBase>& metadata() const
-  { return m_metadata; }
+  const FieldMetadata& metadata() const
+  { 
+    if (m_hdf5Base) {
+      return m_hdf5Base->metadata();
+    }
+    return m_metadata; 
+  }
  
   //! This function should implemented by concrete classes to  
   //! get the callback when metadata changes
@@ -314,6 +316,11 @@ protected:
 
   //! \name Convenience methods
   //! \{
+
+  //! Returns a pointer to the given partition
+  //! \returns NULL if no partition was found of that name
+  File::Partition::Ptr getPartition(const std::string &partitionName) const
+  { return partition(partitionName); }
 
   //! Closes the file if open.
   virtual void closeInternal() = 0;
@@ -343,6 +350,17 @@ protected:
   std::string makeIntPartitionName(const std::string &partitionsName,
                                    int i) const;
 
+  //! Returns a unique partition name given the requested name. This ensures
+  //! that partitions with matching mappings get the same name but each
+  //! subsequent differing mapping gets a new, separate name
+  std::string intPartitionName(const std::string &partitionName,
+                               const std::string &layerName,
+                               FieldRes::Ptr field);
+
+  //! Strips any unique identifiers from the partition name and returns
+  //! the original name
+  std::string removeUniqueId(const std::string &partitionName) const;
+
   //! \}
 
   // Data members --------------------------------------------------------------
@@ -365,7 +383,10 @@ protected:
   GroupMembershipMap m_groupMembership;
 
   //! metadata
-  FieldMetadata<Field3DFileBase> m_metadata;
+  FieldMetadata m_metadata;
+
+  //! HDF5 fallback
+  boost::shared_ptr<Field3DFileHDF5Base> m_hdf5Base;
 
 private:
 
@@ -404,27 +425,11 @@ public:
 
   //! \}
 
-  // From Field3DFileBase ------------------------------------------------------
-
-  virtual void closeInternal()
-  {
-    cleanup();
-  }
-
-  void cleanup()
-  {
-    // The destruction of the various Ogawa components must happen in the
-    // right order
-    
-    // First, the partition groups
-    m_partitions.clear();
-    // Then the root group
-    m_root.reset();
-    // Finally, the archive
-    m_archive.reset();
-  }
-
   // Main interface ------------------------------------------------------------
+
+  //! Opens the given file
+  //! \returns Whether successful
+  bool open(const std::string &filename);
 
   //! \name Reading layers from disk
   //! \{
@@ -448,14 +453,24 @@ public:
   template <class Data_T>
   typename Field<Data_T>::Vec
   readScalarLayers(const std::string &layerName = std::string("")) const
-  { return readLayers<Data_T>(layerName); }
+  { 
+    if (m_hdf5) {
+      return m_hdf5->readScalarLayers<Data_T>(layerName);
+    }
+    return readLayers<Data_T>(layerName); 
+  }
 
   //! This one allows the allows the partitionName to be passed in
   template <class Data_T>
   typename Field<Data_T>::Vec
   readScalarLayers(const std::string &partitionName, 
                    const std::string &layerName) const
-  { return readLayers<Data_T>(partitionName, layerName); }
+  { 
+    if (m_hdf5) {
+      return m_hdf5->readScalarLayers<Data_T>(partitionName, layerName);
+    }
+    return readLayers<Data_T>(partitionName, layerName); 
+  }
 
   //! Retrieves all the layers of vector type and maintains their on-disk
   //! data types
@@ -464,14 +479,24 @@ public:
   template <class Data_T>
   typename Field<FIELD3D_VEC3_T<Data_T> >::Vec
   readVectorLayers(const std::string &layerName = std::string("")) const
-  { return readLayers<FIELD3D_VEC3_T<Data_T> >(layerName); }
+  { 
+    if (m_hdf5) {
+      return m_hdf5->readVectorLayers<Data_T>(layerName);
+    }
+    return readLayers<FIELD3D_VEC3_T<Data_T> >(layerName); 
+  }
 
   //! This version allows you to pass in the partition name
   template <class Data_T>
   typename Field<FIELD3D_VEC3_T<Data_T> >::Vec
   readVectorLayers(const std::string &partitionName, 
                    const std::string &layerName) const
-  { return readLayers<FIELD3D_VEC3_T<Data_T> >(partitionName, layerName); }
+  { 
+    if (m_hdf5) {
+      return m_hdf5->readVectorLayers<Data_T>(partitionName, layerName);
+    }
+    return readLayers<FIELD3D_VEC3_T<Data_T> >(partitionName, layerName); 
+  }
 
   //! \}
 
@@ -509,13 +534,32 @@ public:
 
   //! \}
 
-  // File IO ---
-
-  //! Opens the given file
-  //! \returns Whether successful
-  bool open(const std::string &filename);
-
 private:
+
+  // From Field3DFileBase ------------------------------------------------------
+
+  virtual void closeInternal()
+  {
+    if (m_hdf5) {
+      m_hdf5->closeInternal();
+      return;
+    }
+
+    cleanup();
+  }
+
+  void cleanup()
+  {
+    // The destruction of the various Ogawa components must happen in the
+    // right order
+    
+    // First, the partition groups
+    m_partitions.clear();
+    // Then the root group
+    m_root.reset();
+    // Finally, the archive
+    m_archive.reset();
+  }
 
   // Convenience methods -------------------------------------------------------
 
@@ -543,6 +587,9 @@ private:
   boost::shared_ptr<Alembic::Ogawa::IArchive> m_archive;
   //! Pointer to root group
   boost::shared_ptr<OgIGroup> m_root;
+
+  //! HDF5 fallback
+  boost::shared_ptr<Field3DInputFileHDF5> m_hdf5;
 
 };
 
@@ -592,10 +639,135 @@ public:
 
   //! \}
 
+  // Main interface ------------------------------------------------------------
+
+  //! Creates a .f3d file on disk
+  bool create(const std::string &filename, CreateMode cm = OverwriteMode);
+
+  //! Whether to output ogawa files
+  static void useOgawa(const bool enabled)
+  { ms_doOgawa = enabled; }
+
+  //! \name Writing layer to disk
+  //! \{
+
+  //! Writes a scalar layer to the "Default" partition.
+  template <class Data_T>
+  bool writeLayer(const std::string &layerName, 
+                  typename Field<Data_T>::Ptr layer)
+  { 
+    return writeLayer<Data_T>(std::string("default"), layerName, layer); 
+  }
+
+  //! Writes a layer to a specific partition. The partition will be created if
+  //! not specified.
+  template <class Data_T>
+  bool writeLayer(const std::string &partitionName, 
+                  const std::string &layerName, 
+                  typename Field<Data_T>::Ptr layer);
+
+  //! Writes a layer to a specific partition. The field name and attribute
+  //! name are used for partition and layer, respectively
+  template <class Data_T>
+  bool writeLayer(typename Field<Data_T>::Ptr layer)
+  { 
+    return writeLayer<Data_T>(layer->name, layer->attribute, layer); 
+  }
+
+  //! \}
+
+  //! \name Backward compatibility
+  //! \{
+
+  //! Writes a scalar layer to the "Default" partition.
+  template <class Data_T>
+  bool writeScalarLayer(const std::string &layerName, 
+                        typename Field<Data_T>::Ptr layer)
+  { 
+    if (m_hdf5) {
+      return m_hdf5->writeScalarLayer<Data_T>(layerName, layer);
+    }
+    return writeScalarLayer<Data_T>(std::string("default"), layerName, layer); 
+  }
+
+  //! Writes a layer to a specific partition. The partition will be created if
+  //! not specified.
+  template <class Data_T>
+  bool writeScalarLayer(const std::string &partitionName, 
+                        const std::string &layerName, 
+                        typename Field<Data_T>::Ptr layer)
+  { 
+    if (m_hdf5) {
+      return m_hdf5->writeScalarLayer<Data_T>(partitionName, layerName, layer);
+    }
+    return writeLayer<Data_T>(partitionName, layerName, layer); 
+  }
+
+  //! Writes a layer to a specific partition. The field name and attribute
+  //! name are used for partition and layer, respectively
+  template <class Data_T>
+  bool writeScalarLayer(typename Field<Data_T>::Ptr layer)
+  { 
+    if (m_hdf5) {
+      return m_hdf5->writeScalarLayer<Data_T>(layer);
+    }
+    return writeLayer<Data_T>(layer); 
+  }
+
+  //! Writes a scalar layer to the "Default" partition.
+  template <class Data_T>
+  bool writeVectorLayer(const std::string &layerName, 
+                        typename Field<FIELD3D_VEC3_T<Data_T> >::Ptr layer)
+  { 
+    if (m_hdf5) {
+      return m_hdf5->writeVectorLayer<Data_T>(layerName, layer);
+    }
+    return writeVectorLayer<Data_T>(std::string("default"), layerName, layer); 
+  }
+
+  //! Writes a layer to a specific partition. The partition will be created if
+  //! not specified.
+  template <class Data_T>
+  bool writeVectorLayer(const std::string &partitionName, 
+                        const std::string &layerName, 
+                        typename Field<FIELD3D_VEC3_T<Data_T> >::Ptr layer)
+  { 
+    if (m_hdf5) {
+      return m_hdf5->writeVectorLayer<Data_T>(partitionName, layerName, layer);
+    }
+    return writeLayer<FIELD3D_VEC3_T<Data_T> >(partitionName, layerName, layer);
+  }
+
+  //! Writes a layer to a specific partition. The field name and attribute
+  //! name are used for partition and layer, respectively
+  template <class Data_T>
+  bool writeVectorLayer(typename Field<FIELD3D_VEC3_T<Data_T> >::Ptr layer)
+  { 
+    if (m_hdf5) {
+      return m_hdf5->writeVectorLayer<Data_T>(layer);
+    }
+    return writeLayer<FIELD3D_VEC3_T<Data_T> >(layer); 
+  }
+
+  //! This routine is call if you want to write out global metadata to disk
+  bool writeGlobalMetadata();
+
+  //! This routine is called just before closing to write out any group
+  //! membership to disk.
+  bool writeGroupMembership();
+
+   //! \}
+
+private:
+  
   // From Field3DFileBase ------------------------------------------------------
 
   virtual void closeInternal()
   {
+    if (m_hdf5) {
+      m_hdf5->closeInternal();
+      return;
+    }
     cleanup();
   }
 
@@ -612,89 +784,6 @@ public:
     m_archive.reset();
   }
 
-  // Main interface ------------------------------------------------------------
-
-  //! \name Writing layer to disk
-  //! \{
-
-  //! Writes a scalar layer to the "Default" partition.
-  template <class Data_T>
-  bool writeLayer(const std::string &layerName, 
-                  typename Field<Data_T>::Ptr layer)
-  { return writeLayer<Data_T>(std::string("default"), layerName, layer); }
-
-  //! Writes a layer to a specific partition. The partition will be created if
-  //! not specified.
-  template <class Data_T>
-  bool writeLayer(const std::string &partitionName, 
-                  const std::string &layerName, 
-                  typename Field<Data_T>::Ptr layer);
-
-  //! Writes a layer to a specific partition. The field name and attribute
-  //! name are used for partition and layer, respectively
-  template <class Data_T>
-  bool writeLayer(typename Field<Data_T>::Ptr layer)
-  { return writeLayer<Data_T>(layer->name, layer->attribute, layer); }
-
-  //! \}
-
-  //! \name Backward compatibility
-  //! \{
-
-  //! Writes a scalar layer to the "Default" partition.
-  template <class Data_T>
-  bool writeScalarLayer(const std::string &layerName, 
-                        typename Field<Data_T>::Ptr layer)
-  { return writeScalarLayer<Data_T>(std::string("default"), layerName, layer); }
-
-  //! Writes a layer to a specific partition. The partition will be created if
-  //! not specified.
-  template <class Data_T>
-  bool writeScalarLayer(const std::string &partitionName, 
-                        const std::string &layerName, 
-                        typename Field<Data_T>::Ptr layer)
-  { return writeLayer<Data_T>(partitionName, layerName, layer); }
-
-  //! Writes a layer to a specific partition. The field name and attribute
-  //! name are used for partition and layer, respectively
-  template <class Data_T>
-  bool writeScalarLayer(typename Field<Data_T>::Ptr layer)
-  { return writeLayer<Data_T>(layer); }
-
-  //! Writes a scalar layer to the "Default" partition.
-  template <class Data_T>
-  bool writeVectorLayer(const std::string &layerName, 
-                        typename Field<FIELD3D_VEC3_T<Data_T> >::Ptr layer)
-  { return writeVectorLayer<Data_T>(std::string("default"), layerName, layer); }
-
-  //! Writes a layer to a specific partition. The partition will be created if
-  //! not specified.
-  template <class Data_T>
-  bool writeVectorLayer(const std::string &partitionName, 
-                        const std::string &layerName, 
-                        typename Field<FIELD3D_VEC3_T<Data_T> >::Ptr layer)
-  { return writeLayer<FIELD3D_VEC3_T<Data_T> >(partitionName, layerName, layer); }
-
-  //! Writes a layer to a specific partition. The field name and attribute
-  //! name are used for partition and layer, respectively
-  template <class Data_T>
-  bool writeVectorLayer(typename Field<FIELD3D_VEC3_T<Data_T> >::Ptr layer)
-  { return writeLayer<FIELD3D_VEC3_T<Data_T> >(layer); }
-
-  //! \}
-
-  //! Creates a .f3d file on disk
-  bool create(const std::string &filename, CreateMode cm = OverwriteMode);
-
-  //! This routine is call if you want to write out global metadata to disk
-  bool writeGlobalMetadata();
-
-  //! This routine is called just before closing to write out any group
-  //! membership to disk.
-  bool writeGroupMembership();
-
-private:
-  
   // Convenience methods -------------------------------------------------------
 
   //! Increment the partition or make it zero if there's not an integer suffix
@@ -715,12 +804,18 @@ private:
   //! Writes metadata for this file
   bool writeMetadata(OgOGroup &metadataGroup);
 
-  // Data members --------------------------------------------------------------
+ // Data members --------------------------------------------------------------
+
+  //! Whether to output ogawa files
+  static bool ms_doOgawa;
 
   //! Pointer to the Ogawa archive
   boost::shared_ptr<Alembic::Ogawa::OArchive> m_archive;
   //! Pointer to root group
   boost::shared_ptr<OgOGroup> m_root;
+
+  //! HDF5 fallback
+  boost::shared_ptr<Field3DOutputFileHDF5> m_hdf5;
 
 };
 
@@ -737,7 +832,7 @@ Field3DInputFile::readLayers(const std::string &name) const
 
   typedef typename Field<Data_T>::Ptr FieldPtr;
   typedef typename Field<Data_T>::Vec FieldList;
-
+  
   FieldList ret;
   std::vector<std::string> parts;
   getIntPartitionNames(parts);

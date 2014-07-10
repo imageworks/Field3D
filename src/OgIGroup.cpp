@@ -5,6 +5,10 @@
 #include "OgIGroup.h"
 
 //----------------------------------------------------------------------------//
+
+FIELD3D_NAMESPACE_OPEN
+
+//----------------------------------------------------------------------------//
 // OgIGroup implementations
 //----------------------------------------------------------------------------//
 
@@ -145,6 +149,32 @@ OgIGroup::groupNames(const OgGroupType groupType) const
 
 //----------------------------------------------------------------------------//
 
+OgDataType OgIGroup::attributeType(const std::string &name) const
+{
+  Alembic::Ogawa::IGroupPtr group = findGroup(name, F3DAttributeType);
+
+  if (group && group->getNumChildren() > 2) {
+    return readDataType(group, 2);
+  }
+
+  return F3DInvalidDataType;
+}
+
+//----------------------------------------------------------------------------//
+
+OgDataType OgIGroup::datasetType(const std::string &name) const
+{
+  Alembic::Ogawa::IGroupPtr group = findGroup(name, F3DDatasetType);
+
+  if (group && group->getNumChildren() > 2) {
+    return readDataType(group, 2);
+  }
+
+  return F3DInvalidDataType;
+}
+
+//----------------------------------------------------------------------------//
+
 OgIGroup::OgIGroup()
 {
   // Nothing
@@ -173,5 +203,9 @@ void OgIGroup::validate()
     m_group.reset();
   }
 }
+
+//----------------------------------------------------------------------------//
+
+FIELD3D_NAMESPACE_SOURCE_CLOSE
 
 //----------------------------------------------------------------------------//

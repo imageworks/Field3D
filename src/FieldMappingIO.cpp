@@ -45,6 +45,7 @@
 #include "Hdf5Util.h"
 
 #include "FieldMappingIO.h"
+#include "OgIO.h"
 
 //----------------------------------------------------------------------------//
 
@@ -96,6 +97,21 @@ NullFieldMappingIO::read(hid_t mappingGroup)
 
 //----------------------------------------------------------------------------//
 
+FieldMapping::Ptr
+NullFieldMappingIO::read(OgIGroup &mappingGroup)
+{
+  OgIAttribute<string> data = 
+    mappingGroup.findAttribute<string>(k_nullMappingDataName);
+  if (!data.isValid()) {
+    Msg::print(Msg::SevWarning, "Couldn't read attribute " + 
+               k_nullMappingDataName);
+    return NullFieldMapping::Ptr();
+  }
+  return NullFieldMapping::Ptr(new NullFieldMapping);
+}
+
+//----------------------------------------------------------------------------//
+
 bool
 NullFieldMappingIO::write(hid_t mappingGroup, FieldMapping::Ptr /* nm */)
 {
@@ -104,6 +120,16 @@ NullFieldMappingIO::write(hid_t mappingGroup, FieldMapping::Ptr /* nm */)
     Msg::print(Msg::SevWarning, "Couldn't add attribute " + k_nullMappingDataName);
     return false;
   }
+  return true;
+}
+
+//----------------------------------------------------------------------------//
+
+bool
+NullFieldMappingIO::write(OgOGroup &mappingGroup, FieldMapping::Ptr /* nm */)
+{
+  string nfmAttrData("NullFieldMapping has no data");
+  OgOAttribute<string> data(mappingGroup, k_nullMappingDataName, nfmAttrData);
   return true;
 }
 
@@ -174,6 +200,52 @@ MatrixFieldMappingIO::read(hid_t mappingGroup)
 
 //----------------------------------------------------------------------------//
 
+FieldMapping::Ptr
+MatrixFieldMappingIO::read(OgIGroup &mappingGroup)
+{
+  M44d mtx;
+  int numSamples = 0;
+
+  MatrixFieldMapping::Ptr mm(new MatrixFieldMapping);
+
+  try {
+    OgIAttribute<int> numSamplesAttr = 
+      mappingGroup.findAttribute<int>(k_matrixMappingNumSamples);
+    if (!numSamplesAttr.isValid()) {
+      Msg::print(Msg::SevWarning, "Couldn't read attribute " + 
+                 k_matrixMappingNumSamples);
+      return FieldMapping::Ptr();
+    }
+    numSamples = numSamplesAttr.value();
+  } catch (...) {
+    //do nothing
+  }
+
+  for (int i = 0; i < numSamples; ++i) {
+    string timeAttr = k_matrixMappingTime + boost::lexical_cast<string>(i);
+    string matrixAttr = k_matrixMappingMatrix + boost::lexical_cast<string>(i);
+    // Read time
+    OgIAttribute<float32_t> time = 
+      mappingGroup.findAttribute<float32_t>(timeAttr);
+    if (!time.isValid()) {
+      Msg::print(Msg::SevWarning, "Couldn't read attribute " + timeAttr);
+      return FieldMapping::Ptr();
+    }
+    // Read matrix
+    OgIAttribute<mtx64_t> mtx = 
+      mappingGroup.findAttribute<mtx64_t>(matrixAttr);
+    if (!mtx.isValid()) {
+      Msg::print(Msg::SevWarning, "Couldn't read attribute " + matrixAttr);
+      return FieldMapping::Ptr();
+    }
+    mm->setLocalToWorld(time.value(), mtx.value());
+  }
+  
+  return mm;
+}
+
+//----------------------------------------------------------------------------//
+
 bool
 MatrixFieldMappingIO::write(hid_t mappingGroup, FieldMapping::Ptr mapping)
 {
@@ -214,6 +286,44 @@ MatrixFieldMappingIO::write(hid_t mappingGroup, FieldMapping::Ptr mapping)
       Msg::print(Msg::SevWarning, "Couldn't add attribute " + matrixAttr);
       return false;
     }
+  }
+
+  return true;
+}
+
+//----------------------------------------------------------------------------//
+
+bool
+MatrixFieldMappingIO::write(OgOGroup &mappingGroup, FieldMapping::Ptr mapping)
+{
+  typedef MatrixFieldMapping::MatrixCurve::SampleVec SampleVec;
+
+  MatrixFieldMapping::Ptr mm =
+    FIELD_DYNAMIC_CAST<MatrixFieldMapping>(mapping);
+
+  if (!mm) {
+    Msg::print(Msg::SevWarning, "Couldn't get MatrixFieldMapping from pointer");
+    return false;
+  }
+
+  // First write number of time samples
+
+  const SampleVec &samples    = mm->localToWorldSamples();
+  const int        numSamples = static_cast<int>(samples.size());
+
+  OgOAttribute<int> numSamplesAttr(mappingGroup, k_matrixMappingNumSamples,
+                                   numSamples);
+
+  // Then write each sample
+
+  for (int i = 0; i < numSamples; ++i) {
+    // Attribute names
+    const string timeAttr   = 
+      k_matrixMappingTime + boost::lexical_cast<string>(i);
+    const string matrixAttr = 
+      k_matrixMappingMatrix + boost::lexical_cast<string>(i);
+    OgOAttribute<float32_t> time(mappingGroup, timeAttr, samples[i].first);
+    OgOAttribute<mtx64_t> mtx (mappingGroup, matrixAttr, samples[i].second);
   }
 
   return true;
@@ -300,6 +410,83 @@ FrustumFieldMappingIO::read(hid_t mappingGroup)
 
 //----------------------------------------------------------------------------//
 
+FieldMapping::Ptr
+FrustumFieldMappingIO::read(OgIGroup &mappingGroup)
+{
+  int numSamples = 0;
+
+  FrustumFieldMapping::Ptr fm(new FrustumFieldMapping);
+  
+  // Read number of time samples
+
+  try {
+    OgIAttribute<int> numSamplesAttr = 
+      mappingGroup.findAttribute<int>(k_frustumMappingNumSamples);
+    if (!numSamplesAttr.isValid()) {
+      Msg::print(Msg::SevWarning, "Couldn't read attribute " + 
+                 k_frustumMappingNumSamples);
+      return FieldMapping::Ptr();
+    }
+  } catch (...) {
+    //do nothing
+  }
+
+  // Read each time sample
+
+  for (int i = 0; i < numSamples; ++i) {
+    // Attribute names
+    string timeAttr = k_frustumMappingTime + boost::lexical_cast<string>(i);
+    string ssAttr = k_frustumMappingScreenMatrix + boost::lexical_cast<string>(i);
+    string csAttr = k_frustumMappingCameraMatrix + boost::lexical_cast<string>(i);
+    // Read time
+    OgIAttribute<float> time = 
+      mappingGroup.findAttribute<float>(timeAttr);
+    if (!time.isValid()) {
+      Msg::print(Msg::SevWarning, "Couldn't read attribute " + timeAttr);
+      return FieldMapping::Ptr();
+    }
+    // Read matrices
+    OgIAttribute<mtx64_t> ssMtx = 
+      mappingGroup.findAttribute<mtx64_t>(ssAttr);
+    OgIAttribute<mtx64_t> csMtx = 
+      mappingGroup.findAttribute<mtx64_t>(csAttr);
+    if (!ssMtx.isValid()) {
+      Msg::print(Msg::SevWarning, "Couldn't read attribute " + ssAttr);
+      return FieldMapping::Ptr();
+    }
+    if (!csMtx.isValid()) {
+      Msg::print(Msg::SevWarning, "Couldn't read attribute " + csAttr);
+      return FieldMapping::Ptr();
+    }
+
+    fm->setTransforms(time.value(), ssMtx.value(), csMtx.value());
+  }
+
+
+  // Read Z distribution
+
+  FrustumFieldMapping::ZDistribution dist;
+  
+  try {
+    OgIAttribute<int> zDist = 
+      mappingGroup.findAttribute<int>(k_frustumMappingZDistribution);
+    if (!zDist.isValid()) {
+      Msg::print(Msg::SevWarning, "Couldn't read attribute " + 
+                 k_frustumMappingZDistribution);
+      return FieldMapping::Ptr();
+    }
+    dist = static_cast<FrustumFieldMapping::ZDistribution>(zDist.value()); 
+  } catch (...) {
+    dist = FrustumFieldMapping::PerspectiveDistribution;
+  }
+
+  fm->setZDistribution(dist);
+
+  return fm;
+}
+
+//----------------------------------------------------------------------------//
+
 bool
 FrustumFieldMappingIO::write(hid_t mappingGroup, FieldMapping::Ptr mapping)
 {
@@ -360,6 +547,55 @@ FrustumFieldMappingIO::write(hid_t mappingGroup, FieldMapping::Ptr mapping)
                k_frustumMappingNumSamples);
     return false;
   }
+
+  return true;
+}
+
+//----------------------------------------------------------------------------//
+
+bool
+FrustumFieldMappingIO::write(OgOGroup &mappingGroup, FieldMapping::Ptr mapping)
+{
+  typedef FrustumFieldMapping::MatrixCurve::SampleVec SampleVec;
+
+  FrustumFieldMapping::Ptr fm =
+    FIELD_DYNAMIC_CAST<FrustumFieldMapping>(mapping);
+
+  if (!fm) {
+    Msg::print(Msg::SevWarning, 
+               "Couldn't get FrustumFieldMapping from pointer");
+    return false;
+  }
+
+  // First write number of time samples ---
+
+  const SampleVec &ssSamples  = fm->screenToWorldSamples();
+  const SampleVec &csSamples  = fm->cameraToWorldSamples();
+  const int        numSamples = static_cast<int>(ssSamples.size());
+
+  OgOAttribute<int> numSamplesAttr(mappingGroup, k_frustumMappingNumSamples,
+                                   numSamples);
+
+  // Then write each sample ---
+
+  for (int i = 0; i < numSamples; ++i) {
+    const string timeAttr = k_frustumMappingTime + 
+      boost::lexical_cast<string>(i);
+    const string ssAttr   = k_frustumMappingScreenMatrix + 
+      boost::lexical_cast<string>(i);
+    const string csAttr   = k_frustumMappingCameraMatrix + 
+      boost::lexical_cast<string>(i);
+    
+    OgOAttribute<float> time(mappingGroup, timeAttr, ssSamples[i].first);
+    OgOAttribute<mtx64_t> ss(mappingGroup, ssAttr, ssSamples[i].second);
+    OgOAttribute<mtx64_t> cs(mappingGroup, csAttr, csSamples[i].second);
+  }
+
+  // Write distribution type ---
+
+  int dist = static_cast<int>(fm->zDistribution());
+
+  OgOAttribute<int> zDist(mappingGroup, k_frustumMappingZDistribution, dist);
 
   return true;
 }

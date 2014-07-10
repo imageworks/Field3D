@@ -45,9 +45,13 @@
 #ifndef _INCLUDED_Field3D_OgawaFwd_H_
 #define _INCLUDED_Field3D_OgawaFwd_H_
 
+#include "ns.h"
+
 //----------------------------------------------------------------------------//
 // Forward declarations
 //----------------------------------------------------------------------------//
+
+FIELD3D_NAMESPACE_OPEN
 
 class OgIGroup;
 class OgOGroup;
@@ -61,6 +65,10 @@ template <typename T>
 class OgIDataset;
 template <typename T>
 class OgODataset;
+
+FIELD3D_NAMESPACE_HEADER_CLOSE
+
+//----------------------------------------------------------------------------//
 
 namespace Alembic {
   namespace Ogawa {

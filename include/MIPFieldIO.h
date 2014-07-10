@@ -118,10 +118,23 @@ public:
                               const std::string &layerPath,
                               DataTypeEnum typeEnum);
 
+  //! Reads the field at the given location and tries to create a MIPField
+  //! object from it. Calls out to readData() for template-specific work.
+  //! \returns Null if no object was read
+  virtual FieldBase::Ptr read(OgIGroup &layerGroup, 
+                              const std::string &filename, 
+                              const std::string &layerPath,
+                              OgDataType typeEnum);
+
   //! Writes the given field to disk. This function calls out to writeInternal
   //! once the template type has been determined.
   //! \return true if successful, otherwise false
   virtual bool write(hid_t layerGroup, FieldBase::Ptr field);
+
+  //! Writes the given field to disk. This function calls out to writeInternal
+  //! once the template type has been determined.
+  //! \return true if successful, otherwise false
+  virtual bool write(OgOGroup &layerGroup, FieldBase::Ptr field);
 
   //! Returns the class name
   virtual std::string className() const

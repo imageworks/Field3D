@@ -12,6 +12,12 @@
 #include "OgIDataset.h"
 
 //----------------------------------------------------------------------------//
+
+#include "ns.h"
+
+FIELD3D_NAMESPACE_OPEN
+
+//----------------------------------------------------------------------------//
 // OgIGroup
 //----------------------------------------------------------------------------//
 
@@ -60,6 +66,12 @@ public:
   //! wasn't found.
   template <typename T>
   OgIDataset<T>            findDataset(const std::string &name) const;
+
+  //! Returns the data type of an attribute
+  OgDataType               attributeType(const std::string &name) const;
+
+  //! Returns the data type of a dataset
+  OgDataType               datasetType(const std::string &name) const;
 
 private:
   
@@ -114,6 +126,10 @@ OgIDataset<T> OgIGroup::findDataset(const std::string &name) const
 
   return OgIDataset<T>();
 }
+
+//----------------------------------------------------------------------------//
+  
+FIELD3D_NAMESPACE_HEADER_CLOSE
 
 //----------------------------------------------------------------------------//
 

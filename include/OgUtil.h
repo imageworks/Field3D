@@ -15,6 +15,8 @@
 #include "All.h"
 #include "UtilFoundation.h"
 
+#include "Traits.h"
+
 //----------------------------------------------------------------------------//
 // Defines
 //----------------------------------------------------------------------------//
@@ -25,44 +27,10 @@
 #define OGAWA_INVALID_DATASET_INDEX -1
 
 //----------------------------------------------------------------------------//
-// Types
-//----------------------------------------------------------------------------//
 
-#if !defined(_MSC_VER)
-using ::uint8_t;
-using ::int8_t;
-using ::uint16_t;
-using ::int16_t;
-using ::uint32_t;
-using ::int32_t;
-using ::uint64_t;
-using ::int64_t;
-#else
-typedef unsigned char           uint8_t;
-typedef signed char             int8_t;
-typedef unsigned short          uint16_t;
-typedef signed short            int16_t;
-typedef unsigned int            uint32_t;
-typedef int                     int32_t;
-typedef unsigned long long      uint64_t;
-typedef long long               int64_t;
-#endif
+#include "ns.h"
 
-typedef half                    float16_t;
-typedef float                   float32_t;
-typedef double                  float64_t;
-
-#ifdef FIELD3D_VERSION_NS
-typedef Field3D::V3h            vec16_t;
-typedef Field3D::V3f            vec32_t;
-typedef Field3D::V3d            vec64_t;
-typedef Field3D::V3i            veci32_t;
-#else
-typedef Imath::Vec3<float16_t>  vec16_t;
-typedef Imath::Vec3<float32_t>  vec32_t;
-typedef Imath::Vec3<float64_t>  vec64_t;
-typedef Imath::Vec3<int32_t>    veci32_t;
-#endif
+FIELD3D_NAMESPACE_OPEN
 
 //----------------------------------------------------------------------------//
 // Enums
@@ -77,46 +45,6 @@ enum OgGroupType {
 };
 
 //----------------------------------------------------------------------------//
-
-//! Enumerates the various uses for Ogawa-level groups. 
-//! \warning Do not under any circumstances alter the order of these! If you
-//! need to add more types, append them at the end, before F3DNumDataTypes.
-enum OgDataType {
-
-  // Signed and unsigned integers from char to long
-  F3DInt8 = 0,
-  F3DUint8,
-
-  F3DInt16,
-  F3DUint16,
-
-  F3DInt32,
-  F3DUint32,
-
-  F3DInt64,
-  F3DUint64,
-
-  // Floats
-  F3DFloat16,
-  F3DFloat32,
-  F3DFloat64,
-
-  // Vec3
-  F3DVec16,
-  F3DVec32,
-  F3DVec64,
-  F3DVecI32,
-
-  // String
-  F3DString, 
-
-  F3DNumDataTypes, 
-
-  // Invalid type enum
-  F3DInvalidDataType = 127
-};
-
-//----------------------------------------------------------------------------//
 // OgawaTypeTraits
 //----------------------------------------------------------------------------//
 
@@ -126,33 +54,35 @@ struct OgawaTypeTraits;
 
 //----------------------------------------------------------------------------//
 
-#define F3D_DECLARE_OG_TRAITS(type, enum, name)      \
+#define F3D_DECLARE_OG_TRAITS(type, enum, name, def) \
   template <>                                        \
   struct OgawaTypeTraits<type>                       \
   {                                                  \
   typedef type value_type;                           \
   static const char* typeName() { return name; }     \
   static OgDataType  typeEnum() { return enum; }     \
+  static value_type  defaultValue() { return def; }  \
   };
 
 //----------------------------------------------------------------------------//
 
-F3D_DECLARE_OG_TRAITS(int8_t,      F3DInt8,    "int8_t");
-F3D_DECLARE_OG_TRAITS(uint8_t,     F3DUint8,   "uint8_t");
-F3D_DECLARE_OG_TRAITS(int16_t,     F3DInt16,   "int16_t");
-F3D_DECLARE_OG_TRAITS(uint16_t,    F3DUint16,  "uint16_t");
-F3D_DECLARE_OG_TRAITS(int32_t,     F3DInt32,   "int32_t");
-F3D_DECLARE_OG_TRAITS(uint32_t,    F3DUint32,  "uint32_t");
-F3D_DECLARE_OG_TRAITS(int64_t,     F3DInt64,   "int64_t");
-F3D_DECLARE_OG_TRAITS(uint64_t,    F3DUint64,  "uint64_t");
-F3D_DECLARE_OG_TRAITS(float16_t,   F3DFloat16, "float16_t");
-F3D_DECLARE_OG_TRAITS(float32_t,   F3DFloat32, "float32_t");
-F3D_DECLARE_OG_TRAITS(float64_t,   F3DFloat64, "float64_t");
-F3D_DECLARE_OG_TRAITS(vec16_t,     F3DVec16,   "vec16_t");
-F3D_DECLARE_OG_TRAITS(vec32_t,     F3DVec32,   "vec32_t");
-F3D_DECLARE_OG_TRAITS(vec64_t,     F3DVec64,   "vec64_t");
-F3D_DECLARE_OG_TRAITS(veci32_t,    F3DVecI32,  "veci32_t");
-F3D_DECLARE_OG_TRAITS(std::string, F3DString,  "string");
+F3D_DECLARE_OG_TRAITS(int8_t,      F3DInt8,    "int8_t", 0);
+F3D_DECLARE_OG_TRAITS(uint8_t,     F3DUint8,   "uint8_t", 0);
+F3D_DECLARE_OG_TRAITS(int16_t,     F3DInt16,   "int16_t", 0);
+F3D_DECLARE_OG_TRAITS(uint16_t,    F3DUint16,  "uint16_t", 0);
+F3D_DECLARE_OG_TRAITS(int32_t,     F3DInt32,   "int32_t", 0);
+F3D_DECLARE_OG_TRAITS(uint32_t,    F3DUint32,  "uint32_t", 0);
+F3D_DECLARE_OG_TRAITS(int64_t,     F3DInt64,   "int64_t", 0);
+F3D_DECLARE_OG_TRAITS(uint64_t,    F3DUint64,  "uint64_t", 0);
+F3D_DECLARE_OG_TRAITS(float16_t,   F3DFloat16, "float16_t", 0);
+F3D_DECLARE_OG_TRAITS(float32_t,   F3DFloat32, "float32_t", 0);
+F3D_DECLARE_OG_TRAITS(float64_t,   F3DFloat64, "float64_t", 0);
+F3D_DECLARE_OG_TRAITS(vec16_t,     F3DVec16,   "vec16_t", vec16_t(0));
+F3D_DECLARE_OG_TRAITS(vec32_t,     F3DVec32,   "vec32_t", vec32_t(0));
+F3D_DECLARE_OG_TRAITS(vec64_t,     F3DVec64,   "vec64_t", vec64_t(0));
+F3D_DECLARE_OG_TRAITS(veci32_t,    F3DVecI32,  "veci32_t", veci32_t(0));
+F3D_DECLARE_OG_TRAITS(mtx64_t,     F3DMtx64,   "mtx64_t", mtx64_t());
+F3D_DECLARE_OG_TRAITS(std::string, F3DString,  "string", "");
 
 //----------------------------------------------------------------------------//
 // Helper functions
@@ -279,6 +209,10 @@ protected:
   std::string               m_name;
 
 };
+
+//----------------------------------------------------------------------------//
+  
+FIELD3D_NAMESPACE_HEADER_CLOSE
 
 //----------------------------------------------------------------------------//
 

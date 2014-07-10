@@ -186,6 +186,15 @@ MIPFieldIO::read(hid_t layerGroup, const std::string &filename,
 
 //----------------------------------------------------------------------------//
 
+FieldBase::Ptr
+MIPFieldIO::read(OgIGroup &layerGroup, const std::string &filename, 
+                 const std::string &layerPath, OgDataType typeEnum)
+{
+  return FieldBase::Ptr();
+}
+
+//----------------------------------------------------------------------------//
+
 bool
 MIPFieldIO::write(hid_t layerGroup, FieldBase::Ptr field)
 {
@@ -269,6 +278,14 @@ MIPFieldIO::write(hid_t layerGroup, FieldBase::Ptr field)
   }
 
   return success;
+}
+
+//----------------------------------------------------------------------------//
+
+bool
+MIPFieldIO::write(OgOGroup &layerGroup, FieldBase::Ptr field)
+{
+  return true;
 }
 
 //----------------------------------------------------------------------------//

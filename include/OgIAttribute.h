@@ -9,6 +9,14 @@
 
 #include "OgUtil.h"
 
+#include <OpenEXR/ImathMatrix.h>
+
+//----------------------------------------------------------------------------//
+
+#include "ns.h"
+
+FIELD3D_NAMESPACE_OPEN
+
 //----------------------------------------------------------------------------//
 // OgIAttribute
 //----------------------------------------------------------------------------//
@@ -44,7 +52,7 @@ public:
 
   //! Returns the value of the attribute. This will be zero if the attribute
   //! is invalid.
-  T                  value() const;
+  T value() const;
 
 };
 
@@ -87,8 +95,12 @@ T OgIAttribute<T>::value() const
   if (readData(m_group, 3, v)) {
     return v;
   }
-  return T(0);
+  return OgawaTypeTraits<T>::defaultValue();
 }
+
+//----------------------------------------------------------------------------//
+  
+FIELD3D_NAMESPACE_HEADER_CLOSE
 
 //----------------------------------------------------------------------------//
 

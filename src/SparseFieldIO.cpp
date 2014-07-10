@@ -219,6 +219,15 @@ SparseFieldIO::read(hid_t layerGroup, const std::string &filename,
 
 //----------------------------------------------------------------------------//
 
+FieldBase::Ptr 
+SparseFieldIO::read(OgIGroup &layerGroup, const std::string &filename, 
+                    const std::string &layerPath, OgDataType typeEnum)
+{
+  return FieldBase::Ptr();
+}
+
+//----------------------------------------------------------------------------//
+
 bool
 SparseFieldIO::write(hid_t layerGroup, FieldBase::Ptr field)
 {
@@ -266,6 +275,14 @@ SparseFieldIO::write(hid_t layerGroup, FieldBase::Ptr field)
   }
 
   return success;
+}
+
+//----------------------------------------------------------------------------//
+
+bool
+SparseFieldIO::write(OgOGroup &layerGroup, FieldBase::Ptr field)
+{
+  return true;
 }
 
 //----------------------------------------------------------------------------//

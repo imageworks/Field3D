@@ -69,7 +69,11 @@ using namespace Hdf5Util;
 const int         SparseFieldIO::k_versionNumber(1);
 const std::string SparseFieldIO::k_versionAttrName("version");
 const std::string SparseFieldIO::k_extentsStr("extents");
+const std::string SparseFieldIO::k_extentsMinStr("extents_min");
+const std::string SparseFieldIO::k_extentsMaxStr("extents_max");
 const std::string SparseFieldIO::k_dataWindowStr("data_window");
+const std::string SparseFieldIO::k_dataWindowMinStr("data_window_min");
+const std::string SparseFieldIO::k_dataWindowMaxStr("data_window_max");
 const std::string SparseFieldIO::k_componentsStr("components");
 const std::string SparseFieldIO::k_dataStr("data");
 const std::string SparseFieldIO::k_blockOrderStr("block_order");
@@ -220,10 +224,167 @@ SparseFieldIO::read(hid_t layerGroup, const std::string &filename,
 //----------------------------------------------------------------------------//
 
 FieldBase::Ptr 
-SparseFieldIO::read(OgIGroup &layerGroup, const std::string &filename, 
+SparseFieldIO::read(const OgIGroup &layerGroup, const std::string &filename, 
                     const std::string &layerPath, OgDataType typeEnum)
 {
-  return FieldBase::Ptr();
+  Box3i extents, dataW;
+  int blockOrder;
+  int numBlocks;
+  V3i blockRes;
+  
+  if (!layerGroup.isValid()) {
+    Msg::print(Msg::SevWarning, "Bad layerGroup.");
+    return FieldBase::Ptr();
+  }
+
+  // Check version ---
+
+  OgIAttribute<int> versionAttr = 
+    layerGroup.findAttribute<int>(k_versionAttrName);
+  if (!versionAttr.isValid()) {
+    throw MissingAttributeException("Couldn't find attribute: " +
+                                    k_versionAttrName);
+  }
+  const int version = versionAttr.value();
+
+  if (version != k_versionNumber) {
+    throw UnsupportedVersionException("SparseField version not supported: " +
+                                      lexical_cast<std::string>(version));
+  }
+
+  // Get extents ---
+
+  OgIAttribute<veci32_t> extMinAttr = 
+    layerGroup.findAttribute<veci32_t>(k_extentsMinStr);
+  OgIAttribute<veci32_t> extMaxAttr = 
+    layerGroup.findAttribute<veci32_t>(k_extentsMaxStr);
+  if (!extMinAttr.isValid()) {
+    throw MissingAttributeException("Couldn't find attribute " + 
+                                    k_extentsMinStr);
+  }
+  if (!extMaxAttr.isValid()) {
+    throw MissingAttributeException("Couldn't find attribute " + 
+                                    k_extentsMaxStr);
+  }
+
+  extents.min = extMinAttr.value();
+  extents.max = extMaxAttr.value();
+
+  // Get data window ---
+
+  OgIAttribute<veci32_t> dwMinAttr = 
+    layerGroup.findAttribute<veci32_t>(k_dataWindowMinStr);
+  OgIAttribute<veci32_t> dwMaxAttr = 
+    layerGroup.findAttribute<veci32_t>(k_dataWindowMaxStr);
+  if (!dwMinAttr.isValid()) {
+    throw MissingAttributeException("Couldn't find attribute " + 
+                                    k_dataWindowMinStr);
+  }
+  if (!dwMaxAttr.isValid()) {
+    throw MissingAttributeException("Couldn't find attribute " + 
+                                    k_dataWindowMaxStr);
+  }
+
+  dataW.min = dwMinAttr.value();
+  dataW.max = dwMaxAttr.value();
+
+  // Get num components ---
+
+  OgIAttribute<uint8_t> numComponentsAttr = 
+    layerGroup.findAttribute<uint8_t>(k_componentsStr);
+  if (!numComponentsAttr.isValid()) {
+    throw MissingAttributeException("Couldn't find attribute " + 
+                                    k_componentsStr);
+  }
+
+  // Read block order ---
+
+  OgIAttribute<uint8_t> blockOrderAttr = 
+    layerGroup.findAttribute<uint8_t>(k_blockOrderStr); 
+  if (!blockOrderAttr.isValid()) {
+    throw MissingAttributeException("Couldn't find attribute: " +
+                                    k_blockOrderStr);
+  }
+  blockOrder = blockOrderAttr.value();
+
+  // Read number of blocks total ---
+  
+  OgIAttribute<uint32_t> numBlocksAttr = 
+    layerGroup.findAttribute<uint32_t>(k_numBlocksStr);
+  if (!numBlocksAttr.isValid()) {
+    throw MissingAttributeException("Couldn't find attribute: " +
+                                    k_numBlocksStr);
+  }
+  numBlocks = numBlocksAttr.value();
+
+  // Read block resolution in each dimension ---
+
+  OgIAttribute<veci32_t> blockResAttr = 
+    layerGroup.findAttribute<veci32_t>(k_blockResStr);
+  if (!blockResAttr.isValid()) {
+    throw MissingAttributeException("Couldn't find attribute: " +
+                                    k_blockResStr);
+  }
+  blockRes = blockResAttr.value();
+
+  // ... Check that it matches the # reported by summing the active blocks
+
+  int numCalculatedBlocks = blockRes.x * blockRes.y * blockRes.z;
+  if (numCalculatedBlocks != numBlocks) {
+    throw FileIntegrityException("Incorrect block count in "
+                                 "SparseFieldIO::read()");
+  }
+
+  // Call the appropriate read function based on the data type ---
+
+  OgIAttribute<uint32_t> occupiedBlocksAttr = 
+    layerGroup.findAttribute<uint32_t>(k_numOccupiedBlocksStr);
+  if (!occupiedBlocksAttr.isValid()) {
+    throw MissingAttributeException("Couldn't find attribute: " +
+                                    k_numOccupiedBlocksStr);
+  }
+  
+  // Finally, read the data ---
+
+  FieldBase::Ptr result;
+  
+  OgDataType typeOnDisk = layerGroup.datasetType(k_dataStr);
+
+  if (typeEnum == typeOnDisk) {
+    if (typeEnum == F3DFloat16) {
+      result = readData<float16_t>(layerGroup, extents, dataW, blockOrder,
+                                   numBlocks, filename, layerPath);
+    } else if (typeEnum == F3DFloat32) {
+      result = readData<float32_t>(layerGroup, extents, dataW, blockOrder,
+                                   numBlocks, filename, layerPath);
+    } else if (typeEnum == F3DFloat64) {
+      result = readData<float64_t>(layerGroup, extents, dataW, blockOrder,
+                                   numBlocks, filename, layerPath);
+    } else if (typeEnum == F3DVec16) {
+      result = readData<vec16_t>(layerGroup, extents, dataW, blockOrder,
+                                 numBlocks, filename, layerPath);
+    } else if (typeEnum == F3DVec32) {
+      result = readData<vec32_t>(layerGroup, extents, dataW, blockOrder,
+                                 numBlocks, filename, layerPath);
+    } else if (typeEnum == F3DVec64) {
+      result = readData<vec64_t>(layerGroup, extents, dataW, blockOrder,
+                                 numBlocks, filename, layerPath);
+    } 
+  }
+
+#if 0
+  if (components == 1) {
+    if (isHalf && typeEnum == DataTypeHalf) {
+      SparseField<half>::Ptr field(new SparseField<half>);
+      field->setSize(extents, dataW);
+      field->setBlockOrder(blockOrder);
+      readData<half>(layerGroup, numBlocks, filename, layerPath, field);
+      result = field;      
+    } 
+  } 
+#endif
+
+  return result;
 }
 
 //----------------------------------------------------------------------------//
@@ -282,7 +443,151 @@ SparseFieldIO::write(hid_t layerGroup, FieldBase::Ptr field)
 bool
 SparseFieldIO::write(OgOGroup &layerGroup, FieldBase::Ptr field)
 {
-  return true;
+  using namespace Exc;
+
+  // Add version attribute
+  OgOAttribute<int> version(layerGroup, k_versionAttrName, k_versionNumber);
+
+  SparseField<half>::Ptr halfField = 
+    field_dynamic_cast<SparseField<half> >(field);
+  SparseField<float>::Ptr floatField = 
+    field_dynamic_cast<SparseField<float> >(field);
+  SparseField<double>::Ptr doubleField = 
+    field_dynamic_cast<SparseField<double> >(field);
+  SparseField<V3h>::Ptr vecHalfField = 
+    field_dynamic_cast<SparseField<V3h> >(field);
+  SparseField<V3f>::Ptr vecFloatField = 
+    field_dynamic_cast<SparseField<V3f> >(field);
+  SparseField<V3d>::Ptr vecDoubleField = 
+    field_dynamic_cast<SparseField<V3d> >(field);
+
+  bool success = true;
+
+  if (floatField) {
+    success = writeInternal<float>(layerGroup, floatField);
+  }
+  else if (halfField) {
+    success = writeInternal<half>(layerGroup, halfField);
+  }
+  else if (doubleField) {
+    success = writeInternal<double>(layerGroup, doubleField);
+  }
+  else if (vecFloatField) {
+    success = writeInternal<V3f>(layerGroup, vecFloatField);
+  }
+  else if (vecHalfField) {
+    success = writeInternal<V3h>(layerGroup, vecHalfField);
+  }
+  else if (vecDoubleField) {
+    success = writeInternal<V3d>(layerGroup, vecDoubleField);
+  }
+  else {
+    throw WriteLayerException("SparseFieldIO does not support the given "
+                              "SparseField template parameter");
+  }
+
+  return success;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+typename SparseField<Data_T>::Ptr
+SparseFieldIO::readData(const OgIGroup &location, const Box3i &extents, 
+                        const Box3i &dataW, const size_t blockOrder, 
+                        const size_t numBlocks, const std::string &filename, 
+                        const std::string &layerPath)
+{
+  using namespace std;
+  using namespace Exc;
+  using namespace Sparse;
+
+  typename SparseField<Data_T>::Ptr result(new SparseField<Data_T>);
+  result->setSize(extents, dataW);
+  result->setBlockOrder(blockOrder);
+
+  const bool   dynamicLoading = SparseFileManager::singleton().doLimitMemUse();
+  const int    components     = FieldTraits<Data_T>::dataDims();
+  const size_t numVoxels      = (1 << (result->m_blockOrder * 3));
+  const int    valuesPerBlock = (1 << (result->m_blockOrder * 3)) * components;
+  
+  // Read the number of occupied blocks ---
+
+  OgIAttribute<uint32_t> occupiedBlocksAttr = 
+    location.findAttribute<uint32_t>(k_numOccupiedBlocksStr);
+  if (!occupiedBlocksAttr.isValid()) {
+    throw MissingAttributeException("Couldn't find attribute: " +
+                                    k_numOccupiedBlocksStr);
+  }
+  const int occupiedBlocks = occupiedBlocksAttr.value();
+
+  // Set up the dynamic read info ---
+
+  if (dynamicLoading) {
+    // Set up the field reference
+    //! \todo The valuesPerBlock is wrong. Fix
+    result->addReference(filename, layerPath, valuesPerBlock, occupiedBlocks);
+  }
+
+  // Read the block info data sets ---
+
+  SparseBlock<Data_T> *blocks = result->m_blocks;
+
+  // ... Read the isAllocated array
+
+  {
+    // Grab the data
+    vector<uint8_t> isAllocated(numBlocks);
+    OgIDataset<uint8_t> isAllocatedData = 
+      location.findDataset<uint8_t>("block_is_allocated_data");
+    if (!isAllocatedData.isValid()) {
+      throw MissingGroupException("Couldn't find block_is_allocated_data: ");
+    }
+    isAllocatedData.getData(0, &isAllocated[0], OGAWA_THREAD);
+    // Allocate the blocks
+    for (size_t i = 0; i < numBlocks; ++i) {
+      blocks[i].isAllocated = isAllocated[i];
+      if (!dynamicLoading && isAllocated[i]) {
+        blocks[i].resize(numVoxels);
+      }
+    }
+  }
+
+  // ... Read the emptyValue array ---
+
+  {
+    // Grab the data
+    vector<Data_T> emptyValue(numBlocks);
+    OgIDataset<Data_T> emptyValueData = 
+      location.findDataset<Data_T>("block_empty_value_data");
+    if (!emptyValueData.isValid()) {
+      throw MissingGroupException("Couldn't find block_empty_value_data: ");
+    }
+    emptyValueData.getData(0, &emptyValue[0], OGAWA_THREAD);
+    // Fill in the field
+    for (size_t i = 0; i < numBlocks; ++i) {
+      blocks[i].emptyValue = emptyValue[i];
+    }
+  }
+
+  // Read the data ---
+
+  if (occupiedBlocks > 0) {
+    if (dynamicLoading) {
+      // Defer loading to the sparse cache
+      result->setupReferenceBlocks();
+    } else {
+      // Read the data directly. The memory is already allocated
+      OgSparseDataReader<Data_T> reader(location, numVoxels, occupiedBlocks);
+      for (size_t i = 0; i < numBlocks; ++i) {
+        if (blocks[i].isAllocated) {
+          reader.readBlock(i, blocks[i].data);
+        }
+      }
+    }
+  }
+
+  return result;
 }
 
 //----------------------------------------------------------------------------//

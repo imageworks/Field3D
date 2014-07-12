@@ -120,7 +120,8 @@ public:
   //! Reads the field at the given location and tries to create a MACField
   //! object from it.
   //! \returns Null if no object was read
-  virtual FieldBase::Ptr read(OgIGroup &layerGroup, const std::string &filename, 
+  virtual FieldBase::Ptr read(const OgIGroup &layerGroup, 
+                              const std::string &filename, 
                               const std::string &layerPath,
                               OgDataType typeEnum);
 

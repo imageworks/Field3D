@@ -86,15 +86,22 @@ OgIGroup::findGroup(const std::string &name,
     // Data set 0 is the name
     std::string groupName;
     if (!readString(group, 0, groupName)) {
+      // This is a bad error. Print details.
+      std::cout << "OgIGroup::findGroup() couldn't read subgroup name for "
+                << "group name: " << name << std::endl;
       return Alembic::Ogawa::IGroupPtr();
     }
     // Data set 1 is the type
     OgGroupType type;
     if (!readData(group, 1, type)) {
+      // This is a bad error. Print details.
+      std::cout << "OgIGroup::findGroup() couldn't read subgroup type for "
+                << "group name: " << name << std::endl;
       return Alembic::Ogawa::IGroupPtr();
     }
     // Check that group type matches
     if (type != groupType) {
+      // This is not an error.
       continue;
     }
     // Check if name matches

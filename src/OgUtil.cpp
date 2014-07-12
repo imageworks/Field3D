@@ -34,6 +34,13 @@ bool readString(Alembic::Ogawa::IGroupPtr group, const size_t idx,
 {
   // Grab data
   Alembic::Ogawa::IDataPtr data = group->getData(idx, OGAWA_THREAD);
+  // Check that we got something
+  if (!data) {
+    std::cout << "OgUtil::readString() got null data for index " 
+              << idx << std::endl;
+    std::cout << "  numChildren(): " << group->getNumChildren() << std::endl;
+    return false;
+  }
   // Check data length
   const size_t length = data->getSize();
   if (length % sizeof(std::string::value_type) != 0) {

@@ -574,10 +574,10 @@ private:
   bool readPartitionAndLayerInfo();
 
   //! Read metadata for this layer
-  bool readMetadata(OgIGroup &metadataGroup, FieldBase::Ptr field) const;
+  bool readMetadata(const OgIGroup &metadataGroup, FieldBase::Ptr field) const;
 
   //! Read global metadata for this file
-  bool readMetadata(OgIGroup &metadataGroup);
+  bool readMetadata(const OgIGroup &metadataGroup);
 
   // Data members --------------------------------------------------------------
 
@@ -818,80 +818,6 @@ private:
   boost::shared_ptr<Field3DOutputFileHDF5> m_hdf5;
 
 };
-
-//----------------------------------------------------------------------------//
-// Template implementations
-//----------------------------------------------------------------------------//
-
-template <class Data_T>
-typename Field<Data_T>::Vec
-Field3DInputFile::readLayers(const std::string &name) const
-{
-  using std::vector;
-  using std::string;
-
-  typedef typename Field<Data_T>::Ptr FieldPtr;
-  typedef typename Field<Data_T>::Vec FieldList;
-  
-  FieldList ret;
-  std::vector<std::string> parts;
-  getIntPartitionNames(parts);
-
-  for (vector<string>::iterator p = parts.begin(); p != parts.end(); ++p) {
-    vector<std::string> layers;
-    getIntScalarLayerNames(layers, *p);
-    for (vector<string>::iterator l = layers.begin(); l != layers.end(); ++l) {
-      // Only read if it matches the name
-      if ((name.length() == 0) || (*l == name)) {
-        FieldPtr mf = readLayer<Data_T>(*p, *l);
-        if (mf) {
-          ret.push_back(mf);
-        }
-      }
-    }
-  }
-  
-  return ret;
-}
-
-//----------------------------------------------------------------------------//
-
-template <class Data_T>
-typename Field<Data_T>::Vec
-Field3DInputFile::readLayers(const std::string &partitionName, 
-                             const std::string &layerName) const
-{
-  using namespace std;
-  
-  typedef typename Field<Data_T>::Ptr FieldPtr;
-  typedef typename Field<Data_T>::Vec FieldList;
-
-  FieldList ret;
-
-  if ((layerName.length() == 0) || (partitionName.length() == 0))
-    return ret;
-  
-  std::vector<std::string> parts;
-  getIntPartitionNames(parts);
- 
-  for (vector<string>::iterator p = parts.begin(); p != parts.end(); ++p) {
-    std::vector<std::string> layers;
-    getIntScalarLayerNames(layers, *p);
-    if (removeUniqueId(*p) == partitionName) {
-      for (vector<string>::iterator l = layers.begin(); 
-           l != layers.end(); ++l) {
-        // Only read if it matches the name
-        if (*l == layerName) {
-          FieldPtr mf = readLayer<Data_T>(*p, *l);
-          if (mf)
-            ret.push_back(mf);
-        }
-      }
-    }
-  }
-  
-  return ret;
-}
 
 //----------------------------------------------------------------------------//
 

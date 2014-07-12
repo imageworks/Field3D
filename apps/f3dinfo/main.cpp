@@ -336,7 +336,7 @@ void printFileInfo(const std::string &filename, const Options &options)
 
     }
   }
-
+  
   cout << "  Global metadata" << endl;
 
   cout << "    Int metadata:" << endl;

@@ -165,7 +165,7 @@ DenseFieldIO::read(hid_t layerGroup, const std::string &/*filename*/,
 //----------------------------------------------------------------------------//
 
 FieldBase::Ptr
-DenseFieldIO::read(OgIGroup &lg, const std::string &/*filename*/, 
+DenseFieldIO::read(const OgIGroup &lg, const std::string &/*filename*/, 
                    const std::string &/*layerPath*/, OgDataType typeEnum)
 {
   Box3i extents, dataW;

@@ -155,7 +155,8 @@ MACFieldIO::read(hid_t layerGroup, const std::string & /* filename */,
 //----------------------------------------------------------------------------//
 
 FieldBase::Ptr
-MACFieldIO::read(OgIGroup &layerGroup, const std::string & /* filename */, 
+MACFieldIO::read(const OgIGroup &layerGroup, 
+                 const std::string & /* filename */, 
                  const std::string & /* layerPath */,
                  OgDataType typeEnum)
 {

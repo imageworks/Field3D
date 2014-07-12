@@ -121,7 +121,8 @@ public:
   //! Reads the field at the given location and tries to create a DenseField
   //! object from it. Calls out to readData() for template-specific work.
   //! \returns Null if no object was read
-  virtual FieldBase::Ptr read(OgIGroup &layerGroup, const std::string &filename,
+  virtual FieldBase::Ptr read(const OgIGroup &layerGroup, 
+                              const std::string &filename,
                               const std::string &layerPath,
                               OgDataType typeEnum);
 
@@ -166,7 +167,8 @@ private:
   //! This call performs the actual reading of data from disk.
   template <class Data_T>
   typename DenseField<Data_T>::Ptr 
-  readData(OgIGroup &layerGroup, const Box3i &extents, const Box3i &dataW);
+  readData(const OgIGroup &layerGroup, const Box3i &extents, 
+           const Box3i &dataW);
 
   // Strings -------------------------------------------------------------------
 
@@ -384,7 +386,7 @@ DenseFieldIO::readData(hid_t dataSet, const Box3i &extents, const Box3i &dataW)
 
 template <class Data_T>
 typename DenseField<Data_T>::Ptr 
-DenseFieldIO::readData(OgIGroup &layerGroup, const Box3i &extents, 
+DenseFieldIO::readData(const OgIGroup &layerGroup, const Box3i &extents, 
                        const Box3i &dataW)
 {
   typename DenseField<Data_T>::Ptr field(new DenseField<Data_T>);

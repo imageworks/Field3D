@@ -1023,14 +1023,19 @@ void testField3DFile()
     sField->setMapping(mm);
     sField->clear(1.2);
     sField->metadata().setFloatMetadata("testfloat", 1.0f);
+    sField->metadata().setIntMetadata("testint", 2);
+    sField->metadata().setStrMetadata("teststring", "3!");
 
     // Create the vector field
     typename VField::Ptr vField(new VField);
     vField->setSize(extents, dataWindow);
     MatrixFieldMapping::Ptr mapping(new MatrixFieldMapping);
+    mapping->setLocalToWorld(mtx);
     vField->setMapping(mapping);
     vField->clear(Vec3_T(0.5));
     vField->metadata().setFloatMetadata("testfloat", 1.0f);
+    vField->metadata().setIntMetadata("testint", 2);
+    vField->metadata().setStrMetadata("teststring", "3!");
 
     // Fill scalar fields with all data 
     std::for_each(sField->begin(), sField->end(), WriteSequence<Data_T>());
@@ -1040,21 +1045,25 @@ void testField3DFile()
     Box3i toFill(dataWindow);
     toFill.min = V3i(30, 30, 30);
     toFill.max = V3i(49, 49, 40);
-    std::for_each(vField->begin(toFill), vField->end(toFill), 
+    std::for_each(vField->begin(), vField->end(), 
                   WriteSequence<Vec3_T>());
 
     // Create the output file
-    Field3DOutputFile out;
+    Field3DOutputFile out, outS, outV;
     bool createSuccess = out.create(filename);
+    outS.create(filename + ".s");
+    outV.create(filename + ".v");
     BOOST_CHECK_EQUAL(createSuccess, true);
 
     // Write two layers
     bool writeSuccess;
     writeSuccess = out.writeScalarLayer<Data_T>(field1Name, densityName, 
                                                 sField);
+    outS.writeScalarLayer<Data_T>(field1Name, densityName, sField);
     BOOST_CHECK_EQUAL(writeSuccess, true);
     writeSuccess = out.writeVectorLayer<Data_T>(field2Name, velName, 
                                                 vField);
+    outV.writeVectorLayer<Data_T>(field2Name, velName, vField);
     BOOST_CHECK_EQUAL(writeSuccess, true);
 
     /// write out global metadata
@@ -1079,20 +1088,20 @@ void testField3DFile()
     iFile.open(filename);
 
     // check the global meta data are correct
-    V3f inMetaVecFloat = iFile.metadata().vecFloatMetadata(
-      "testGlobalMetadataVecFloat", V3f(9.0));
+    V3f inMetaVecFloat = 
+      iFile.metadata().vecFloatMetadata("testGlobalMetadataVecFloat", V3f(9.0));
     BOOST_CHECK_EQUAL(metaVecFloat,inMetaVecFloat);
-    float inMetaFloat = iFile.metadata().floatMetadata(
-      "testGlobalMetadataFloat", 9.0f);
+    float inMetaFloat = 
+      iFile.metadata().floatMetadata("testGlobalMetadataFloat", 9.0f);
     BOOST_CHECK_EQUAL(metaFloat,inMetaFloat);
-    V3i inMetaVecInt = iFile.metadata().vecIntMetadata(
-      "testGlobalMetadataVecInt", V3i(9));
+    V3i inMetaVecInt = 
+      iFile.metadata().vecIntMetadata("testGlobalMetadataVecInt", V3i(9));
     BOOST_CHECK_EQUAL(metaVecInt,inMetaVecInt);
-    int inMetaInt = iFile.metadata().intMetadata(
-      "testGlobalMetadataInt", 9); 
+    int inMetaInt = 
+      iFile.metadata().intMetadata("testGlobalMetadataInt", 9); 
     BOOST_CHECK_EQUAL(metaInt,inMetaInt);
-    string inMetaStr = iFile.metadata().strMetadata(
-      "testGlobalMetadataStr", "Hello");
+    string inMetaStr = 
+      iFile.metadata().strMetadata("testGlobalMetadataStr", "Hello");
     BOOST_CHECK_EQUAL(metaStr,inMetaStr);
 
 
@@ -1157,12 +1166,37 @@ void testField3DFile()
       ScopedPrintTimer t;
       BOOST_CHECK_EQUAL(isIdentical<Data_T>(s1, s2), true);
     }
-    
+
+#if 0
+    Box3i dw = v1->dataWindow();
+    Field<Vec3_T> *p1 = v1.get(), *p2 = v2.get();
+    for (int k = dw.min.z; k <= dw.max.z; ++k) {
+      for (int j = dw.min.y; j <= dw.max.y; ++j) {
+        for (int i = dw.min.x; i <= dw.max.x; ++i) {
+          if (p1->value(i, j, k) != p2->value(i, j, k)) {
+            cout << "Mismatch voxel: " << V3i(i, j, k) << endl;
+          }
+        }
+      }
+    }
+#endif
+
     // Check vector layer data
     {
       Msg::print("Verifying vector data is identical");
       ScopedPrintTimer t;
       BOOST_CHECK_EQUAL(isIdentical<Vec3_T>(v1, v2), true);
+    }
+
+    // Check scalar metadata
+    {
+      Msg::print("Verifying scalar field's metadata is identical");
+      const float fMeta  = s2->metadata().floatMetadata("testfloat", 0.0f);
+      const int iMeta    = s2->metadata().intMetadata("testint", 0);
+      const string sMeta = s2->metadata().strMetadata("teststring", "");
+      BOOST_CHECK_EQUAL(fMeta, 1.0f);
+      BOOST_CHECK_EQUAL(iMeta, 2);
+      BOOST_CHECK_EQUAL(sMeta, "3!");
     }
  
   }

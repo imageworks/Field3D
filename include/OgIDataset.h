@@ -125,7 +125,8 @@ OgIDataset<T>::dataSize(const size_t index, const size_t threadId) const
 //----------------------------------------------------------------------------//
 
 template <typename T>
-bool OgIDataset<T>::getData(const size_t index, T *data, const size_t threadId) const
+bool OgIDataset<T>::getData(const size_t index, T *data, 
+                            const size_t threadId) const
 {
   // Indices start at OGAWA_DATASET_BASEOFFSET
   const size_t internalIndex = index + OGAWA_DATASET_BASEOFFSET;

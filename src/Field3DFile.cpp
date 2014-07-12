@@ -186,7 +186,7 @@ namespace {
 
   //! This function creates a FieldMappingIO instance based on className 
   //! read from mappingGroup location which then reads FieldMapping data
-  FIELD3D_API FieldMapping::Ptr readFieldMapping(OgIGroup &mappingGroup)
+  FIELD3D_API FieldMapping::Ptr readFieldMapping(const OgIGroup &mappingGroup)
   {
     ClassFactory &factory = ClassFactory::singleton();
     
@@ -245,7 +245,7 @@ namespace {
   //! which then reads the field data from layerGroup location
   template <class Data_T>
   typename Field<Data_T>::Ptr 
-  readField(const std::string &className, OgIGroup &layerGroup,
+  readField(const std::string &className, const OgIGroup &layerGroup,
             const std::string &filename, const std::string &layerPath)
   {
     ClassFactory &factory = ClassFactory::singleton();
@@ -766,12 +766,13 @@ bool Field3DInputFile::open(const string &filename)
       
     }
 
-    // Read the global metadata
+    // Read the global metadata. This does not always exists, 
+    // depends on if it was written or not.
     try { 
-      OgIGroup metadataGroup = m_root->findGroup("field3d_global_metadata");
+      const OgIGroup metadataGroup = m_root->findGroup("field3d_global_metadata");
       if (metadataGroup.isValid()) {
         readMetadata(metadataGroup);
-      }
+      } 
     }
     catch (...) {
       Msg::print(Msg::SevWarning, 
@@ -869,12 +870,12 @@ bool Field3DInputFile::readPartitionAndLayerInfo()
     // Grab the name
     const std::string &name = (**i).name;
     // Open the partition group
-    OgIGroup partitionGroup = m_root->findGroup(name);
+    const OgIGroup partitionGroup = m_root->findGroup(name);
     if (!partitionGroup.isValid()) {
       Msg::print(Msg::SevWarning, "Couldn't open partition group " + name);
     }
     // Open the mapping group
-    OgIGroup mappingGroup = partitionGroup.findGroup(k_mappingStr);
+    const OgIGroup mappingGroup = partitionGroup.findGroup(k_mappingStr);
     if (!mappingGroup.isValid()) {
       Msg::print(Msg::SevWarning, "Couldn't open mapping group " + name);
     }
@@ -898,7 +899,7 @@ bool Field3DInputFile::readPartitionAndLayerInfo()
     // Grab the name
     const std::string &partitionName = (**i).name;
     // Open the partition group
-    OgIGroup partitionGroup = m_root->findGroup(partitionName);
+    const OgIGroup partitionGroup = m_root->findGroup(partitionName);
     if (!partitionGroup.isValid()) {
       Msg::print(Msg::SevWarning, "Couldn't open partition group " + 
                  partitionName);
@@ -927,7 +928,7 @@ bool Field3DInputFile::readPartitionAndLayerInfo()
 
 //----------------------------------------------------------------------------//
 
-bool Field3DInputFile::readMetadata(OgIGroup &metadataGroup, 
+bool Field3DInputFile::readMetadata(const OgIGroup &metadataGroup, 
                                     FieldBase::Ptr field) const
 {
   return readMeta(metadataGroup, field->metadata());
@@ -935,7 +936,7 @@ bool Field3DInputFile::readMetadata(OgIGroup &metadataGroup,
 
 //----------------------------------------------------------------------------//
 
-bool Field3DInputFile::readMetadata(OgIGroup &metadataGroup)
+bool Field3DInputFile::readMetadata(const OgIGroup &metadataGroup)
 {
   return readMeta(metadataGroup, metadata());
 }
@@ -1525,7 +1526,7 @@ Field3DInputFile::readLayer(const std::string &intPartitionName,
   }
 
   // Open the partition group
-  OgIGroup partitionGroup = m_root->findGroup(intPartitionName);
+  const OgIGroup partitionGroup = m_root->findGroup(intPartitionName);
   if (!partitionGroup.isValid()) {
     Msg::print(Msg::SevWarning, "Couldn't open partition group " + 
                intPartitionName);
@@ -1533,7 +1534,7 @@ Field3DInputFile::readLayer(const std::string &intPartitionName,
   }
 
   // Open the layer group
-  OgIGroup layerGroup = partitionGroup.findGroup(layerName);
+  const OgIGroup layerGroup = partitionGroup.findGroup(layerName);
   if (!layerGroup.isValid()) {
     Msg::print(Msg::SevWarning, "Couldn't open layer group " + 
                layerName);
@@ -1563,7 +1564,7 @@ Field3DInputFile::readLayer(const std::string &intPartitionName,
   }
   
   // Read the metadata
-  OgIGroup metadataGroup = layerGroup.findGroup("metadata");
+  const OgIGroup metadataGroup = layerGroup.findGroup("metadata");
   if (metadataGroup.isValid()) {
     readMetadata(metadataGroup, field);
   }
@@ -1574,6 +1575,78 @@ Field3DInputFile::readLayer(const std::string &intPartitionName,
   field->setMapping(part->mapping);
 
   return field;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+typename Field<Data_T>::Vec
+Field3DInputFile::readLayers(const std::string &name) const
+{
+  using std::vector;
+  using std::string;
+
+  typedef typename Field<Data_T>::Ptr FieldPtr;
+  typedef typename Field<Data_T>::Vec FieldList;
+  
+  FieldList ret;
+  std::vector<std::string> parts;
+  getIntPartitionNames(parts);
+
+  for (vector<string>::iterator p = parts.begin(); p != parts.end(); ++p) {
+    vector<std::string> layers;
+    getIntScalarLayerNames(layers, *p);
+    for (vector<string>::iterator l = layers.begin(); l != layers.end(); ++l) {
+      // Only read if it matches the name
+      if ((name.length() == 0) || (*l == name)) {
+        FieldPtr mf = readLayer<Data_T>(*p, *l);
+        if (mf) {
+          ret.push_back(mf);
+        }
+      }
+    }
+  }
+  
+  return ret;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+typename Field<Data_T>::Vec
+Field3DInputFile::readLayers(const std::string &partitionName, 
+                             const std::string &layerName) const
+{
+  using namespace std;
+  
+  typedef typename Field<Data_T>::Ptr FieldPtr;
+  typedef typename Field<Data_T>::Vec FieldList;
+
+  FieldList ret;
+
+  if ((layerName.length() == 0) || (partitionName.length() == 0))
+    return ret;
+  
+  std::vector<std::string> parts;
+  getIntPartitionNames(parts);
+ 
+  for (vector<string>::iterator p = parts.begin(); p != parts.end(); ++p) {
+    std::vector<std::string> layers;
+    getIntScalarLayerNames(layers, *p);
+    if (removeUniqueId(*p) == partitionName) {
+      for (vector<string>::iterator l = layers.begin(); 
+           l != layers.end(); ++l) {
+        // Only read if it matches the name
+        if (*l == layerName) {
+          FieldPtr mf = readLayer<Data_T>(*p, *l);
+          if (mf)
+            ret.push_back(mf);
+        }
+      }
+    }
+  }
+  
+  return ret;
 }
 
 //----------------------------------------------------------------------------//
@@ -1594,6 +1667,8 @@ FIELD3D_INSTANTIATION_WRITELAYER(vec64_t);
 
 //----------------------------------------------------------------------------//
 
+#if 0
+
 #define FIELD3D_INSTANTIATION_READLAYER(type)                           \
   template                                                              \
   Field<type>::Ptr                                                      \
@@ -1606,6 +1681,37 @@ FIELD3D_INSTANTIATION_READLAYER(float64_t);
 FIELD3D_INSTANTIATION_READLAYER(vec16_t);
 FIELD3D_INSTANTIATION_READLAYER(vec32_t);
 FIELD3D_INSTANTIATION_READLAYER(vec64_t);
+
+#endif
+
+//----------------------------------------------------------------------------//
+
+#define FIELD3D_INSTANTIATION_READLAYERS1(type)                         \
+  template                                                              \
+  Field<type>::Vec                                                      \
+  Field3DInputFile::readLayers<type>(const std::string &name) const;    \
+
+FIELD3D_INSTANTIATION_READLAYERS1(float16_t);
+FIELD3D_INSTANTIATION_READLAYERS1(float32_t);
+FIELD3D_INSTANTIATION_READLAYERS1(float64_t);
+FIELD3D_INSTANTIATION_READLAYERS1(vec16_t);
+FIELD3D_INSTANTIATION_READLAYERS1(vec32_t);
+FIELD3D_INSTANTIATION_READLAYERS1(vec64_t);
+
+//----------------------------------------------------------------------------//
+
+#define FIELD3D_INSTANTIATION_READLAYERS2(type)                         \
+  template                                                              \
+  Field<type>::Vec                                                      \
+  Field3DInputFile::readLayers<type>(const std::string &partitionName,    \
+                                     const std::string &layerName) const; \
+
+FIELD3D_INSTANTIATION_READLAYERS2(float16_t);
+FIELD3D_INSTANTIATION_READLAYERS2(float32_t);
+FIELD3D_INSTANTIATION_READLAYERS2(float64_t);
+FIELD3D_INSTANTIATION_READLAYERS2(vec16_t);
+FIELD3D_INSTANTIATION_READLAYERS2(vec32_t);
+FIELD3D_INSTANTIATION_READLAYERS2(vec64_t);
 
 //----------------------------------------------------------------------------//
 

@@ -122,7 +122,8 @@ public:
   //! Read the field at the given Ogawa group
   //! \returns Pointer to the created field, or a null pointer if the field
   //! couldn't be read.
-  virtual FieldBase::Ptr read(OgIGroup &layerGroup, const std::string &filename,
+  virtual FieldBase::Ptr read(const OgIGroup &layerGroup, 
+                              const std::string &filename,
                               const std::string &layerPath,
                               OgDataType typeEnum) = 0;
 

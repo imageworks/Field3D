@@ -187,7 +187,7 @@ MIPFieldIO::read(hid_t layerGroup, const std::string &filename,
 //----------------------------------------------------------------------------//
 
 FieldBase::Ptr
-MIPFieldIO::read(OgIGroup &layerGroup, const std::string &filename, 
+MIPFieldIO::read(const OgIGroup &layerGroup, const std::string &filename, 
                  const std::string &layerPath, OgDataType typeEnum)
 {
   return FieldBase::Ptr();

@@ -98,7 +98,7 @@ NullFieldMappingIO::read(hid_t mappingGroup)
 //----------------------------------------------------------------------------//
 
 FieldMapping::Ptr
-NullFieldMappingIO::read(OgIGroup &mappingGroup)
+NullFieldMappingIO::read(const OgIGroup &mappingGroup)
 {
   OgIAttribute<string> data = 
     mappingGroup.findAttribute<string>(k_nullMappingDataName);
@@ -201,7 +201,7 @@ MatrixFieldMappingIO::read(hid_t mappingGroup)
 //----------------------------------------------------------------------------//
 
 FieldMapping::Ptr
-MatrixFieldMappingIO::read(OgIGroup &mappingGroup)
+MatrixFieldMappingIO::read(const OgIGroup &mappingGroup)
 {
   M44d mtx;
   int numSamples = 0;
@@ -411,7 +411,7 @@ FrustumFieldMappingIO::read(hid_t mappingGroup)
 //----------------------------------------------------------------------------//
 
 FieldMapping::Ptr
-FrustumFieldMappingIO::read(OgIGroup &mappingGroup)
+FrustumFieldMappingIO::read(const OgIGroup &mappingGroup)
 {
   int numSamples = 0;
 

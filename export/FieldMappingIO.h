@@ -102,7 +102,7 @@ public:
   //! Read the field at the given hdf5 group
   //! \returns Pointer to the created field, or a null pointer if the field
   //! couldn't be read.
-  virtual FieldMapping::Ptr read(OgIGroup &mappingGroup) = 0;
+  virtual FieldMapping::Ptr read(const OgIGroup &mappingGroup) = 0;
 
   //! Write the field to the given mapping group
   //! \returns Whether the operation was successful
@@ -174,7 +174,7 @@ public:
   //! Reads the field mapping and tries to create a NullFieldMapping
   //! object from it.
   //! \returns Null if no object was read
-  virtual FieldMapping::Ptr read(OgIGroup &mappingGroup);
+  virtual FieldMapping::Ptr read(const OgIGroup &mappingGroup);
 
   //! Writes the given field mapping to disk.
   //! \return true if successful, otherwise false
@@ -246,7 +246,7 @@ public:
   //! Reads the field mapping and tries to create a MatrixFieldMapping
   //! object from it.
   //! \returns Matrix if no object was read
-  virtual FieldMapping::Ptr read(OgIGroup &mappingGroup);
+  virtual FieldMapping::Ptr read(const OgIGroup &mappingGroup);
 
   //! Writes the given field mapping to disk.
   //! \return true if successful, otherwise false
@@ -318,7 +318,7 @@ public:
   //! Reads the field mapping and tries to create a FrustumFieldMapping
   //! object from it.
   //! \returns Null pointer if no object was read
-  virtual FieldMapping::Ptr read(OgIGroup &mappingGroup);
+  virtual FieldMapping::Ptr read(const OgIGroup &mappingGroup);
 
   //! Writes the given field mapping to disk.
   //! \return true if successful, otherwise false

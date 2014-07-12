@@ -121,7 +121,7 @@ public:
   //! Reads the field at the given location and tries to create a MIPField
   //! object from it. Calls out to readData() for template-specific work.
   //! \returns Null if no object was read
-  virtual FieldBase::Ptr read(OgIGroup &layerGroup, 
+  virtual FieldBase::Ptr read(const OgIGroup &layerGroup, 
                               const std::string &filename, 
                               const std::string &layerPath,
                               OgDataType typeEnum);

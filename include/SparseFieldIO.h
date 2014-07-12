@@ -53,6 +53,8 @@
 
 #include <hdf5.h>
 
+#include "OgIO.h"
+#include "OgSparseDataReader.h"
 #include "SparseDataReader.h"
 #include "SparseField.h"
 #include "SparseFile.h"
@@ -122,7 +124,8 @@ public:
   //! Reads the field at the given location and tries to create a SparseField
   //! object from it.
   //! \returns Null if no object was read
-  virtual FieldBase::Ptr read(OgIGroup &layerGroup, const std::string &filename, 
+  virtual FieldBase::Ptr read(const OgIGroup &layerGroup, 
+                              const std::string &filename, 
                               const std::string &layerPath,
                               OgDataType typeEnum);
 
@@ -146,6 +149,11 @@ private:
   template <class Data_T>
   bool writeInternal(hid_t layerGroup, typename SparseField<Data_T>::Ptr field);
 
+  //! This call writes all the attributes and sets up the data space.
+  template <class Data_T>
+  bool writeInternal(OgOGroup &layerGroup, 
+                     typename SparseField<Data_T>::Ptr field);
+
   //! Reads the data that is dependent on the data type on disk
   template <class Data_T>
   bool readData(hid_t location, 
@@ -154,12 +162,23 @@ private:
                 const std::string &layerPath, 
                 typename SparseField<Data_T>::Ptr result);
 
+  template <class Data_T>
+  typename SparseField<Data_T>::Ptr
+  readData(const OgIGroup &location, const Box3i &extents, 
+           const Box3i &dataWindow, const size_t blockOrder, 
+           const size_t numBlocks, const std::string &filename, 
+           const std::string &layerPath);
+
   // Strings -------------------------------------------------------------------
 
   static const int         k_versionNumber;
   static const std::string k_versionAttrName;
   static const std::string k_extentsStr;
+  static const std::string k_extentsMinStr;
+  static const std::string k_extentsMaxStr;
   static const std::string k_dataWindowStr;
+  static const std::string k_dataWindowMinStr;
+  static const std::string k_dataWindowMaxStr;
   static const std::string k_componentsStr;
   static const std::string k_blockOrderStr;
   static const std::string k_numBlocksStr;
@@ -284,7 +303,7 @@ bool SparseFieldIO::writeInternal(hid_t layerGroup,
   for (int i = 0; i < numBlocks; ++i) {
     if (blocks[i].isAllocated) {
       occupiedBlocks++;
-  }
+    }
   }
 
   if (!writeAttribute(layerGroup, k_numOccupiedBlocksStr, 1, occupiedBlocks)) {
@@ -376,6 +395,87 @@ bool SparseFieldIO::writeInternal(hid_t layerGroup,
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
+bool SparseFieldIO::writeInternal(OgOGroup &layerGroup, 
+                                  typename SparseField<Data_T>::Ptr field)
+{
+  using namespace Exc;
+  using namespace Sparse;
+
+  SparseBlock<Data_T> *blocks = field->m_blocks;
+
+  const int    components     = FieldTraits<Data_T>::dataDims();
+  const int    bits           = DataTypeTraits<Data_T>::h5bits();
+  const V3i   &blockRes       = field->m_blockRes;
+  const size_t numBlocks      = blockRes.x * blockRes.y * blockRes.z;
+  const size_t numVoxels      = (1 << (field->m_blockOrder * 3));
+  
+  const Box3i ext(field->extents()), dw(field->dataWindow());
+
+  // Add attributes ---
+
+  OgOAttribute<veci32_t> extMinAttr(layerGroup, k_extentsMinStr, ext.min);
+  OgOAttribute<veci32_t> extMaxAttr(layerGroup, k_extentsMaxStr, ext.max);
+  
+  OgOAttribute<veci32_t> dwMinAttr(layerGroup, k_dataWindowMinStr, dw.min);
+  OgOAttribute<veci32_t> dwMaxAttr(layerGroup, k_dataWindowMaxStr, dw.max);
+
+  OgOAttribute<uint8_t> componentsAttr(layerGroup, k_componentsStr, components);
+
+  OgOAttribute<uint8_t> bitsAttr(layerGroup, k_bitsPerComponentStr, bits);
+
+  OgOAttribute<uint8_t> blockOrderAttr(layerGroup, k_blockOrderStr, 
+                                       field->m_blockOrder);
+
+  OgOAttribute<uint32_t> numBlocksAttr(layerGroup, k_numBlocksStr, numBlocks);
+
+  OgOAttribute<veci32_t> blockResAttr(layerGroup, k_blockResStr, blockRes);
+
+  // Write the isAllocated array
+  std::vector<uint8_t> isAllocated(numBlocks);
+  for (size_t i = 0; i < numBlocks; ++i) {
+    isAllocated[i] = static_cast<uint8_t>(blocks[i].isAllocated);
+  }
+  OgODataset<uint8_t> isAllocatedData(layerGroup, "block_is_allocated_data");
+  isAllocatedData.addData(numBlocks, &isAllocated[0]);
+
+  // Write the emptyValue array
+  std::vector<Data_T> emptyValue(numBlocks);
+  for (size_t i = 0; i < numBlocks; ++i) {
+    emptyValue[i] = static_cast<Data_T>(blocks[i].emptyValue);
+  }
+  OgODataset<Data_T> emptyValueData(layerGroup, "block_empty_value_data");
+  emptyValueData.addData(numBlocks, &emptyValue[0]);
+    
+  // Count the number of occupied blocks
+  int occupiedBlocks = 0;
+  for (size_t i = 0; i < numBlocks; ++i) {
+    if (blocks[i].isAllocated) {
+      occupiedBlocks++;
+    }
+  }
+  OgOAttribute<uint32_t> numOccupiedBlockAttr(layerGroup, 
+                                              k_numOccupiedBlocksStr, 
+                                              occupiedBlocks);
+
+  // Add data to file ---
+
+  if (occupiedBlocks > 0) {
+    // Create the dataset
+    OgODataset<Data_T> data(layerGroup, k_dataStr);
+    // Write each block
+    for (size_t i = 0; i < numBlocks; ++i) {
+      if (blocks[i].isAllocated) {
+        data.addData(numVoxels, blocks[i].data);
+      }
+    }
+  }
+
+  return true;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
 bool SparseFieldIO::readData(hid_t location, 
                              int numBlocks, 
                              const std::string &filename, 
@@ -392,7 +492,8 @@ bool SparseFieldIO::readData(hid_t location,
   bool dynamicLoading = SparseFileManager::singleton().doLimitMemUse();
 
   int components = FieldTraits<Data_T>::dataDims();
-  int valuesPerBlock = (1 << (result->m_blockOrder * 3)) * components;
+  int numVoxels = (1 << (result->m_blockOrder * 3));
+  int valuesPerBlock = numVoxels * components;
   
   // Read the number of occupied blocks ---
 
@@ -421,7 +522,7 @@ bool SparseFieldIO::readData(hid_t location,
     for (int i = 0; i < numBlocks; ++i) {
       blocks[i].isAllocated = isAllocated[i];
       if (!dynamicLoading && isAllocated[i]) {
-        blocks[i].resize(valuesPerBlock);
+        blocks[i].resize(numVoxels);
       }
     }
   }
@@ -460,7 +561,7 @@ bool SparseFieldIO::readData(hid_t location,
         
         for (; b != bend && mem < maxMemPerPass; ++b) {
           if (blocks[b].isAllocated) {
-            mem += sizeof(Data_T)*valuesPerBlock;
+            mem += sizeof(Data_T)*numVoxels;
             memoryList.push_back(blocks[b].data);
           }
         }

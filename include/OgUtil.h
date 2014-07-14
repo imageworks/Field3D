@@ -41,7 +41,8 @@ FIELD3D_NAMESPACE_OPEN
 enum OgGroupType {
   F3DGroupType = 0,
   F3DAttributeType,
-  F3DDatasetType
+  F3DDatasetType,
+  F3DCompressedDatasetType
 };
 
 //----------------------------------------------------------------------------//

@@ -50,6 +50,8 @@
 #include <hdf5.h>
 #include <string.h> // for memcpy
 
+#include <zlib.h>
+
 #include "OgIO.h"
 #include "Hdf5Util.h"
 
@@ -66,6 +68,8 @@ FIELD3D_NAMESPACE_OPEN
 //! This class gets used by SparseFieldIO and SparseFileManager to read
 //! the block data. On creation it will open the data set and not close
 //! it until the object is destroyed
+//! \note This class should not be accessed by multiple threads. Instead,
+//! instantiate a separate one for each thread.
 //! \ingroup file_int
 template <class Data_T>
 class OgSparseDataReader
@@ -77,7 +81,7 @@ public:
   //! Constructor. Requires knowledge of the Ogawa location where data
   //! is stored
   OgSparseDataReader(const OgIGroup &location, const size_t valuesPerBlock, 
-                     const size_t occupiedBlocks);
+                     const size_t occupiedBlocks, const bool isCompressed);
 
   // Main methods --------------------------------------------------------------
 
@@ -89,11 +93,19 @@ private:
 
   // Data members --------------------------------------------------------------
 
+  //! Og Dataset
   OgIDataset<Data_T> m_dataset;
-  
+  //! Compressed Og Dataset
+  OgICDataset<Data_T> m_cDataset;
+  //! Number of voxels per block
   const size_t m_numVoxels;
-
+  //! Data name string
   const std::string k_dataStr;
+  //! Whether the data is compressed
+  const bool m_isCompressed;
+
+  //! Cache for decompression
+  std::vector<uint8_t> m_compressionCache;
 };
 
 //----------------------------------------------------------------------------//
@@ -103,26 +115,51 @@ private:
 template <class Data_T>
 OgSparseDataReader<Data_T>::OgSparseDataReader(const OgIGroup &location, 
                                                const size_t numVoxels, 
-                                               const size_t occupiedBlocks) 
+                                               const size_t occupiedBlocks,
+                                               const bool isCompressed) 
   : m_numVoxels(numVoxels), 
-    k_dataStr("data")
+    k_dataStr("data"),
+    m_isCompressed(isCompressed)
 {
   using namespace Exc;
 
-  m_dataset = location.findDataset<Data_T>(k_dataStr);
-
-  if (!m_dataset.isValid()) {
-    throw ReadDataException("Couldn't open data set: " + k_dataStr);
+  if (isCompressed) {
+    // Find the dataset
+    m_cDataset = location.findCompressedDataset<Data_T>(k_dataStr);
+    // Check validity
+    if (!m_cDataset.isValid()) {
+      throw ReadDataException("Couldn't open compressed data set: " + 
+                              k_dataStr);
+    }
+    // Check element count
+    if (m_cDataset.numDataElements() != occupiedBlocks) {
+      throw ReadDataException("Block count mismatch in SparseDataReader");
+    }
+    // Check data type
+    OgDataType typeOnDisk = location.compressedDatasetType(k_dataStr);
+    if (typeOnDisk != OgawaTypeTraits<Data_T>::typeEnum()) {
+      throw ReadDataException("Data type mismatch in SparseDataReader");
+    }
+    // Set the compresession cache size
+    m_compressionCache.resize(compressBound(numVoxels * sizeof(Data_T)));
+  } else {
+    // Find the dataset
+    m_dataset = location.findDataset<Data_T>(k_dataStr);
+    // Check validity
+    if (!m_dataset.isValid()) {
+      throw ReadDataException("Couldn't open data set: " + k_dataStr);
+    }
+    // Check element count
+    if (m_dataset.numDataElements() != occupiedBlocks) {
+      throw ReadDataException("Block count mismatch in SparseDataReader");
+    }
+    // Check data type
+    OgDataType typeOnDisk = location.datasetType(k_dataStr);
+    if (typeOnDisk != OgawaTypeTraits<Data_T>::typeEnum()) {
+      throw ReadDataException("Data type mismatch in SparseDataReader");
+    }
   }
 
-  OgDataType typeOnDisk = location.datasetType(k_dataStr);
-  if (typeOnDisk != OgawaTypeTraits<Data_T>::typeEnum()) {
-    throw ReadDataException("Data type mismatch in SparseDataReader");
-  }
-
-  if (m_dataset.numDataElements() != occupiedBlocks) {
-    throw ReadDataException("Block count mismatch in SparseDataReader");
-  }
 }
 
 //----------------------------------------------------------------------------//
@@ -132,7 +169,30 @@ void OgSparseDataReader<Data_T>::readBlock(const size_t idx, Data_T *result)
 {
   using namespace Exc;
 
-  m_dataset.getData(idx, result, OGAWA_THREAD);
+  if (m_isCompressed) {
+
+    // Length of compressed data
+    const uint64_t length = m_cDataset.dataSize(idx, OGAWA_THREAD);
+    // Read data into compression cache
+    m_cDataset.getData(idx, &m_compressionCache[0], OGAWA_THREAD);
+    // Target location
+    uint8_t *ucmpData = reinterpret_cast<uint8_t *>(result);
+    // Length of uncompressed data is stored here
+    uLong ucmpLen = m_numVoxels * sizeof(Data_T);
+    // Uncompress
+    int status = uncompress(ucmpData, &ucmpLen, &m_compressionCache[0], 
+                            length * sizeof(Data_T));
+    if (status != Z_OK) {
+      std::cout << "ERROR in uncompress: " << status
+                << " " << ucmpLen << " " << length << std::endl;
+      return;
+    }
+
+  } else {
+
+    m_dataset.getData(idx, result, OGAWA_THREAD);
+
+  }
 }
 
 //----------------------------------------------------------------------------//

@@ -53,6 +53,9 @@ public:
   //! Returns a list of F3D dataset names (always unique)
   std::vector<std::string> datasetNames() const;
 
+  //! Returns a list of compressed F3D dataset names (always unique)
+  std::vector<std::string> compressedDatasetNames() const;
+
   //! Finds an F3D group. The returned OgIGroup will not be valid if the name
   //! wasn't found.
   OgIGroup                 findGroup(const std::string &name) const;
@@ -67,11 +70,19 @@ public:
   template <typename T>
   OgIDataset<T>            findDataset(const std::string &name) const;
 
+  //! Finds a compressed F3D dataset. The returned OgIGroup will not be valid 
+  //! if the name wasn't found.
+  template <typename T>
+  OgICDataset<T>           findCompressedDataset(const std::string &name) const;
+
   //! Returns the data type of an attribute
   OgDataType               attributeType(const std::string &name) const;
 
   //! Returns the data type of a dataset
   OgDataType               datasetType(const std::string &name) const;
+
+  //! Returns the data type of a compressed dataset
+  OgDataType               compressedDatasetType(const std::string &name) const;
 
 private:
   
@@ -125,6 +136,20 @@ OgIDataset<T> OgIGroup::findDataset(const std::string &name) const
   }
 
   return OgIDataset<T>();
+}
+
+//----------------------------------------------------------------------------//
+
+template <typename T>
+OgICDataset<T> OgIGroup::findCompressedDataset(const std::string &name) const
+{
+  Alembic::Ogawa::IGroupPtr group = findGroup(name, F3DCompressedDatasetType);
+
+  if (group) {
+    return OgICDataset<T>(group);
+  }
+
+  return OgICDataset<T>();
 }
 
 //----------------------------------------------------------------------------//

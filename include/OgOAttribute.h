@@ -33,6 +33,10 @@ class OgOAttribute
 
 public:
 
+  // Typedefs ------------------------------------------------------------------
+
+  typedef T value_type;
+
   // Ctors, dtor ---------------------------------------------------------------
 
   //! Creates the attribute and writes the data.

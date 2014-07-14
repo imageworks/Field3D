@@ -55,6 +55,14 @@ FIELD3D_NAMESPACE_OPEN
 
 //----------------------------------------------------------------------------//
 
+namespace {
+
+  size_t g_numIOThreads = 1;
+
+}
+
+//----------------------------------------------------------------------------//
+
 void initIO() 
 {
   static boost::mutex mutex;
@@ -70,6 +78,20 @@ void initIO()
   factory.registerFieldMappingIO(NullFieldMappingIO::create);
   factory.registerFieldMappingIO(MatrixFieldMappingIO::create);
   factory.registerFieldMappingIO(FrustumFieldMappingIO::create);
+}
+
+//----------------------------------------------------------------------------//
+
+void setNumIOThreads(const size_t numThreads)
+{
+  g_numIOThreads = numThreads;
+}
+
+//----------------------------------------------------------------------------//
+
+size_t numIOThreads()
+{
+  return g_numIOThreads;
 }
 
 //----------------------------------------------------------------------------//

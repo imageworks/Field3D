@@ -37,6 +37,10 @@ class OgIAttribute : public OgIBase
 
 public:
 
+  // Typedefs ------------------------------------------------------------------
+
+  typedef T value_type;
+
   // Ctor, dtor ----------------------------------------------------------------
 
   //! The default constructor leaves m_group initialized, which implies it 

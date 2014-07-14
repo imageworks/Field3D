@@ -51,6 +51,13 @@ std::vector<std::string> OgIGroup::datasetNames() const
 
 //----------------------------------------------------------------------------//
 
+std::vector<std::string> OgIGroup::compressedDatasetNames() const
+{
+  return groupNames(F3DCompressedDatasetType);
+}
+
+//----------------------------------------------------------------------------//
+
 OgIGroup OgIGroup::findGroup(const std::string &name) const
 {
   Alembic::Ogawa::IGroupPtr group = findGroup(name, F3DGroupType);
@@ -172,6 +179,19 @@ OgDataType OgIGroup::attributeType(const std::string &name) const
 OgDataType OgIGroup::datasetType(const std::string &name) const
 {
   Alembic::Ogawa::IGroupPtr group = findGroup(name, F3DDatasetType);
+
+  if (group && group->getNumChildren() > 2) {
+    return readDataType(group, 2);
+  }
+
+  return F3DInvalidDataType;
+}
+
+//----------------------------------------------------------------------------//
+
+OgDataType OgIGroup::compressedDatasetType(const std::string &name) const
+{
+  Alembic::Ogawa::IGroupPtr group = findGroup(name, F3DCompressedDatasetType);
 
   if (group && group->getNumChildren() > 2) {
     return readDataType(group, 2);

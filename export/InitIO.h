@@ -47,6 +47,10 @@
 
 //----------------------------------------------------------------------------//
 
+#include "Types.h"
+
+//----------------------------------------------------------------------------//
+
 #include "ns.h"
 
 FIELD3D_NAMESPACE_OPEN
@@ -56,6 +60,16 @@ FIELD3D_NAMESPACE_OPEN
 //! Initializes the built-in Field3D IO classes.
 //! \ingroup file
 FIELD3D_API void initIO();
+
+//----------------------------------------------------------------------------//
+
+//! Sets the number of threads to use for I/O multi-threading
+FIELD3D_API void setNumIOThreads(const size_t numThreads);
+
+//----------------------------------------------------------------------------//
+
+//! Returns the number of I/O threads to use
+FIELD3D_API size_t numIOThreads();
 
 //----------------------------------------------------------------------------//
 

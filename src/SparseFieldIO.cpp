@@ -43,6 +43,10 @@
 
 #include <boost/intrusive_ptr.hpp>
 
+#include <boost/thread/thread.hpp>
+#include <boost/thread/mutex.hpp>
+
+#include "InitIO.h"
 #include "SparseFieldIO.h"
 #include "Types.h"
 
@@ -81,6 +85,7 @@ const std::string SparseFieldIO::k_numBlocksStr("num_blocks");
 const std::string SparseFieldIO::k_blockResStr("block_res");
 const std::string SparseFieldIO::k_bitsPerComponentStr("bits_per_component");
 const std::string SparseFieldIO::k_numOccupiedBlocksStr("num_occupied_blocks");
+const std::string SparseFieldIO::k_isCompressed("data_is_compressed");
 
 //----------------------------------------------------------------------------//
 
@@ -343,12 +348,27 @@ SparseFieldIO::read(const OgIGroup &layerGroup, const std::string &filename,
     throw MissingAttributeException("Couldn't find attribute: " +
                                     k_numOccupiedBlocksStr);
   }
+
+  // Check if the data is compressed ---
+
+  OgIAttribute<uint8_t> isCompressedAttr = 
+    layerGroup.findAttribute<uint8_t>(k_isCompressed);
+  if (!isCompressedAttr.isValid()) {
+    throw MissingAttributeException("Couldn't find attribute: " +
+                                    k_isCompressed);
+  }
   
   // Finally, read the data ---
 
   FieldBase::Ptr result;
   
-  OgDataType typeOnDisk = layerGroup.datasetType(k_dataStr);
+  OgDataType typeOnDisk;
+
+  if (isCompressedAttr.value() == 0) {
+    typeOnDisk = layerGroup.datasetType(k_dataStr);
+  } else {
+    typeOnDisk = layerGroup.compressedDatasetType(k_dataStr);
+  }
 
   if (typeEnum == typeOnDisk) {
     if (typeEnum == F3DFloat16) {
@@ -371,18 +391,6 @@ SparseFieldIO::read(const OgIGroup &layerGroup, const std::string &filename,
                                  numBlocks, filename, layerPath);
     } 
   }
-
-#if 0
-  if (components == 1) {
-    if (isHalf && typeEnum == DataTypeHalf) {
-      SparseField<half>::Ptr field(new SparseField<half>);
-      field->setSize(extents, dataW);
-      field->setBlockOrder(blockOrder);
-      readData<half>(layerGroup, numBlocks, filename, layerPath, field);
-      result = field;      
-    } 
-  } 
-#endif
 
   return result;
 }
@@ -572,13 +580,19 @@ SparseFieldIO::readData(const OgIGroup &location, const Box3i &extents,
 
   // Read the data ---
 
+  // Check whether data is compressed
+  OgIAttribute<uint8_t> isCompressedAttr = 
+    location.findAttribute<uint8_t>(k_isCompressed);
+  const bool isCompressed = isCompressedAttr.value() != 0;
+
   if (occupiedBlocks > 0) {
     if (dynamicLoading) {
       // Defer loading to the sparse cache
       result->setupReferenceBlocks();
     } else {
       // Read the data directly. The memory is already allocated
-      OgSparseDataReader<Data_T> reader(location, numVoxels, occupiedBlocks);
+      OgSparseDataReader<Data_T> reader(location, numVoxels, occupiedBlocks,
+                                        isCompressed);
       for (size_t i = 0; i < numBlocks; ++i) {
         if (blocks[i].isAllocated) {
           reader.readBlock(i, blocks[i].data);
@@ -588,6 +602,556 @@ SparseFieldIO::readData(const OgIGroup &location, const Box3i &extents,
   }
 
   return result;
+}
+
+//----------------------------------------------------------------------------//
+// Template implementations
+//----------------------------------------------------------------------------//
+
+//! \todo Tune the chunk size of the gzip call
+template <class Data_T>
+bool SparseFieldIO::writeInternal(hid_t layerGroup, 
+                                  typename SparseField<Data_T>::Ptr field)
+{
+  using namespace std;
+  using namespace Exc;
+  using namespace Hdf5Util;
+  using namespace Sparse;
+
+  Box3i ext(field->extents()), dw(field->dataWindow());
+
+  int components = FieldTraits<Data_T>::dataDims();
+
+  int valuesPerBlock = (1 << (field->m_blockOrder * 3)) * components;
+
+  // Add extents attribute ---
+
+  int extents[6] = 
+    { ext.min.x, ext.min.y, ext.min.z, ext.max.x, ext.max.y, ext.max.z };
+
+  if (!writeAttribute(layerGroup, k_extentsStr, 6, extents[0])) {
+    Msg::print(Msg::SevWarning, "Error adding size attribute.");
+    return false;
+  }
+
+  // Add data window attribute ---
+
+  int dataWindow[6] = 
+    { dw.min.x, dw.min.y, dw.min.z, dw.max.x, dw.max.y, dw.max.z };
+
+  if (!writeAttribute(layerGroup, k_dataWindowStr, 6, dataWindow[0])) {
+    Msg::print(Msg::SevWarning, "Error adding size attribute.");
+    return false;
+  }
+
+  // Add components attribute ---
+
+  if (!writeAttribute(layerGroup, k_componentsStr, 1, components)) {
+    Msg::print(Msg::SevWarning, "Error adding components attribute.");
+    return false;
+  }
+
+  // Add block order attribute ---
+
+  int blockOrder = field->m_blockOrder;
+
+  if (!writeAttribute(layerGroup, k_blockOrderStr, 1, blockOrder)) {
+    Msg::print(Msg::SevWarning, "Error adding block order attribute.");
+    return false;
+  }
+
+  // Add number of blocks attribute ---
+  
+  V3i &blockRes = field->m_blockRes;
+  int numBlocks = blockRes.x * blockRes.y * blockRes.z;
+
+  if (!writeAttribute(layerGroup, k_numBlocksStr, 1, numBlocks)) {
+    Msg::print(Msg::SevWarning, "Error adding number of blocks attribute.");
+    return false;
+  }
+
+  // Add block resolution in each dimension ---
+
+  if (!writeAttribute(layerGroup, k_blockResStr, 3, blockRes.x)) {
+    Msg::print(Msg::SevWarning, "Error adding block res attribute.");
+    return false;
+  }
+
+  // Add the bits per component attribute ---
+
+  int bits = DataTypeTraits<Data_T>::h5bits();
+  if (!writeAttribute(layerGroup, k_bitsPerComponentStr, 1, bits)) {
+    Msg::print(Msg::SevWarning, "Error adding bits per component attribute.");
+    return false;    
+  }
+
+  // Write the block info data sets ---
+  
+  SparseBlock<Data_T> *blocks = field->m_blocks;
+
+  // ... Write the isAllocated array
+  {
+    vector<char> isAllocated(numBlocks);
+    for (int i = 0; i < numBlocks; ++i) {
+      isAllocated[i] = static_cast<char>(blocks[i].isAllocated);
+    }
+    writeSimpleData<char>(layerGroup, "block_is_allocated_data", isAllocated);
+  }
+
+  // ... Write the emptyValue array
+  {
+    vector<Data_T> emptyValue(numBlocks);
+    for (int i = 0; i < numBlocks; ++i) {
+      emptyValue[i] = static_cast<Data_T>(blocks[i].emptyValue);
+    }
+    writeSimpleData<Data_T>(layerGroup, "block_empty_value_data", emptyValue);
+  }
+
+  // Count the number of occupied blocks ---
+  int occupiedBlocks = 0;
+  for (int i = 0; i < numBlocks; ++i) {
+    if (blocks[i].isAllocated) {
+      occupiedBlocks++;
+    }
+  }
+
+  if (!writeAttribute(layerGroup, k_numOccupiedBlocksStr, 1, occupiedBlocks)) {
+    throw WriteAttributeException("Couldn't add attribute " + 
+                                k_numOccupiedBlocksStr);
+  }
+  
+  if (occupiedBlocks > 0) {
+
+    // Make the memory data space
+    hsize_t memDims[1];
+    memDims[0] = valuesPerBlock;
+    H5ScopedScreate memDataSpace(H5S_SIMPLE);
+    H5Sset_extent_simple(memDataSpace.id(), 1, memDims, NULL);
+
+    // Make the file data space
+    hsize_t fileDims[2];
+    fileDims[0] = occupiedBlocks;
+    fileDims[1] = valuesPerBlock;
+    H5ScopedScreate fileDataSpace(H5S_SIMPLE);
+    H5Sset_extent_simple(fileDataSpace.id(), 2, fileDims, NULL);
+
+    // Set up gzip property list
+    bool gzipAvailable = checkHdf5Gzip();
+    hid_t dcpl = H5Pcreate(H5P_DATASET_CREATE);
+    hsize_t chunkSize[2];
+    chunkSize[0] = 1;
+    chunkSize[1] = valuesPerBlock;
+    if (gzipAvailable) {
+      herr_t status = H5Pset_deflate(dcpl, 9);
+      if (status < 0) {
+        return false;
+      }
+      status = H5Pset_chunk(dcpl, 2, chunkSize);
+      if (status < 0) {
+        return false;
+      }    
+    }
+
+    // Add the data set
+    H5ScopedDcreate dataSet(layerGroup, k_dataStr, 
+                            DataTypeTraits<Data_T>::h5type(), 
+                            fileDataSpace.id(), 
+                            H5P_DEFAULT, dcpl, H5P_DEFAULT);
+    if (dataSet.id() < 0)
+      throw CreateDataSetException("Couldn't create data set in "
+                                   "SparseFieldIO::writeInternal");
+
+    // For each allocated block ---
+
+    int nextBlockIdx = 0;
+    hsize_t offset[2];
+    hsize_t count[2];
+    herr_t status;
+
+    for (int i = 0; i < numBlocks; ++i) {
+      if (blocks[i].isAllocated) {
+        offset[0] = nextBlockIdx;  // Index of next block
+        offset[1] = 0;             // Index of first data in block. Always 0
+        count[0] = 1;              // Number of columns to read. Always 1
+        count[1] = valuesPerBlock; // Number of values in one column
+        status = H5Sselect_hyperslab(fileDataSpace.id(), H5S_SELECT_SET, 
+                                     offset, NULL, count, NULL);
+        if (status < 0) {
+          throw WriteHyperSlabException(
+            "Couldn't select slab " + 
+            boost::lexical_cast<std::string>(nextBlockIdx));
+        }
+        Data_T *data = field->m_blocks[i].data;
+        status = H5Dwrite(dataSet.id(), DataTypeTraits<Data_T>::h5type(), 
+                          memDataSpace.id(), 
+                          fileDataSpace.id(), H5P_DEFAULT, data);
+        if (status < 0) {
+          throw WriteHyperSlabException(
+            "Couldn't write slab " + 
+            boost::lexical_cast<std::string>(nextBlockIdx));
+        }
+        // Increment nextBlockIdx
+        nextBlockIdx++;
+      }
+    }
+
+  } // if occupiedBlocks > 0
+
+  return true; 
+
+}
+
+//----------------------------------------------------------------------------//
+
+template <typename Data_T>
+struct ThreadingState
+{
+  ThreadingState(OgOCDataset<Data_T> &i_data, 
+                 Sparse::SparseBlock<Data_T> *i_blocks, 
+                 const size_t i_numVoxels, 
+                 const size_t i_numBlocks,
+                 const std::vector<uint8_t> &i_isAllocated)
+    : data(i_data),
+      blocks(i_blocks),
+      numVoxels(i_numVoxels), 
+      numBlocks(i_numBlocks),
+      isAllocated(i_isAllocated), 
+      nextBlockToCompress(0),
+      nextBlockToWrite(0)
+  { 
+    // Find first in-use block
+    for (size_t i = 0; i < numBlocks; ++i) {
+      if (blocks[i].isAllocated) {
+        nextBlockToCompress = i;
+        nextBlockToWrite = i;
+        return;
+      }
+    }
+    // If we get here, there are no active blocks. Set to numBlocks
+    nextBlockToCompress = numBlocks;
+    nextBlockToWrite = numBlocks;
+  }
+  // Data members
+  OgOCDataset<Data_T> &data;
+  Sparse::SparseBlock<Data_T> *blocks;
+  const size_t numVoxels;
+  const size_t numBlocks;
+  const std::vector<uint8_t> isAllocated;
+  size_t nextBlockToCompress;
+  size_t nextBlockToWrite;
+  // Mutexes
+  boost::mutex compressMutex;
+  boost::mutex writeMutex;
+};
+
+//----------------------------------------------------------------------------//
+
+template <typename Data_T>
+class WriteBlockOp
+{
+public:
+  WriteBlockOp(ThreadingState<Data_T> &state)
+    : m_state(state)
+  { 
+    const uLong srcLen      = m_state.numVoxels * sizeof(Data_T);
+    const uLong cmpLenBound = compressBound(srcLen);
+    m_cache.resize(cmpLenBound);
+  }
+  void operator() ()
+  {
+    const int level = 1;
+    // Get next block to compress
+    size_t blockIdx;
+    {
+      boost::mutex::scoped_lock lock(m_state.compressMutex);
+      blockIdx = m_state.nextBlockToCompress;
+      m_state.nextBlockToCompress++;
+    }
+    // Loop over blocks until we run out
+    while (blockIdx < m_state.numBlocks) {
+      if (m_state.blocks[blockIdx].isAllocated) {
+        // Block data as bytes
+        const uint8_t *srcData = 
+          reinterpret_cast<const uint8_t *>(m_state.blocks[blockIdx].data);
+        // Length of compressed data is stored here
+        const uLong srcLen      = m_state.numVoxels * sizeof(Data_T);
+        const uLong cmpLenBound = compressBound(srcLen);
+        uLong cmpLen            = cmpLenBound;
+        // Perform compression
+        const int status = compress2(&m_cache[0], &cmpLen, 
+                                     srcData, srcLen, level);
+        // Error check
+        if (status != Z_OK) {
+          std::cout << "ERROR: Couldn't compress in SparseFieldIO." << std::endl
+                    << "  Level:  " << level << std::endl
+                    << "  Status: " << status << std::endl
+                    << "  srcLen: " << srcLen << std::endl
+                    << "  cmpLenBound: " << cmpLenBound << std::endl
+                    << "  cmpLen: " << cmpLen << std::endl;
+          return;
+        }
+        // Wait to write data
+        while (m_state.nextBlockToWrite != blockIdx) {
+          sleep(1e-9);
+          // Spin
+        }
+        // Do the writing
+        m_state.data.addData(cmpLen, &m_cache[0]);
+        // Let next block write
+        while (m_state.nextBlockToWrite < m_state.numBlocks){
+          // Increment to next
+          m_state.nextBlockToWrite++;
+          if (m_state.blocks[m_state.nextBlockToWrite].isAllocated) {
+            break;
+          }
+        }
+      }
+      // Get next block idx
+      {
+        boost::mutex::scoped_lock lock(m_state.compressMutex);
+        blockIdx = m_state.nextBlockToCompress;
+        m_state.nextBlockToCompress++;
+      }
+    }
+  }
+private:
+  // Data members ---
+  ThreadingState<Data_T> &m_state;
+  std::vector<uint8_t> m_cache;
+};
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+bool SparseFieldIO::writeInternal(OgOGroup &layerGroup, 
+                                  typename SparseField<Data_T>::Ptr field)
+{
+  using namespace Exc;
+  using namespace Sparse;
+
+  SparseBlock<Data_T> *blocks = field->m_blocks;
+
+  const int    components     = FieldTraits<Data_T>::dataDims();
+  const int    bits           = DataTypeTraits<Data_T>::h5bits();
+  const V3i   &blockRes       = field->m_blockRes;
+  const size_t numBlocks      = blockRes.x * blockRes.y * blockRes.z;
+  const size_t numVoxels      = (1 << (field->m_blockOrder * 3));
+  
+  const Box3i ext(field->extents()), dw(field->dataWindow());
+
+  // Add attributes ---
+
+  OgOAttribute<veci32_t> extMinAttr(layerGroup, k_extentsMinStr, ext.min);
+  OgOAttribute<veci32_t> extMaxAttr(layerGroup, k_extentsMaxStr, ext.max);
+  
+  OgOAttribute<veci32_t> dwMinAttr(layerGroup, k_dataWindowMinStr, dw.min);
+  OgOAttribute<veci32_t> dwMaxAttr(layerGroup, k_dataWindowMaxStr, dw.max);
+
+  OgOAttribute<uint8_t> componentsAttr(layerGroup, k_componentsStr, components);
+
+  OgOAttribute<uint8_t> bitsAttr(layerGroup, k_bitsPerComponentStr, bits);
+
+  OgOAttribute<uint8_t> blockOrderAttr(layerGroup, k_blockOrderStr, 
+                                       field->m_blockOrder);
+
+  OgOAttribute<uint32_t> numBlocksAttr(layerGroup, k_numBlocksStr, numBlocks);
+
+  OgOAttribute<veci32_t> blockResAttr(layerGroup, k_blockResStr, blockRes);
+
+  OgOAttribute<uint8_t> isCompressedAttr(layerGroup, k_isCompressed, 1);
+  
+  // Write the isAllocated array
+  std::vector<uint8_t> isAllocated(numBlocks);
+  for (size_t i = 0; i < numBlocks; ++i) {
+    isAllocated[i] = static_cast<uint8_t>(blocks[i].isAllocated);
+  }
+  OgODataset<uint8_t> isAllocatedData(layerGroup, "block_is_allocated_data");
+  isAllocatedData.addData(numBlocks, &isAllocated[0]);
+
+  // Write the emptyValue array
+  std::vector<Data_T> emptyValue(numBlocks);
+  for (size_t i = 0; i < numBlocks; ++i) {
+    emptyValue[i] = static_cast<Data_T>(blocks[i].emptyValue);
+  }
+  OgODataset<Data_T> emptyValueData(layerGroup, "block_empty_value_data");
+  emptyValueData.addData(numBlocks, &emptyValue[0]);
+    
+  // Count the number of occupied blocks
+  int occupiedBlocks = 0;
+  for (size_t i = 0; i < numBlocks; ++i) {
+    if (blocks[i].isAllocated) {
+      occupiedBlocks++;
+    }
+  }
+  OgOAttribute<uint32_t> numOccupiedBlockAttr(layerGroup, 
+                                              k_numOccupiedBlocksStr, 
+                                              occupiedBlocks);
+
+  // Add data to file ---
+
+  if (occupiedBlocks > 0) {
+#if 1
+    // Create the compressed dataset
+    OgOCDataset<Data_T> data(layerGroup, k_dataStr);
+    // Threading state
+    ThreadingState<Data_T> state(data, blocks, numVoxels, numBlocks, 
+                                 isAllocated);
+    // Number of threads
+    const size_t numThreads = numIOThreads();
+    // Launch threads
+    boost::thread_group threads;
+    for (size_t i = 0; i < numThreads; ++i) {
+      threads.create_thread(WriteBlockOp<Data_T>(state));
+    }
+    threads.join_all();
+#else
+    const int level = 1;
+    // Create the compressed dataset
+    OgOCDataset<Data_T> data(layerGroup, k_dataStr);
+    // Length of source data
+    const uLong srcLen = numVoxels * sizeof(Data_T);
+    const uLong cmpLenBound = compressBound(srcLen);
+    // Temp storage for compressed data
+    std::vector<uint8_t> cache(cmpLenBound);
+    // Write each block
+    for (size_t i = 0; i < numBlocks; ++i) {
+      if (!blocks[i].isAllocated) {
+        continue;
+      }
+      // Block data as bytes
+      const uint8_t *srcData = 
+        reinterpret_cast<const uint8_t *>(blocks[i].data);
+      // Length of compressed data is stored here
+      uLong cmpLen = cmpLenBound;
+      // Perform compression
+      const int status = compress2(&cache[0], &cmpLen, srcData, srcLen, level);
+      // Error check
+      if (status != Z_OK) {
+        std::cout << "ERROR: Couldn't compress in SparseFieldIO." << std::endl
+                  << "  Level:  " << level << std::endl
+                  << "  Status: " << status << std::endl
+                  << "  srcLen: " << srcLen << std::endl
+                  << "  cmpLenBound: " << cmpLenBound << std::endl
+                  << "  cmpLen: " << cmpLen << std::endl;
+        return false;
+      }
+      // Write data
+      data.addData(cmpLen, &cache[0]);
+    }
+#endif
+  }
+
+  return true;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+bool SparseFieldIO::readData(hid_t location, 
+                             int numBlocks, 
+                             const std::string &filename, 
+                             const std::string &layerPath, 
+                             typename SparseField<Data_T>::Ptr result)
+{
+  using namespace std;
+  using namespace Exc;
+  using namespace Hdf5Util;
+  using namespace Sparse;
+
+  int occupiedBlocks;
+
+  bool dynamicLoading = SparseFileManager::singleton().doLimitMemUse();
+
+  int components = FieldTraits<Data_T>::dataDims();
+  int numVoxels = (1 << (result->m_blockOrder * 3));
+  int valuesPerBlock = numVoxels * components;
+  
+  // Read the number of occupied blocks ---
+
+  if (!readAttribute(location, k_numOccupiedBlocksStr, 1, occupiedBlocks)) 
+    throw MissingAttributeException("Couldn't find attribute: " +
+                                    k_numOccupiedBlocksStr);
+
+  // Set up the dynamic read info ---
+
+  if (dynamicLoading) {
+    // Set up the field reference
+    result->addReference(filename, layerPath,
+                         valuesPerBlock,
+                         occupiedBlocks);
+  }
+
+  // Read the block info data sets ---
+
+  SparseBlock<Data_T> *blocks = result->m_blocks;
+
+  // ... Read the isAllocated array
+
+  {
+    vector<char> isAllocated(numBlocks);
+    readSimpleData<char>(location, "block_is_allocated_data", isAllocated);
+    for (int i = 0; i < numBlocks; ++i) {
+      blocks[i].isAllocated = isAllocated[i];
+      if (!dynamicLoading && isAllocated[i]) {
+        blocks[i].resize(numVoxels);
+      }
+    }
+  }
+
+  // ... Read the emptyValue array ---
+
+  {
+    vector<Data_T> emptyValue(numBlocks);
+    readSimpleData<Data_T>(location, "block_empty_value_data", emptyValue);
+    for (int i = 0; i < numBlocks; ++i) {
+      blocks[i].emptyValue = emptyValue[i];
+    }
+  }
+
+  // Read the data ---
+
+  if (occupiedBlocks > 0) {
+
+    if (dynamicLoading) {
+
+      result->setupReferenceBlocks();
+
+    } else {
+      
+      size_t b = 0, bend = b + numBlocks;
+
+      SparseDataReader<Data_T> reader(location, valuesPerBlock, occupiedBlocks);
+
+      // We'll read at most 50meg at a time
+      static const long maxMemPerPass = 50*1024*1024;
+
+      for (int nextBlockIdx = 0;;) {
+
+        long mem = 0;
+        std::vector<Data_T*> memoryList;
+        
+        for (; b != bend && mem < maxMemPerPass; ++b) {
+          if (blocks[b].isAllocated) {
+            mem += sizeof(Data_T)*numVoxels;
+            memoryList.push_back(blocks[b].data);
+          }
+        }
+
+        // all done.
+        if (!memoryList.size()) {
+          break;
+        }
+
+        reader.readBlockList(nextBlockIdx, memoryList);
+        nextBlockIdx += memoryList.size();
+      }                           
+
+    }
+
+  } // if occupiedBlocks > 0
+
+  return true;
+  
 }
 
 //----------------------------------------------------------------------------//

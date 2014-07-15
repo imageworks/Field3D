@@ -646,6 +646,11 @@ void MIPField<Field_T>::loadLevelFromDisk(size_t level) const
     if (!m_rawFields[level]) {
       // Execute the lazy load action
       m_fields[level] = m_loadActions[level]->load();
+      // Check that field was loaded
+      if (!m_fields[level]) {
+        throw Exc::MIPFieldException("Couldn't load MIP level: " + 
+                                     boost::lexical_cast<std::string>(level));
+      }
       // Remove lazy load action
       m_loadActions[level].reset();
       // Update aux data
@@ -688,18 +693,18 @@ MIPField<Field_T>::sanityChecks(const T &fields)
     if (size.x > prevSize.x || 
         size.y > prevSize.y ||
         size.z > prevSize.z) {
-      throw MIPFieldException("Field " + 
-                                   lexical_cast<string>(i) + 
-                                   " had greater resolution than previous"
-                                   " level");
+      throw MIPFieldException("Field " + lexical_cast<string>(i) + 
+                              " had greater resolution than previous"
+                              " level");
     }
     if (size.x >= prevSize.x &&
         size.y >= prevSize.y &&
         size.z >= prevSize.z) {
-      throw MIPFieldException("Field " + 
-                                   lexical_cast<string>(i) + 
-                                   " did not decrease in resolution from "
-                                   " previous level");
+      throw MIPFieldException("Field " + lexical_cast<string>(i) + 
+                              " did not decrease in resolution from "
+                              " previous level: " + 
+                              lexical_cast<string>(size) + " > " + 
+                              lexical_cast<string>(prevSize));
     }
     prevSize = size;
   }

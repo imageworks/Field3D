@@ -238,8 +238,7 @@ SparseFieldIO::read(const OgIGroup &layerGroup, const std::string &filename,
   V3i blockRes;
   
   if (!layerGroup.isValid()) {
-    Msg::print(Msg::SevWarning, "Bad layerGroup.");
-    return FieldBase::Ptr();
+    throw MissingGroupException("Invalid group in SparseFieldIO::read()");
   }
 
   // Check version ---
@@ -989,10 +988,11 @@ bool SparseFieldIO::writeInternal(OgOGroup &layerGroup,
 
   // Add data to file ---
 
+  // Create the compressed dataset regardless of whether there are blocks
+  // to write.
+  OgOCDataset<Data_T> data(layerGroup, k_dataStr);
+  // Write data if there is any
   if (occupiedBlocks > 0) {
-#if 1
-    // Create the compressed dataset
-    OgOCDataset<Data_T> data(layerGroup, k_dataStr);
     // Threading state
     ThreadingState<Data_T> state(data, blocks, numVoxels, numBlocks, 
                                  isAllocated);
@@ -1004,41 +1004,6 @@ bool SparseFieldIO::writeInternal(OgOGroup &layerGroup,
       threads.create_thread(WriteBlockOp<Data_T>(state));
     }
     threads.join_all();
-#else
-    const int level = 1;
-    // Create the compressed dataset
-    OgOCDataset<Data_T> data(layerGroup, k_dataStr);
-    // Length of source data
-    const uLong srcLen = numVoxels * sizeof(Data_T);
-    const uLong cmpLenBound = compressBound(srcLen);
-    // Temp storage for compressed data
-    std::vector<uint8_t> cache(cmpLenBound);
-    // Write each block
-    for (size_t i = 0; i < numBlocks; ++i) {
-      if (!blocks[i].isAllocated) {
-        continue;
-      }
-      // Block data as bytes
-      const uint8_t *srcData = 
-        reinterpret_cast<const uint8_t *>(blocks[i].data);
-      // Length of compressed data is stored here
-      uLong cmpLen = cmpLenBound;
-      // Perform compression
-      const int status = compress2(&cache[0], &cmpLen, srcData, srcLen, level);
-      // Error check
-      if (status != Z_OK) {
-        std::cout << "ERROR: Couldn't compress in SparseFieldIO." << std::endl
-                  << "  Level:  " << level << std::endl
-                  << "  Status: " << status << std::endl
-                  << "  srcLen: " << srcLen << std::endl
-                  << "  cmpLenBound: " << cmpLenBound << std::endl
-                  << "  cmpLen: " << cmpLen << std::endl;
-        return false;
-      }
-      // Write data
-      data.addData(cmpLen, &cache[0]);
-    }
-#endif
   }
 
   return true;

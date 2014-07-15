@@ -48,6 +48,10 @@ public:
   OgOGroup(OgOGroup &parent, const std::string &name)
     : m_name(name)
   {
+    // Make sure there is no '/' in the name
+    if (name.find("/") != std::string::npos) {
+      throw Field3D::Exc::OgOGroupException("'/' character in group name.");
+    }
     // Construct the group
     m_group = parent.m_group->addGroup();
     // Base data sets

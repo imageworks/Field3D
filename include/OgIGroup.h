@@ -57,8 +57,9 @@ public:
   std::vector<std::string> compressedDatasetNames() const;
 
   //! Finds an F3D group. The returned OgIGroup will not be valid if the name
-  //! wasn't found.
-  OgIGroup                 findGroup(const std::string &name) const;
+  //! wasn't found. The name may be a full path including '/'-separators,
+  //! in which case the nested group will be searched for.
+  OgIGroup                 findGroup(const std::string &path) const;
 
   //! Finds an F3D group. The returned OgIAttribute will not be valid if the 
   //! name wasn't found.
@@ -99,6 +100,10 @@ private:
   //! Finds an ogawa-level group
   Alembic::Ogawa::IGroupPtr findGroup(const std::string &name,
                                       const OgGroupType groupType) const;
+
+  //! Recursively finds an ogawa-level group
+  Alembic::Ogawa::IGroupPtr recursiveFindGroup
+  (const std::string &name, const OgGroupType groupType) const;
 
   //! Retrieves list of ogawa-level groups of the given type
   std::vector<std::string>  groupNames(const OgGroupType groupType) const;

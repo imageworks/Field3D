@@ -570,6 +570,15 @@ private:
   readLayer(const std::string &intPartitionName, 
             const std::string &layerName) const;
 
+  //! Retrieves a proxy version (EmptyField) from a given Ogawa location
+  //! \note Although the call is templated, all fields are read, regardless
+  //! of bit depth.
+  template <class Data_T>
+  typename EmptyField<Data_T>::Ptr
+  readProxyLayer(OgIGroup &location, const std::string &name,
+                 const std::string &attribute, 
+                 FieldMapping::Ptr mapping) const;
+  
   //! Sets up all the partitions and layers, but does not load any data
   bool readPartitionAndLayerInfo();
 

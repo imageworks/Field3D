@@ -1651,6 +1651,184 @@ Field3DInputFile::readLayers(const std::string &partitionName,
 }
 
 //----------------------------------------------------------------------------//
+
+template <class Data_T>
+typename EmptyField<Data_T>::Ptr 
+Field3DInputFile::readProxyLayer(OgIGroup &location, 
+                                 const std::string &name,
+                                 const std::string &attribute,
+                                 FieldMapping::Ptr mapping) const
+{
+  using namespace boost;
+  using namespace std;
+
+  typename EmptyField<Data_T>::Ptr null;
+
+  const std::string extentsMinStr("extents_min");
+  const std::string extentsMaxStr("extents_max");
+  const std::string dataWindowMinStr("data_window_min");
+  const std::string dataWindowMaxStr("data_window_max");
+
+  Box3i extents, dataW;
+  
+  // Get extents ---
+
+  OgIAttribute<veci32_t> extMinAttr = 
+    location.findAttribute<veci32_t>(extentsMinStr);
+  OgIAttribute<veci32_t> extMaxAttr = 
+    location.findAttribute<veci32_t>(extentsMaxStr);
+  if (!extMinAttr.isValid()) {
+    throw MissingAttributeException("Couldn't find attribute " + 
+                                    extentsMinStr);
+  }
+  if (!extMaxAttr.isValid()) {
+    throw MissingAttributeException("Couldn't find attribute " + 
+                                    extentsMaxStr);
+  }
+
+  extents.min = extMinAttr.value();
+  extents.max = extMaxAttr.value();
+
+  // Get data window ---
+
+  OgIAttribute<veci32_t> dwMinAttr = 
+    location.findAttribute<veci32_t>(dataWindowMinStr);
+  OgIAttribute<veci32_t> dwMaxAttr = 
+    location.findAttribute<veci32_t>(dataWindowMaxStr);
+  if (!dwMinAttr.isValid()) {
+    throw MissingAttributeException("Couldn't find attribute " + 
+                                    dataWindowMinStr);
+  }
+  if (!dwMaxAttr.isValid()) {
+    throw MissingAttributeException("Couldn't find attribute " + 
+                                    dataWindowMaxStr);
+  }
+
+  dataW.min = dwMinAttr.value();
+  dataW.max = dwMaxAttr.value();
+
+  // Construct the field
+  typename EmptyField<Data_T>::Ptr field(new EmptyField<Data_T>);
+  field->setSize(extents, dataW);
+
+  // Read the metadata 
+  OgIGroup metadataGroup = location.findGroup("metadata");
+  if (metadataGroup.isValid()) {    
+    readMetadata(metadataGroup, field);
+  }
+
+  // Set field properties
+  field->name = name;
+  field->attribute = attribute;
+  field->setMapping(mapping);
+
+  return field;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+typename EmptyField<Data_T>::Vec
+Field3DInputFile::readProxyLayer(const std::string &partitionName, 
+                                 const std::string &layerName,
+                                 bool isVectorLayer) const
+{
+  using namespace boost;
+  using namespace std;
+  using namespace Hdf5Util;
+
+  if (m_hdf5) {
+    return m_hdf5->readProxyLayer<Data_T>(partitionName, layerName, 
+                                          isVectorLayer);
+  }
+
+  // Instantiate a null pointer for easier code reading
+  typename EmptyField<Data_T>::Vec emptyList, output;
+
+  if ((layerName.length() == 0) || (partitionName.length() == 0))
+    return emptyList;
+
+  std::vector<std::string> parts, layers;
+  getIntPartitionNames(parts);
+ 
+  bool foundPartition = false;
+
+  for (vector<string>::iterator p = parts.begin(); p != parts.end(); ++p) {
+    if (removeUniqueId(*p) == partitionName) {
+      foundPartition = true;
+      if (isVectorLayer) {
+        getIntVectorLayerNames(layers, *p);
+      } else {
+        getIntScalarLayerNames(layers, *p);
+      }
+      for (vector<string>::iterator l = layers.begin(); 
+           l != layers.end(); ++l) {
+        if (*l == layerName) {
+          // Find the partition
+          File::Partition::Ptr part = partition(*p);
+          if (!part) {
+            Msg::print(Msg::SevWarning, "Couldn't find partition: " + *p);
+            return emptyList;
+          }
+          // Find the layer
+          const File::Layer *layer;
+          if (isVectorLayer) {
+            layer = part->layer(layerName);
+          } else {
+            layer = part->layer(layerName);
+          }
+          if (!layer) {
+            Msg::print(Msg::SevWarning, "Couldn't find layer: " + layerName);
+            return emptyList;
+          }
+          // Open the layer group
+          string layerPath = layer->parent + "/" + layer->name;
+          OgIGroup parent = m_root->findGroup(layer->parent);
+          if (!parent.isValid()) {
+            Msg::print(Msg::SevWarning, "Couldn't find layer parent " 
+                      + layerPath + " in .f3d file ");
+            return emptyList;
+          }
+          OgIGroup layerGroup = parent.findGroup(layer->name);
+          if (!layerGroup.isValid()) {
+            Msg::print(Msg::SevWarning, "Couldn't find layer group " 
+                      + layerPath + " in .f3d file ");
+            return emptyList;
+          }
+
+          // Make the proxy representation
+          typename EmptyField<Data_T>::Ptr field = 
+            readProxyLayer<Data_T>(layerGroup, partitionName, layerName, 
+                                   part->mapping);
+
+          // Read MIPField's number of mip levels
+          int numLevels = 0;
+          OgIGroup mipGroup = layerGroup.findGroup("mip_levels");
+          if (mipGroup.isValid()) {
+            OgIAttribute<uint32_t> levelsAttr = 
+              mipGroup.findAttribute<uint32_t>("levels");
+            if (levelsAttr.isValid()) {
+              numLevels = levelsAttr.value();
+            }
+          }
+          field->metadata().setIntMetadata("mip_levels", numLevels);
+
+          // Add field to output
+          output.push_back(field);
+        }
+      }
+    }
+  }
+
+  if (!foundPartition) {
+    Msg::print(Msg::SevWarning, "Couldn't find partition: " + partitionName);
+    return emptyList;    
+  }
+  
+  return output;
+}
+
+//----------------------------------------------------------------------------//
 // Template instantiations
 //----------------------------------------------------------------------------//
 
@@ -1713,6 +1891,22 @@ FIELD3D_INSTANTIATION_READLAYERS2(float64_t);
 FIELD3D_INSTANTIATION_READLAYERS2(vec16_t);
 FIELD3D_INSTANTIATION_READLAYERS2(vec32_t);
 FIELD3D_INSTANTIATION_READLAYERS2(vec64_t);
+
+//----------------------------------------------------------------------------//
+
+#define FIELD3D_INSTANTIATION_READPROXYLAYER(type)                      \
+  template                                                              \
+  EmptyField<type>::Vec                                                 \
+  Field3DInputFile::readProxyLayer<type>(const std::string &partitionName, \
+                                         const std::string &layerName,  \
+                                         bool isVectorLayer) const      \
+  
+FIELD3D_INSTANTIATION_READPROXYLAYER(float16_t);
+FIELD3D_INSTANTIATION_READPROXYLAYER(float32_t);
+FIELD3D_INSTANTIATION_READPROXYLAYER(float64_t);
+FIELD3D_INSTANTIATION_READPROXYLAYER(vec16_t);
+FIELD3D_INSTANTIATION_READPROXYLAYER(vec32_t);
+FIELD3D_INSTANTIATION_READPROXYLAYER(vec64_t);
 
 //----------------------------------------------------------------------------//
 

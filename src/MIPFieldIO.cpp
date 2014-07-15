@@ -66,13 +66,18 @@ using namespace Hdf5Util;
 const int         MIPFieldIO::k_versionNumber      (1);
 const std::string MIPFieldIO::k_versionAttrName    ("version");
 const std::string MIPFieldIO::k_extentsStr         ("extents");
+const std::string MIPFieldIO::k_extentsMinStr      ("extents_min");
+const std::string MIPFieldIO::k_extentsMaxStr      ("extents_max");
 const std::string MIPFieldIO::k_dataWindowStr      ("data_window");
+const std::string MIPFieldIO::k_dataWindowMinStr   ("data_window_min");
+const std::string MIPFieldIO::k_dataWindowMaxStr   ("data_window_max");
 const std::string MIPFieldIO::k_componentsStr      ("components");
 const std::string MIPFieldIO::k_bitsPerComponentStr("bits_per_component");
 const std::string MIPFieldIO::k_mipGroupStr        ("mip_levels");
 const std::string MIPFieldIO::k_levelGroupStr      ("level");
 const std::string MIPFieldIO::k_levelsStr          ("levels");
 const std::string MIPFieldIO::k_baseTypeStr        ("base_type");
+const std::string MIPFieldIO::k_dummyDataStr       ("dummy_data");
 
 //----------------------------------------------------------------------------//
 // MIPFieldIO
@@ -80,8 +85,8 @@ const std::string MIPFieldIO::k_baseTypeStr        ("base_type");
 
 FieldBase::Ptr
 MIPFieldIO::read(hid_t layerGroup, const std::string &filename, 
-                      const std::string &layerPath,
-                      DataTypeEnum typeEnum)
+                 const std::string &layerPath,
+                 DataTypeEnum typeEnum)
 {
   Box3i extents, dataW;
   int components;
@@ -190,7 +195,107 @@ FieldBase::Ptr
 MIPFieldIO::read(const OgIGroup &layerGroup, const std::string &filename, 
                  const std::string &layerPath, OgDataType typeEnum)
 {
-  return FieldBase::Ptr();
+  Box3i extents, dataW;
+
+  if (!layerGroup.isValid()) {
+    Msg::print(Msg::SevWarning, "Bad layerGroup group in "
+               "MIPFieldIO::read(ogawa).");
+    return FieldBase::Ptr();
+  }
+
+  // Check version ---
+
+  OgIAttribute<int> versionAttr = 
+    layerGroup.findAttribute<int>(k_versionAttrName);
+  if (!versionAttr.isValid()) {
+    throw MissingAttributeException("Couldn't find attribute: " +
+                                    k_versionAttrName);
+  }
+  const int version = versionAttr.value();
+
+  if (version != k_versionNumber) {
+    throw UnsupportedVersionException("MIPField version not supported: " +
+                                      lexical_cast<std::string>(version));
+  }
+
+  // Get num components ---
+
+  OgIAttribute<uint8_t> numComponentsAttr = 
+    layerGroup.findAttribute<uint8_t>(k_componentsStr);
+  if (!numComponentsAttr.isValid()) {
+    throw MissingAttributeException("Couldn't find attribute " + 
+                                    k_componentsStr);
+  }
+
+  // Get base type ---
+
+  OgIAttribute<std::string> baseTypeAttr = 
+    layerGroup.findAttribute<std::string>(k_baseTypeStr);
+  if (!baseTypeAttr.isValid()) {
+    throw MissingAttributeException("Couldn't find attribute " + 
+                                    k_baseTypeStr);
+  }
+
+  bool isSparse = false;
+  bool isDense  = false;
+
+  if (baseTypeAttr.value() == "SparseField") {
+    isSparse = true;
+  } else if (baseTypeAttr.value() == "DenseField") {
+    isDense = true;
+  }
+
+  // Get the deta type ---
+
+  OgDataType typeOnDisk = layerGroup.datasetType(k_dummyDataStr);
+
+  FieldBase::Ptr result;
+
+  if (typeEnum == typeOnDisk) {
+    if (isDense) {
+      if (typeEnum == F3DFloat16) {
+        result = readInternal<DenseField, float16_t>(layerGroup, filename, 
+                                                     layerPath, typeEnum);
+      } else if (typeEnum == F3DFloat32) {
+        result = readInternal<DenseField, float32_t>(layerGroup, filename, 
+                                                     layerPath, typeEnum);
+      } else if (typeEnum == F3DFloat64) {
+        result = readInternal<DenseField, float64_t>(layerGroup, filename, 
+                                                     layerPath, typeEnum);
+      } else if (typeEnum == F3DVec16) {
+        result = readInternal<DenseField, vec16_t>(layerGroup, filename, 
+                                                   layerPath, typeEnum);
+      } else if (typeEnum == F3DVec32) {
+        result = readInternal<DenseField, vec32_t>(layerGroup, filename, 
+                                                   layerPath, typeEnum);
+      } else if (typeEnum == F3DVec64) {
+        result = readInternal<DenseField, vec64_t>(layerGroup, filename, 
+                                                   layerPath, typeEnum);
+      }
+    } else if (isSparse) {
+      if (typeEnum == F3DFloat16) {
+        result = readInternal<SparseField, float16_t>(layerGroup, filename, 
+                                                      layerPath, typeEnum);
+      } else if (typeEnum == F3DFloat32) {
+        result = readInternal<SparseField, float32_t>(layerGroup, filename, 
+                                                      layerPath, typeEnum);
+      } else if (typeEnum == F3DFloat64) {
+        result = readInternal<SparseField, float64_t>(layerGroup, filename, 
+                                                      layerPath, typeEnum);
+      } else if (typeEnum == F3DVec16) {
+        result = readInternal<SparseField, vec16_t>(layerGroup, filename, 
+                                                    layerPath, typeEnum);
+      } else if (typeEnum == F3DVec32) {
+        result = readInternal<SparseField, vec32_t>(layerGroup, filename, 
+                                                    layerPath, typeEnum);
+      } else if (typeEnum == F3DVec64) {
+        result = readInternal<SparseField, vec64_t>(layerGroup, filename, 
+                                                    layerPath, typeEnum);
+      }
+    } 
+  }
+
+  return result;
 }
 
 //----------------------------------------------------------------------------//
@@ -285,6 +390,77 @@ MIPFieldIO::write(hid_t layerGroup, FieldBase::Ptr field)
 bool
 MIPFieldIO::write(OgOGroup &layerGroup, FieldBase::Ptr field)
 {
+  // Add version attribute
+  OgOAttribute<int> version(layerGroup, k_versionAttrName, k_versionNumber);
+
+  MIPField<DenseField<half> >::Ptr halfDenseField = 
+    field_dynamic_cast<MIPField<DenseField<half> > >(field);
+  MIPField<DenseField<float> >::Ptr floatDenseField = 
+    field_dynamic_cast<MIPField<DenseField<float> > >(field);
+  MIPField<DenseField<double> >::Ptr doubleDenseField = 
+    field_dynamic_cast<MIPField<DenseField<double> > >(field);
+  MIPField<DenseField<V3h> >::Ptr vecHalfDenseField = 
+    field_dynamic_cast<MIPField<DenseField<V3h> > >(field);
+  MIPField<DenseField<V3f> >::Ptr vecFloatDenseField = 
+    field_dynamic_cast<MIPField<DenseField<V3f> > >(field);
+  MIPField<DenseField<V3d> >::Ptr vecDoubleDenseField = 
+    field_dynamic_cast<MIPField<DenseField<V3d> > >(field);
+  MIPField<SparseField<half> >::Ptr halfSparseField = 
+    field_dynamic_cast<MIPField<SparseField<half> > >(field);
+  MIPField<SparseField<float> >::Ptr floatSparseField = 
+    field_dynamic_cast<MIPField<SparseField<float> > >(field);
+  MIPField<SparseField<double> >::Ptr doubleSparseField = 
+    field_dynamic_cast<MIPField<SparseField<double> > >(field);
+  MIPField<SparseField<V3h> >::Ptr vecHalfSparseField = 
+    field_dynamic_cast<MIPField<SparseField<V3h> > >(field);
+  MIPField<SparseField<V3f> >::Ptr vecFloatSparseField = 
+    field_dynamic_cast<MIPField<SparseField<V3f> > >(field);
+  MIPField<SparseField<V3d> >::Ptr vecDoubleSparseField = 
+    field_dynamic_cast<MIPField<SparseField<V3d> > >(field);
+  
+  bool success = true;
+
+  if (floatDenseField) {
+    success = writeInternal<DenseField, float>(layerGroup, floatDenseField);
+  }
+  else if (halfDenseField) {
+    success = writeInternal<DenseField, half>(layerGroup, halfDenseField);
+  }
+  else if (doubleDenseField) {
+    success = writeInternal<DenseField, double>(layerGroup, doubleDenseField);
+  }
+  else if (vecFloatDenseField) {
+    success = writeInternal<DenseField, V3f>(layerGroup, vecFloatDenseField);
+  }
+  else if (vecHalfDenseField) {
+    success = writeInternal<DenseField, V3h>(layerGroup, vecHalfDenseField);
+  }
+  else if (vecDoubleDenseField) {
+    success = writeInternal<DenseField, V3d>(layerGroup, vecDoubleDenseField);
+  }
+  else if (floatSparseField) {
+    success = writeInternal<SparseField, float>(layerGroup, floatSparseField);
+  }
+  else if (halfSparseField) {
+    success = writeInternal<SparseField, half>(layerGroup, halfSparseField);
+  }
+  else if (doubleSparseField) {
+    success = writeInternal<SparseField, double>(layerGroup, doubleSparseField);
+  }
+  else if (vecFloatSparseField) {
+    success = writeInternal<SparseField, V3f>(layerGroup, vecFloatSparseField);
+  }
+  else if (vecHalfSparseField) {
+    success = writeInternal<SparseField, V3h>(layerGroup, vecHalfSparseField);
+  }
+  else if (vecDoubleSparseField) {
+    success = writeInternal<SparseField, V3d>(layerGroup, vecDoubleSparseField);
+  }
+  else {
+    throw WriteLayerException("MIPFieldIO does not support the given "
+                              "MIPField template parameter");
+  }
+
   return true;
 }
 

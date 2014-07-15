@@ -6,6 +6,11 @@
 
 //----------------------------------------------------------------------------//
 
+using std::cout;
+using std::endl;
+
+//----------------------------------------------------------------------------//
+
 FIELD3D_NAMESPACE_OPEN
 
 //----------------------------------------------------------------------------//
@@ -72,13 +77,19 @@ OgIGroup OgIGroup::findGroup(const std::string &name) const
 //----------------------------------------------------------------------------//
 
 Alembic::Ogawa::IGroupPtr 
-OgIGroup::findGroup(const std::string &name,
+OgIGroup::findGroup(const std::string &path,
                     const OgGroupType groupType) const
 {
   // If not valid, return non-valid group
   if (!isValid()) {
     return Alembic::Ogawa::IGroupPtr();
   }
+  // Check for recursive finding
+  if (path.find("/") != std::string::npos) {
+    return recursiveFindGroup(path, groupType);
+  }
+  // Not recursive, just a single group name
+  const std::string &name = path;
   // If it's valid, we know we have at least 2 children.
   // Check all children
   for (size_t i = OGAWA_START_ID, end = m_group->getNumChildren(); 
@@ -117,6 +128,63 @@ OgIGroup::findGroup(const std::string &name,
     }
   }
   // Didn't find one
+  return Alembic::Ogawa::IGroupPtr();
+}
+
+//----------------------------------------------------------------------------//
+
+Alembic::Ogawa::IGroupPtr 
+OgIGroup::recursiveFindGroup(const std::string &path,
+                             const OgGroupType groupType) const
+{
+  // If not valid, return non-valid group
+  if (!isValid()) {
+    return Alembic::Ogawa::IGroupPtr();
+  }
+  // Find the next group name in the path
+  const size_t pos = path.find("/");
+  const std::string name = path.substr(0, pos);
+  const std::string restOfPath = path.substr(pos + 1);
+  // If the group is valid, we know we have at least 2 children.
+  // Check all children
+  for (size_t i = OGAWA_START_ID, end = m_group->getNumChildren(); 
+       i < end; ++i) {
+    // Is it an Ogawa group? If not, continue
+    if (!m_group->isChildGroup(i)) {
+      continue;
+    }
+    // Grab the ogawa group
+    Alembic::Ogawa::IGroupPtr group = 
+      m_group->getGroup(i, false, OGAWA_THREAD);
+    // Data set 0 is the name
+    std::string groupName;
+    if (!readString(group, 0, groupName)) {
+      // This is a bad error. Print details.
+      std::cout << "OgIGroup::recursiveFindGroup() couldn't read subgroup "
+                << "name for group name: " << name << std::endl;
+      return Alembic::Ogawa::IGroupPtr();
+    }
+    // Data set 1 is the type
+    OgGroupType type;
+    if (!readData(group, 1, type)) {
+      // This is a bad error. Print details.
+      std::cout << "OgIGroup::recursiveFindGroup() couldn't read subgroup "
+                << "type for group name: " << name << std::endl;
+      return Alembic::Ogawa::IGroupPtr();
+    }
+    // Check that group type is F3DGroupType
+    if (type != F3DGroupType) {
+      // This is not an error.
+      continue;
+    }
+    // Check if name matches
+    if (groupName == name) {
+      OgIGroup subGroup(group);
+      return subGroup.findGroup(restOfPath, groupType);
+    }
+  }
+  // Didn't find one
+  cout << "Couldn't find group: " << name << endl;
   return Alembic::Ogawa::IGroupPtr();
 }
 

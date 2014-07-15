@@ -498,6 +498,93 @@ SparseFieldIO::write(OgOGroup &layerGroup, FieldBase::Ptr field)
 
 //----------------------------------------------------------------------------//
 
+template <typename Data_T>
+struct ReadThreadingState
+{
+  ReadThreadingState(const OgIGroup &i_location, 
+                     Sparse::SparseBlock<Data_T> *i_blocks, 
+                     const size_t i_numVoxels, 
+                     const size_t i_numBlocks,
+                     const size_t i_numOccupiedBlocks, 
+                     const bool i_isCompressed,
+                     const std::vector<size_t> &i_blockIdxToDatasetIdx)
+    : location(i_location),
+      blocks(i_blocks),
+      numVoxels(i_numVoxels), 
+      numBlocks(i_numBlocks),
+      numOccupiedBlocks(i_numOccupiedBlocks),
+      isCompressed(i_isCompressed), 
+      blockIdxToDatasetIdx(i_blockIdxToDatasetIdx), 
+      nextBlockToRead(0)
+  { }
+  // Data members
+  const OgIGroup &location;
+  Sparse::SparseBlock<Data_T> *blocks;
+  const size_t numVoxels;
+  const size_t numBlocks;
+  const size_t numOccupiedBlocks;
+  const bool   isCompressed;
+  const std::vector<size_t> &blockIdxToDatasetIdx;
+  size_t nextBlockToRead;
+  // Mutexes
+  boost::mutex readMutex;
+};
+
+//----------------------------------------------------------------------------//
+
+template <typename Data_T>
+class ReadBlockOp
+{
+public:
+  ReadBlockOp(ReadThreadingState<Data_T> &state, const size_t threadId)
+    : m_state(state)
+  { 
+    // Set up the compression cache
+    const uLong srcLen      = m_state.numVoxels * sizeof(Data_T);
+    const uLong cmpLenBound = compressBound(srcLen);
+    m_cache.resize(cmpLenBound);
+    // Initialize the reader
+    m_readerPtr.reset(
+      new OgSparseDataReader<Data_T>(m_state.location, m_state.numVoxels, 
+                                     m_state.numOccupiedBlocks,
+                                     m_state.isCompressed));
+    m_reader = m_readerPtr.get();
+    // Set the thread id
+    m_reader->setThreadId(threadId);
+  }
+  void operator() ()
+  {
+    // Get next block to read
+    size_t blockIdx;
+    {
+      boost::mutex::scoped_lock lock(m_state.readMutex);
+      blockIdx = m_state.nextBlockToRead;
+      m_state.nextBlockToRead++;
+    }
+    // Loop over blocks until we run out
+    while (blockIdx < m_state.numBlocks) {
+      if (m_state.blocks[blockIdx].isAllocated) {
+        const size_t datasetIdx = m_state.blockIdxToDatasetIdx[blockIdx];
+        m_reader->readBlock(datasetIdx, m_state.blocks[blockIdx].data);
+      }
+      // Get next block idx
+      {
+        boost::mutex::scoped_lock lock(m_state.readMutex);
+        blockIdx = m_state.nextBlockToRead;
+        m_state.nextBlockToRead++;
+      }
+    }
+  }
+private:
+  // Data members ---
+  ReadThreadingState<Data_T> &m_state;
+  std::vector<uint8_t> m_cache;
+  boost::shared_ptr<OgSparseDataReader<Data_T> > m_readerPtr;
+  OgSparseDataReader<Data_T> *m_reader;
+};
+
+//----------------------------------------------------------------------------//
+
 template <class Data_T>
 typename SparseField<Data_T>::Ptr
 SparseFieldIO::readData(const OgIGroup &location, const Box3i &extents, 
@@ -526,7 +613,7 @@ SparseFieldIO::readData(const OgIGroup &location, const Box3i &extents,
     throw MissingAttributeException("Couldn't find attribute: " +
                                     k_numOccupiedBlocksStr);
   }
-  const int occupiedBlocks = occupiedBlocksAttr.value();
+  const size_t occupiedBlocks = occupiedBlocksAttr.value();
 
   // Set up the dynamic read info ---
 
@@ -540,7 +627,8 @@ SparseFieldIO::readData(const OgIGroup &location, const Box3i &extents,
 
   SparseBlock<Data_T> *blocks = result->m_blocks;
 
-  // ... Read the isAllocated array
+  // ... Read the isAllocated array and set up the block mapping array
+  std::vector<size_t> blockIdxToDatasetIdx(numBlocks);
 
   {
     // Grab the data
@@ -551,11 +639,14 @@ SparseFieldIO::readData(const OgIGroup &location, const Box3i &extents,
       throw MissingGroupException("Couldn't find block_is_allocated_data: ");
     }
     isAllocatedData.getData(0, &isAllocated[0], OGAWA_THREAD);
-    // Allocate the blocks
-    for (size_t i = 0; i < numBlocks; ++i) {
+    // Allocate the blocks and set up the block mapping array
+    for (size_t i = 0, nextBlockOnDisk = 0; i < numBlocks; ++i) {
       blocks[i].isAllocated = isAllocated[i];
       if (!dynamicLoading && isAllocated[i]) {
         blocks[i].resize(numVoxels);
+        // Update the block mapping array
+        blockIdxToDatasetIdx[i] = nextBlockOnDisk;
+        nextBlockOnDisk++;
       }
     }
   }
@@ -589,14 +680,33 @@ SparseFieldIO::readData(const OgIGroup &location, const Box3i &extents,
       // Defer loading to the sparse cache
       result->setupReferenceBlocks();
     } else {
+#if 1
+      // Threading state
+      ReadThreadingState<Data_T> state(location, blocks, numVoxels, numBlocks,
+                                       occupiedBlocks, isCompressed,
+                                       blockIdxToDatasetIdx);
+      // Number of threads
+      const size_t numThreads = numIOThreads();
+      // Launch threads
+      boost::thread_group threads;
+      for (size_t i = 0; i < numThreads; ++i) {
+        threads.create_thread(ReadBlockOp<Data_T>(state, i));
+      }
+      threads.join_all();
+#else
       // Read the data directly. The memory is already allocated
       OgSparseDataReader<Data_T> reader(location, numVoxels, occupiedBlocks,
                                         isCompressed);
+      size_t nextBlockOnDisk = 0;
       for (size_t i = 0; i < numBlocks; ++i) {
         if (blocks[i].isAllocated) {
-          reader.readBlock(i, blocks[i].data);
+          // Read the current block
+          reader.readBlock(nextBlockOnDisk, blocks[i].data);
+          // Increment block index
+          nextBlockOnDisk++;
         }
       }
+#endif
     }
   }
 
@@ -840,7 +950,6 @@ struct ThreadingState
   size_t nextBlockToWrite;
   // Mutexes
   boost::mutex compressMutex;
-  boost::mutex writeMutex;
 };
 
 //----------------------------------------------------------------------------//

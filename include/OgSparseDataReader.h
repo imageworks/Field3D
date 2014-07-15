@@ -85,6 +85,9 @@ public:
 
   // Main methods --------------------------------------------------------------
 
+  //! Sets the reader's thread id
+  void setThreadId(const size_t id);
+
   //! Reads a block, storing the data in result, which is assumed to contain
   //! enough room for m_valuesPerBlock entries.
   void readBlock(const size_t idx, Data_T *result);
@@ -104,6 +107,10 @@ private:
   //! Whether the data is compressed
   const bool m_isCompressed;
 
+  //! Thread ID. Used to alert Ogawa that different threads are accessing
+  //! the API concurrently.
+  size_t m_threadId;
+
   //! Cache for decompression
   std::vector<uint8_t> m_compressionCache;
 };
@@ -119,7 +126,8 @@ OgSparseDataReader<Data_T>::OgSparseDataReader(const OgIGroup &location,
                                                const bool isCompressed) 
   : m_numVoxels(numVoxels), 
     k_dataStr("data"),
-    m_isCompressed(isCompressed)
+    m_isCompressed(isCompressed),
+    m_threadId(0)
 {
   using namespace Exc;
 
@@ -165,6 +173,14 @@ OgSparseDataReader<Data_T>::OgSparseDataReader(const OgIGroup &location,
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
+void OgSparseDataReader<Data_T>::setThreadId(const size_t id)
+{
+  m_threadId = id;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
 void OgSparseDataReader<Data_T>::readBlock(const size_t idx, Data_T *result)
 {
   using namespace Exc;
@@ -172,16 +188,16 @@ void OgSparseDataReader<Data_T>::readBlock(const size_t idx, Data_T *result)
   if (m_isCompressed) {
 
     // Length of compressed data
-    const uint64_t length = m_cDataset.dataSize(idx, OGAWA_THREAD);
+    const uint64_t length = m_cDataset.dataSize(idx, m_threadId);
     // Read data into compression cache
-    m_cDataset.getData(idx, &m_compressionCache[0], OGAWA_THREAD);
+    m_cDataset.getData(idx, &m_compressionCache[0], m_threadId);
     // Target location
     uint8_t *ucmpData = reinterpret_cast<uint8_t *>(result);
     // Length of uncompressed data is stored here
     uLong ucmpLen = m_numVoxels * sizeof(Data_T);
     // Uncompress
     int status = uncompress(ucmpData, &ucmpLen, &m_compressionCache[0], 
-                            length * sizeof(Data_T));
+                            length);
     if (status != Z_OK) {
       std::cout << "ERROR in uncompress: " << status
                 << " " << ucmpLen << " " << length << std::endl;

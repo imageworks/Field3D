@@ -67,10 +67,18 @@ def setupEnv(env):
     env.Append(LIBPATH = ["/usr/local/lib"])
     env.Append(LIBPATH = ["/opt/local/lib"])
     # SPI locations
-    env.Append(CPPPATH = ["/usr/include/OpenEXR"])
-    env.Append(CPPPATH = ["/net/apps/spinux1/intel/tbb/include"])
-    env.Append(LIBPATH = ["/usr/lib64"])
-    env.Append(LIBPATH = ["/net/apps/spinux1/intel/tbb/lib/intel64/"])
+    #env.Append(CPPPATH = ["/usr/include/OpenEXR"])
+    #env.Append(CPPPATH = ["/net/apps/spinux1/intel/tbb/include"])
+    #env.Append(LIBPATH = ["/usr/lib64"])
+    #env.Append(LIBPATH = ["/net/apps/spinux1/intel/tbb/lib/intel64/"])
+    # Pixar locations
+    # env.Append(CPPPATH = ["/pixar/d2/sets/tools-28/include/"])
+    # env.Append(CPPPATH = ["/pixar/d2/sets/tools-28/include/OpenEXR"])
+    env.Append(CPPPATH = 
+           ["/dist/3rdpartyrels/houdini/13.0.322/toolkit/include",
+            "/dist/3rdpartyrels/houdini/13.0.322/toolkit/include/OpenEXR"])
+    env.Append(LIBPATH = 
+           ["/dist/3rdpartyrels/houdini/13.0.322/dsolib"])
     # Special case for OpenEXR
     env.Append(CPPPATH = ["/usr/local/include/OpenEXR"])
     env.Append(CPPPATH = ["/opt/local/include/OpenEXR"])
@@ -89,13 +97,16 @@ def setupEnv(env):
         env.Append(LIBS = ["Half"])
         env.Append(LIBS = ["Iex"])
         env.Append(LIBS = ["Imath"])
-        env.Append(LIBS = ["boost_thread-mt"])
+        env.Append(LIBS = ["boost_thread"])
+        env.Append(LIBS = ["boost_system"])
     # TBB
     env.Append(LIBS = ["tbb"])
     # Field3D
     env.Append(CPPPATH = "Field3D_here/export")
+    env.Append(CPPPATH = "Field3D_here/include")
     # OpenVDB
-    env.Append(CPPPATH = "OpenVDB_here")    
+    # env.Append(CPPPATH = "OpenVDB_here")
+    env.Append(LIBS = ["openvdb_sesi"])
     # Compiler flags
     env.Append(CCFLAGS = ["-g", "-O3"])
     env.Append(CPPDEFINES = ["NDEBUG"])

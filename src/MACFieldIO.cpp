@@ -155,10 +155,10 @@ MACFieldIO::read(hid_t layerGroup, const std::string & /* filename */,
 //----------------------------------------------------------------------------//
 
 FieldBase::Ptr
-MACFieldIO::read(const OgIGroup &layerGroup, 
+MACFieldIO::read(const OgIGroup & /* layerGroup */, 
                  const std::string & /* filename */, 
                  const std::string & /* layerPath */,
-                 OgDataType typeEnum)
+                 OgDataType /* typeEnum */)
 {
   return FieldBase::Ptr();
 }
@@ -204,7 +204,7 @@ MACFieldIO::write(hid_t layerGroup, FieldBase::Ptr field)
 //----------------------------------------------------------------------------//
 
 bool
-MACFieldIO::write(OgOGroup &layerGroup, FieldBase::Ptr field)
+MACFieldIO::write(OgOGroup & /* layerGroup */ , FieldBase::Ptr /* field */)
 {
   return true;
 }

@@ -67,6 +67,233 @@ using namespace Exc;
 using namespace Hdf5Util;
 
 //----------------------------------------------------------------------------//
+// Anonymous namespace
+//----------------------------------------------------------------------------//
+
+namespace {
+
+//----------------------------------------------------------------------------//
+
+template <typename Data_T>
+struct ReadThreadingState
+{
+  ReadThreadingState(const OgIGroup &i_location, 
+                     Sparse::SparseBlock<Data_T> *i_blocks, 
+                     const size_t i_numVoxels, 
+                     const size_t i_numBlocks,
+                     const size_t i_numOccupiedBlocks, 
+                     const bool i_isCompressed,
+                     const std::vector<size_t> &i_blockIdxToDatasetIdx)
+    : location(i_location),
+      blocks(i_blocks),
+      numVoxels(i_numVoxels), 
+      numBlocks(i_numBlocks),
+      numOccupiedBlocks(i_numOccupiedBlocks),
+      isCompressed(i_isCompressed), 
+      blockIdxToDatasetIdx(i_blockIdxToDatasetIdx), 
+      nextBlockToRead(0)
+  { }
+  // Data members
+  const OgIGroup &location;
+  Sparse::SparseBlock<Data_T> *blocks;
+  const size_t numVoxels;
+  const size_t numBlocks;
+  const size_t numOccupiedBlocks;
+  const bool   isCompressed;
+  const std::vector<size_t> &blockIdxToDatasetIdx;
+  size_t nextBlockToRead;
+  // Mutexes
+  boost::mutex readMutex;
+};
+
+//----------------------------------------------------------------------------//
+
+template <typename Data_T>
+class ReadBlockOp
+{
+public:
+  ReadBlockOp(ReadThreadingState<Data_T> &state, const size_t threadId)
+    : m_state(state)
+  { 
+    // Set up the compression cache
+    const uLong srcLen      = m_state.numVoxels * sizeof(Data_T);
+    const uLong cmpLenBound = compressBound(srcLen);
+    m_cache.resize(cmpLenBound);
+    // Initialize the reader
+    m_readerPtr.reset(
+      new OgSparseDataReader<Data_T>(m_state.location, m_state.numVoxels, 
+                                     m_state.numOccupiedBlocks,
+                                     m_state.isCompressed));
+    m_reader = m_readerPtr.get();
+    // Set the thread id
+    m_reader->setThreadId(threadId);
+  }
+  void operator() ()
+  {
+    // Get next block to read
+    size_t blockIdx;
+    {
+      boost::mutex::scoped_lock lock(m_state.readMutex);
+      blockIdx = m_state.nextBlockToRead;
+      m_state.nextBlockToRead++;
+    }
+    // Loop over blocks until we run out
+    while (blockIdx < m_state.numBlocks) {
+      if (m_state.blocks[blockIdx].isAllocated) {
+        const size_t datasetIdx = m_state.blockIdxToDatasetIdx[blockIdx];
+        m_reader->readBlock(datasetIdx, m_state.blocks[blockIdx].data);
+      }
+      // Get next block idx
+      {
+        boost::mutex::scoped_lock lock(m_state.readMutex);
+        blockIdx = m_state.nextBlockToRead;
+        m_state.nextBlockToRead++;
+      }
+    }
+  }
+private:
+  // Data members ---
+  ReadThreadingState<Data_T> &m_state;
+  std::vector<uint8_t> m_cache;
+  boost::shared_ptr<OgSparseDataReader<Data_T> > m_readerPtr;
+  OgSparseDataReader<Data_T> *m_reader;
+};
+
+//----------------------------------------------------------------------------//
+
+template <typename Data_T>
+struct ThreadingState
+{
+  ThreadingState(OgOCDataset<Data_T> &i_data, 
+                 Sparse::SparseBlock<Data_T> *i_blocks, 
+                 const size_t i_numVoxels, 
+                 const size_t i_numBlocks,
+                 const std::vector<uint8_t> &i_isAllocated)
+    : data(i_data),
+      blocks(i_blocks),
+      numVoxels(i_numVoxels), 
+      numBlocks(i_numBlocks),
+      isAllocated(i_isAllocated), 
+      nextBlockToCompress(0),
+      nextBlockToWrite(0)
+  { 
+    // Find first in-use block
+    for (size_t i = 0; i < numBlocks; ++i) {
+      if (blocks[i].isAllocated) {
+        nextBlockToCompress = i;
+        nextBlockToWrite = i;
+        return;
+      }
+    }
+    // If we get here, there are no active blocks. Set to numBlocks
+    nextBlockToCompress = numBlocks;
+    nextBlockToWrite = numBlocks;
+  }
+  // Data members
+  OgOCDataset<Data_T> &data;
+  Sparse::SparseBlock<Data_T> *blocks;
+  const size_t numVoxels;
+  const size_t numBlocks;
+  const std::vector<uint8_t> isAllocated;
+  size_t nextBlockToCompress;
+  size_t nextBlockToWrite;
+  // Mutexes
+  boost::mutex compressMutex;
+};
+
+//----------------------------------------------------------------------------//
+
+template <typename Data_T>
+class WriteBlockOp
+{
+public:
+  WriteBlockOp(ThreadingState<Data_T> &state, const size_t threadId)
+    : m_state(state), m_threadId(threadId)
+  { 
+    const uLong srcLen      = m_state.numVoxels * sizeof(Data_T);
+    const uLong cmpLenBound = compressBound(srcLen);
+    m_cache.resize(cmpLenBound);
+  }
+  void operator() ()
+  {
+    const int level = 1;
+    // Get next block to compress
+    size_t blockIdx;
+    {
+      boost::mutex::scoped_lock lock(m_state.compressMutex);
+      blockIdx = m_state.nextBlockToCompress;
+      // Step counter to next
+      while (m_state.nextBlockToCompress < m_state.numBlocks) {
+        m_state.nextBlockToCompress++;
+        if (m_state.blocks[m_state.nextBlockToCompress].isAllocated) {
+          break;
+        }
+      }
+    }
+    // Loop over blocks until we run out
+    while (blockIdx < m_state.numBlocks) {
+      if (m_state.blocks[blockIdx].isAllocated) {
+        // Block data as bytes
+        const uint8_t *srcData = 
+          reinterpret_cast<const uint8_t *>(m_state.blocks[blockIdx].data);
+        // Length of compressed data is stored here
+        const uLong srcLen      = m_state.numVoxels * sizeof(Data_T);
+        const uLong cmpLenBound = compressBound(srcLen);
+        uLong cmpLen            = cmpLenBound;
+        // Perform compression
+        const int status = compress2(&m_cache[0], &cmpLen, 
+                                     srcData, srcLen, level);
+        // Error check
+        if (status != Z_OK) {
+          std::cout << "ERROR: Couldn't compress in SparseFieldIO." << std::endl
+                    << "  Level:  " << level << std::endl
+                    << "  Status: " << status << std::endl
+                    << "  srcLen: " << srcLen << std::endl
+                    << "  cmpLenBound: " << cmpLenBound << std::endl
+                    << "  cmpLen: " << cmpLen << std::endl;
+          return;
+        }
+        // Wait to write data
+        while (m_state.nextBlockToWrite != blockIdx) {
+          // Spin
+        }
+        // Do the writing
+        m_state.data.addData(cmpLen, &m_cache[0]);
+        // Let next block write
+        while (m_state.nextBlockToWrite < m_state.numBlocks){
+          // Increment to next
+          m_state.nextBlockToWrite++;
+          if (m_state.blocks[m_state.nextBlockToWrite].isAllocated) {
+            break;
+          }
+        }
+      }
+      // Get next block idx
+      {
+        boost::mutex::scoped_lock lock(m_state.compressMutex);
+        blockIdx = m_state.nextBlockToCompress;
+        // Step counter to next
+        while (m_state.nextBlockToCompress < m_state.numBlocks) {
+          m_state.nextBlockToCompress++;
+          if (m_state.blocks[m_state.nextBlockToCompress].isAllocated) {
+            break;
+          }
+        }
+      }
+    }
+  }
+private:
+  // Data members ---
+  ThreadingState<Data_T> &m_state;
+  std::vector<uint8_t> m_cache;
+  const size_t m_threadId;
+};
+
+//----------------------------------------------------------------------------//
+
+} // Anonymous namespace
+
+//----------------------------------------------------------------------------//
 // Static members
 //----------------------------------------------------------------------------//
 
@@ -498,93 +725,6 @@ SparseFieldIO::write(OgOGroup &layerGroup, FieldBase::Ptr field)
 
 //----------------------------------------------------------------------------//
 
-template <typename Data_T>
-struct ReadThreadingState
-{
-  ReadThreadingState(const OgIGroup &i_location, 
-                     Sparse::SparseBlock<Data_T> *i_blocks, 
-                     const size_t i_numVoxels, 
-                     const size_t i_numBlocks,
-                     const size_t i_numOccupiedBlocks, 
-                     const bool i_isCompressed,
-                     const std::vector<size_t> &i_blockIdxToDatasetIdx)
-    : location(i_location),
-      blocks(i_blocks),
-      numVoxels(i_numVoxels), 
-      numBlocks(i_numBlocks),
-      numOccupiedBlocks(i_numOccupiedBlocks),
-      isCompressed(i_isCompressed), 
-      blockIdxToDatasetIdx(i_blockIdxToDatasetIdx), 
-      nextBlockToRead(0)
-  { }
-  // Data members
-  const OgIGroup &location;
-  Sparse::SparseBlock<Data_T> *blocks;
-  const size_t numVoxels;
-  const size_t numBlocks;
-  const size_t numOccupiedBlocks;
-  const bool   isCompressed;
-  const std::vector<size_t> &blockIdxToDatasetIdx;
-  size_t nextBlockToRead;
-  // Mutexes
-  boost::mutex readMutex;
-};
-
-//----------------------------------------------------------------------------//
-
-template <typename Data_T>
-class ReadBlockOp
-{
-public:
-  ReadBlockOp(ReadThreadingState<Data_T> &state, const size_t threadId)
-    : m_state(state)
-  { 
-    // Set up the compression cache
-    const uLong srcLen      = m_state.numVoxels * sizeof(Data_T);
-    const uLong cmpLenBound = compressBound(srcLen);
-    m_cache.resize(cmpLenBound);
-    // Initialize the reader
-    m_readerPtr.reset(
-      new OgSparseDataReader<Data_T>(m_state.location, m_state.numVoxels, 
-                                     m_state.numOccupiedBlocks,
-                                     m_state.isCompressed));
-    m_reader = m_readerPtr.get();
-    // Set the thread id
-    m_reader->setThreadId(threadId);
-  }
-  void operator() ()
-  {
-    // Get next block to read
-    size_t blockIdx;
-    {
-      boost::mutex::scoped_lock lock(m_state.readMutex);
-      blockIdx = m_state.nextBlockToRead;
-      m_state.nextBlockToRead++;
-    }
-    // Loop over blocks until we run out
-    while (blockIdx < m_state.numBlocks) {
-      if (m_state.blocks[blockIdx].isAllocated) {
-        const size_t datasetIdx = m_state.blockIdxToDatasetIdx[blockIdx];
-        m_reader->readBlock(datasetIdx, m_state.blocks[blockIdx].data);
-      }
-      // Get next block idx
-      {
-        boost::mutex::scoped_lock lock(m_state.readMutex);
-        blockIdx = m_state.nextBlockToRead;
-        m_state.nextBlockToRead++;
-      }
-    }
-  }
-private:
-  // Data members ---
-  ReadThreadingState<Data_T> &m_state;
-  std::vector<uint8_t> m_cache;
-  boost::shared_ptr<OgSparseDataReader<Data_T> > m_readerPtr;
-  OgSparseDataReader<Data_T> *m_reader;
-};
-
-//----------------------------------------------------------------------------//
-
 template <class Data_T>
 typename SparseField<Data_T>::Ptr
 SparseFieldIO::readData(const OgIGroup &location, const Box3i &extents, 
@@ -680,7 +820,6 @@ SparseFieldIO::readData(const OgIGroup &location, const Box3i &extents,
       // Defer loading to the sparse cache
       result->setupReferenceBlocks();
     } else {
-#if 1
       // Threading state
       ReadThreadingState<Data_T> state(location, blocks, numVoxels, numBlocks,
                                        occupiedBlocks, isCompressed,
@@ -693,20 +832,6 @@ SparseFieldIO::readData(const OgIGroup &location, const Box3i &extents,
         threads.create_thread(ReadBlockOp<Data_T>(state, i));
       }
       threads.join_all();
-#else
-      // Read the data directly. The memory is already allocated
-      OgSparseDataReader<Data_T> reader(location, numVoxels, occupiedBlocks,
-                                        isCompressed);
-      size_t nextBlockOnDisk = 0;
-      for (size_t i = 0; i < numBlocks; ++i) {
-        if (blocks[i].isAllocated) {
-          // Read the current block
-          reader.readBlock(nextBlockOnDisk, blocks[i].data);
-          // Increment block index
-          nextBlockOnDisk++;
-        }
-      }
-#endif
     }
   }
 
@@ -912,124 +1037,6 @@ bool SparseFieldIO::writeInternal(hid_t layerGroup,
 
 //----------------------------------------------------------------------------//
 
-template <typename Data_T>
-struct ThreadingState
-{
-  ThreadingState(OgOCDataset<Data_T> &i_data, 
-                 Sparse::SparseBlock<Data_T> *i_blocks, 
-                 const size_t i_numVoxels, 
-                 const size_t i_numBlocks,
-                 const std::vector<uint8_t> &i_isAllocated)
-    : data(i_data),
-      blocks(i_blocks),
-      numVoxels(i_numVoxels), 
-      numBlocks(i_numBlocks),
-      isAllocated(i_isAllocated), 
-      nextBlockToCompress(0),
-      nextBlockToWrite(0)
-  { 
-    // Find first in-use block
-    for (size_t i = 0; i < numBlocks; ++i) {
-      if (blocks[i].isAllocated) {
-        nextBlockToCompress = i;
-        nextBlockToWrite = i;
-        return;
-      }
-    }
-    // If we get here, there are no active blocks. Set to numBlocks
-    nextBlockToCompress = numBlocks;
-    nextBlockToWrite = numBlocks;
-  }
-  // Data members
-  OgOCDataset<Data_T> &data;
-  Sparse::SparseBlock<Data_T> *blocks;
-  const size_t numVoxels;
-  const size_t numBlocks;
-  const std::vector<uint8_t> isAllocated;
-  size_t nextBlockToCompress;
-  size_t nextBlockToWrite;
-  // Mutexes
-  boost::mutex compressMutex;
-};
-
-//----------------------------------------------------------------------------//
-
-template <typename Data_T>
-class WriteBlockOp
-{
-public:
-  WriteBlockOp(ThreadingState<Data_T> &state)
-    : m_state(state)
-  { 
-    const uLong srcLen      = m_state.numVoxels * sizeof(Data_T);
-    const uLong cmpLenBound = compressBound(srcLen);
-    m_cache.resize(cmpLenBound);
-  }
-  void operator() ()
-  {
-    const int level = 1;
-    // Get next block to compress
-    size_t blockIdx;
-    {
-      boost::mutex::scoped_lock lock(m_state.compressMutex);
-      blockIdx = m_state.nextBlockToCompress;
-      m_state.nextBlockToCompress++;
-    }
-    // Loop over blocks until we run out
-    while (blockIdx < m_state.numBlocks) {
-      if (m_state.blocks[blockIdx].isAllocated) {
-        // Block data as bytes
-        const uint8_t *srcData = 
-          reinterpret_cast<const uint8_t *>(m_state.blocks[blockIdx].data);
-        // Length of compressed data is stored here
-        const uLong srcLen      = m_state.numVoxels * sizeof(Data_T);
-        const uLong cmpLenBound = compressBound(srcLen);
-        uLong cmpLen            = cmpLenBound;
-        // Perform compression
-        const int status = compress2(&m_cache[0], &cmpLen, 
-                                     srcData, srcLen, level);
-        // Error check
-        if (status != Z_OK) {
-          std::cout << "ERROR: Couldn't compress in SparseFieldIO." << std::endl
-                    << "  Level:  " << level << std::endl
-                    << "  Status: " << status << std::endl
-                    << "  srcLen: " << srcLen << std::endl
-                    << "  cmpLenBound: " << cmpLenBound << std::endl
-                    << "  cmpLen: " << cmpLen << std::endl;
-          return;
-        }
-        // Wait to write data
-        while (m_state.nextBlockToWrite != blockIdx) {
-          sleep(1e-9);
-          // Spin
-        }
-        // Do the writing
-        m_state.data.addData(cmpLen, &m_cache[0]);
-        // Let next block write
-        while (m_state.nextBlockToWrite < m_state.numBlocks){
-          // Increment to next
-          m_state.nextBlockToWrite++;
-          if (m_state.blocks[m_state.nextBlockToWrite].isAllocated) {
-            break;
-          }
-        }
-      }
-      // Get next block idx
-      {
-        boost::mutex::scoped_lock lock(m_state.compressMutex);
-        blockIdx = m_state.nextBlockToCompress;
-        m_state.nextBlockToCompress++;
-      }
-    }
-  }
-private:
-  // Data members ---
-  ThreadingState<Data_T> &m_state;
-  std::vector<uint8_t> m_cache;
-};
-
-//----------------------------------------------------------------------------//
-
 template <class Data_T>
 bool SparseFieldIO::writeInternal(OgOGroup &layerGroup, 
                                   typename SparseField<Data_T>::Ptr field)
@@ -1110,7 +1117,7 @@ bool SparseFieldIO::writeInternal(OgOGroup &layerGroup,
     // Launch threads
     boost::thread_group threads;
     for (size_t i = 0; i < numThreads; ++i) {
-      threads.create_thread(WriteBlockOp<Data_T>(state));
+      threads.create_thread(WriteBlockOp<Data_T>(state, i));
     }
     threads.join_all();
   }

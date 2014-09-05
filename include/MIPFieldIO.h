@@ -611,9 +611,6 @@ MIPFieldIO::readInternal(const OgIGroup &layerGroup,
 
   Box3i extents, dataW;
 
-  std::cout << "MIPField()::readInternal() " 
-            << MIPType::staticClassType() << std::endl;
-
 #if 0
 
   // Get extents ---

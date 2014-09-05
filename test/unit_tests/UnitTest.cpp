@@ -40,7 +40,7 @@
 
 #include <boost/test/included/unit_test.hpp>
 
-#include <boost/timer.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/thread/thread.hpp>
 #include <boost/thread/mutex.hpp>
 
@@ -71,6 +71,7 @@ using namespace Field3D::Hdf5Util;
 //----------------------------------------------------------------------------//
 
 namespace {
+  using namespace boost::posix_time;
   template <typename T>
   struct Add
   {
@@ -94,16 +95,35 @@ namespace {
       current += static_cast<T>(1.0);
     }
   };
-  class ScopedPrintTimer
+  struct Timer
+  {
+    Timer()
+      : m_startTime(microsec_clock::local_time())
+    { }
+    size_t ms()
+    { 
+      return size_t((microsec_clock::local_time() - 
+                     m_startTime).total_milliseconds()); 
+    }
+    size_t us()
+    { 
+      return size_t((microsec_clock::local_time() - 
+                     m_startTime).total_microseconds()); 
+    }
+  private:
+    ptime m_startTime;
+  };  class ScopedPrintTimer
   {
   public:
-    boost::timer timer;
+    Timer timer;
     ScopedPrintTimer(int numThreads=1)
       : m_numThreads(numThreads)
       {}
     ~ScopedPrintTimer()
     {
-      Msg::print("  Time elapsed: " + lexical_cast<string>(timer.elapsed()/float(m_numThreads)));
+      Msg::print("  Time elapsed: " + 
+                 lexical_cast<string>(0.001 * timer.ms() / 
+                                      float(m_numThreads)));
     }
     int m_numThreads;
   };
@@ -967,14 +987,14 @@ void testField3DFile()
   typedef Field_T<Vec3_T> VField;
 
   Msg::print("Field3DFile tests for type " + 
-             string(SField::staticClassType()));
+             string(SField::staticClassType()) + 
+             (DoOgawa_T ? " ogawa" : " hdf5"));
 
   if (DoOgawa_T) {
     Field3DOutputFile::useOgawa(true);
-    Msg::print("  Using ogawa");
+    Field3D::setNumIOThreads(8);
   } else {
     Field3DOutputFile::useOgawa(false);
-    Msg::print("  Using hdf5");
   }
 
   string currentTest;
@@ -995,7 +1015,6 @@ void testField3DFile()
 
   {
     Msg::print(currentTest);
-    ScopedPrintTimer t;
     string basename = "test_" + string(SField::staticClassType());
     if (DoOgawa_T) {
       basename += "ogawa";
@@ -1511,7 +1530,14 @@ void testBasicFileOpen()
   Msg::print("Testing basic Field3DFile open/close");
   {
     Field3DInputFile in;
-    in.open(getTempFile("test_DenseField.float.f3d"));
+    BOOST_CHECK_EQUAL(in.open(getTempFile("test_DenseField_float_hdf5.f3d")), 
+                      true);
+    in.close();
+  }
+  {
+    Field3DInputFile in;
+    BOOST_CHECK_EQUAL(in.open(getTempFile("test_DenseField_float_ogawa.f3d")), 
+                      true);
     in.close();
   }
 }
@@ -1826,6 +1852,15 @@ void testEmptyMACFieldToDisk()
   writeSuccess = out.writeVectorLayer<Float_T>(field1Name, velocityName, msf);
   BOOST_CHECK_EQUAL(writeSuccess, true);
   out.close(); 
+
+  // Read the file back in
+  Field3DInputFile in;
+  BOOST_CHECK_EQUAL(in.open(filename), true);
+  typename Field<FIELD3D_VEC3_T<Float_T> >::Vec fields = 
+    in.readVectorLayers<Float_T>();
+  BOOST_CHECK_EQUAL(fields.size(), 1);
+  BOOST_CHECK_EQUAL(fields[0] != NULL, true);
+  BOOST_CHECK_EQUAL(field_dynamic_cast<MACField_T>(fields[0]) != NULL, true);
 }
 
 //----------------------------------------------------------------------------//
@@ -2374,13 +2409,23 @@ void testThreadField()
 
 template <template <typename T> class MIP_T, 
           template <typename T> class Field_T, 
-          class Data_T>
+          class Data_T,
+          bool DoOgawa_T>
 void testMIPField()
 {
   typedef MIP_T<Data_T> FieldType;
 
   string TName(DataTypeTraits<Data_T>::name());
-  Msg::print(string("Testing ") + MIP_T<Data_T>::staticClassType());
+  Msg::print(string("Testing ") + 
+             MIP_T<Data_T>::staticClassType()+ 
+             (DoOgawa_T ? " ogawa" : " hdf5"));
+
+  if (DoOgawa_T) {
+    Field3DOutputFile::useOgawa(true);
+    Field3D::setNumIOThreads(8);
+  } else {
+    Field3DOutputFile::useOgawa(false);
+  }
 
   typename Field_T<Data_T>::Ptr level0(new Field_T<Data_T>);
   typename Field_T<Data_T>::Ptr level1(new Field_T<Data_T>);
@@ -2404,18 +2449,27 @@ void testMIPField()
   mipField->name = "mip";
   mipField->attribute = "density";
   
+  string basename = "test_" + string(MIP_T<Data_T>::staticClassType());
+  if (DoOgawa_T) {
+    basename += "ogawa";
+  } else {
+    basename += "hdf5";
+  }
+  string filename(getTempFile(basename + ".f3d"));
+    
   Field3DOutputFile out;
-  string filename(getTempFile(string(MIP_T<Data_T>::staticClassType()) + ".f3d")); 
-
   out.create(filename);
   out.writeScalarLayer<float>(mipField);
+  out.close();
 
   Field3DInputFile in;
   in.open(filename);
+
   typename Field<Data_T>::Vec fields = in.readScalarLayers<Data_T>();
+  BOOST_CHECK_EQUAL(fields.size(), 1);
+
   mipField = field_dynamic_cast<MIP_T<Data_T> >(fields[0]);
 
-  BOOST_CHECK_EQUAL(fields.size(), 1);
   BOOST_CHECK_EQUAL(mipField != NULL, true);
   BOOST_CHECK_EQUAL(mipField->numLevels(), 3);
   bool matchLevel0 = isIdentical<Data_T>(mipField->mipLevel(0), level0);
@@ -2541,15 +2595,15 @@ void testMIPMake()
 
 //----------------------------------------------------------------------------//
 
-#define DO_BASIC_TESTS         0
-#define DO_INTERP_TESTS        0
-#define DO_CUBIC_INTERP_TESTS  0
+#define DO_BASIC_TESTS         1
+#define DO_INTERP_TESTS        1
+#define DO_CUBIC_INTERP_TESTS  1
 #define DO_BASIC_FILE_TESTS    1
-#define DO_ADVANCED_FILE_TESTS 0
-#define DO_SPARSE_BLOCK_TESTS  0
-#define DO_MAC_TESTS           0
-#define DO_THREAD_TESTS        0
-#define DO_MIP_TESTS           0
+#define DO_ADVANCED_FILE_TESTS 1
+#define DO_SPARSE_BLOCK_TESTS  1
+#define DO_MAC_TESTS           1
+#define DO_THREAD_TESTS        1
+#define DO_MIP_TESTS           1
 
 test_suite*
 init_unit_test_suite(int argc, char* argv[])
@@ -2696,9 +2750,11 @@ init_unit_test_suite(int argc, char* argv[])
 #endif 
 
 #if DO_MIP_TESTS
-  test->add(BOOST_TEST_CASE((&testMIPField<MIPDenseField, DenseField, float>)));
+  test->add(BOOST_TEST_CASE((&testMIPField<MIPDenseField, DenseField, float, true>)));
+  test->add(BOOST_TEST_CASE((&testMIPField<MIPDenseField, DenseField, float, false>)));
   test->add(BOOST_TEST_CASE((&testMIPFieldColor<MIPDenseField, DenseField, V3f>)));
-  test->add(BOOST_TEST_CASE((&testMIPField<MIPSparseField, SparseField, float>)));
+  test->add(BOOST_TEST_CASE((&testMIPField<MIPSparseField, SparseField, float, true>)));
+  test->add(BOOST_TEST_CASE((&testMIPField<MIPSparseField, SparseField, float, false>)));
   test->add(BOOST_TEST_CASE((&testMIPFieldColor<MIPSparseField, SparseField, V3f>)));
   test->add(BOOST_TEST_CASE((&testMIPMake<DenseField, float>)));
   test->add(BOOST_TEST_CASE((&testMIPMake<SparseField, float>)));

@@ -36,9 +36,11 @@
 //----------------------------------------------------------------------------//
 
 #include <DenseField.h>
+#include <Field3DFile.h>
 #include <FieldInterp.h>
-#include <SparseField.h>
+#include <InitIO.h>
 #include <Log.h>
+#include <SparseField.h>
 
 #include <openvdb/openvdb.h>
 #include <openvdb/tree/ValueAccessor.h>
@@ -295,6 +297,38 @@ Stats testMemoryCoherentReadAccessVDB(int size, int samples);
 
 // --
 
+void  testWriteSparse(int size, int samples);
+Stats testWriteSparseDense(int narrowBand, bool useOgawa, int size, int samples);
+Stats testWriteSparseSparse(int narrowBand, bool useOgawa, int size, int blockOrder, int samples);
+template<openvdb::Index Log2Dim>
+Stats testWriteSparseVDB(int narrowBand, int size, int samples);
+
+// --
+
+void  testWriteDense(int size, int samples);
+Stats testWriteDenseDense(int narrowBand, bool useOgawa, int size, int samples);
+Stats testWriteDenseSparse(int narrowBand, bool useOgawa, int size, int blockOrder, int samples);
+template<openvdb::Index Log2Dim>
+Stats testWriteDenseVDB(int narrowBand, int size, int samples);
+
+// --
+
+void  testReadSparse(int size, int samples);
+Stats testReadSparseDense(int narrowBand, bool useOgawa, int size, int samples);
+Stats testReadSparseSparse(int narrowBand, bool useOgawa, int size, int blockOrder, int samples);
+template<openvdb::Index Log2Dim>
+Stats testReadSparseVDB(int narrowBand, int size, int samples);
+
+// --
+
+void  testReadDense(int size, int samples);
+Stats testReadDenseDense(int narrowBand, bool useOgawa, int size, int samples);
+Stats testReadDenseSparse(int narrowBand, bool useOgawa, int size, int blockOrder, int samples);
+template<openvdb::Index Log2Dim>
+Stats testReadDenseVDB(int narrowBand, int size, int samples);
+
+// --
+
 void testSparseFill(int size, int samples);
 Stats testSparseFillSparse(int size, int order, int samples);
 template<openvdb::Index Log2Dim>
@@ -362,8 +396,12 @@ Stats testNarrowBandLevelSetSphereVDB(int halfWidth, int size, int samples);
 
 int main()
 {
-  int samples = 10;
-  int baseRes = 800;
+  openvdb::initialize();
+  Field3D::initIO();
+  Field3D::setNumIOThreads(16);
+
+  int samples = 1;
+  int baseRes = 200;
 
   g_baseRSS = currentRSS();
 
@@ -375,6 +413,8 @@ int main()
        << OPENVDB_LIBRARY_MINOR_VERSION << "."
        << OPENVDB_LIBRARY_PATCH_VERSION << endl;
 
+#if 0
+
   testContiguousWriteAccess(baseRes, samples);
   testContiguousPreAllocWriteAccess(baseRes, samples);
   testContiguousReadAccess(baseRes, samples);
@@ -382,6 +422,15 @@ int main()
   testMemoryCoherentWriteAccess(baseRes, samples);
   testMemoryCoherentPreAllocWriteAccess(baseRes, samples);
   testMemoryCoherentReadAccess(baseRes, samples);
+
+#endif
+
+  // testWriteDense(baseRes, samples);
+  testWriteSparse(baseRes, samples);
+  // testReadDense(baseRes, samples);
+  testReadSparse(baseRes, samples);
+
+#if 0
 
   testSparseFill(1024, samples);
   testSparseFill(2048, samples);
@@ -405,6 +454,9 @@ int main()
   testNarrowBandLevelSetSphere(3, 2000, samples);
   testNarrowBandLevelSetSphere(3, 3000, samples);
   testNarrowBandLevelSetSphere(3, 4000, samples);
+
+#endif
+
 }
 
 
@@ -1344,6 +1396,855 @@ testMemoryCoherentReadAccessVDB(int size, int samples)
     checkSum = size_t(sum);
   }
 
+  return Stats(allocTime, runTime, memUsage, memRSS, checkSum);
+}
+
+//----------------------------------------------------------------------------//
+// testWriteSparse
+//----------------------------------------------------------------------------//
+
+void
+testWriteSparse(int size, int samples)
+{
+  cout << "Sparse write "<< size << "^3\n";
+
+  const int narrowBand = 3;
+
+  if (size <= 800) {
+    printStats("Dense (og)", testWriteSparseDense(narrowBand, true, size, samples));
+    printStats("Dense (h5)", testWriteSparseDense(narrowBand, false, size, samples));
+  }
+  
+  printStats("Sparse 8 (og)", testWriteSparseSparse(narrowBand, true, size, 3, samples));
+  printStats("Sparse 8 (h5)", testWriteSparseSparse(narrowBand, false, size, 3, samples));
+  printStats("VDB 8", testWriteSparseVDB<3>(narrowBand, size, samples));
+  
+  printStats("Sparse 16 (og)", testWriteSparseSparse(narrowBand, true, size, 4, samples));
+  printStats("Sparse 16 (h5)", testWriteSparseSparse(narrowBand, false, size, 4, samples));
+  printStats("VDB 16", testWriteSparseVDB<4>(narrowBand, size, samples));
+
+  printStats("Sparse 32 (og)", testWriteSparseSparse(narrowBand, true, size, 5, samples));
+  printStats("Sparse 32 (h5)", testWriteSparseSparse(narrowBand, false, size, 5, samples));
+  printStats("VDB 32", testWriteSparseVDB<5>(narrowBand, size, samples));
+}
+
+//----------------------------------------------------------------------------//
+
+Stats testWriteSparseDense(int halfWidth, bool useOgawa, int size, int samples)
+{
+  int rangeMin = 0, rangeMax = size - 1;
+
+  std::stringstream ss;
+  ss << "/tmp/testWriteSparseDense." << size << "." 
+     << (useOgawa ? "ogawa" : "hdf5")
+     << ".f3d";
+  const std::string filename(ss.str());
+
+  Field3DOutputFile::useOgawa(useOgawa);
+
+  // Setup
+  const float
+    dim = float(size),
+    w = float(halfWidth), // narrow band half-width
+    dx = 1.0f / dim,
+    backgroundValue = w * dx,
+    radius = (0.5 - backgroundValue) / dx;
+
+  const int center = int(0.5 / dx);
+  int i, j, k, m = 1;
+  float x2, x2y2, x2y2z2;
+
+  // Construct data ---
+
+  DenseField<float>::Ptr densePtr(new DenseField<float>);
+  DenseField<float> *dense = densePtr.get();
+
+  dense->name = "default";
+  dense->attribute = "surface";
+  dense->setSize(Box3i(V3i(rangeMin), V3i(rangeMax)));
+
+  // Gen level-set sphere
+  for (i = rangeMin; i <= rangeMax; ++i) {
+    x2 = i - center;
+    x2 *= x2;
+    for (j = rangeMin; j <= rangeMax; ++j) {
+      x2y2 = j - center;
+      x2y2 *= x2y2;
+      x2y2 += x2;
+      for (k = rangeMin; k <= rangeMax; k += m) {
+        x2y2z2 = k - center;
+        x2y2z2 *= x2y2z2;
+        x2y2z2 += x2y2;
+
+        const float v = std::sqrt(x2y2z2) - radius, d = std::abs(v);
+        m = 1;
+
+        // Flipped the i & k coordinates here to account for Field3D's optimal memory mapping.
+        if (d < w) dense->fastLValue(k, j, i) = dx * v;       
+        else m += int(std::floor(d - w));
+      }
+    }
+  }
+
+  // Run test ---
+
+  DECLARE_TIMING_VARIABLES;
+  
+  for (int s = 0; s < samples; ++s) {
+  
+    ALLOC_TIMER;
+
+    UPDATE_ALLOC_TIME(ms);
+
+    RUN_TIMER;
+
+    Field3DOutputFile out;
+    out.create(filename);
+    out.writeScalarLayer<float>(densePtr);
+
+    UPDATE_RUN_TIME(ms);
+
+    memRSS = currentRSS();
+    memUsage = dense->memSize();
+    checkSum = checksumF3DDense(*dense);
+  }
+  
+  return Stats(allocTime, runTime, memUsage, memRSS, checkSum);  
+}
+
+
+//----------------------------------------------------------------------------//
+
+Stats testWriteSparseSparse(int halfWidth, bool useOgawa, int size, int blockOrder, int samples)
+{
+  int rangeMin = 0, rangeMax = size - 1;
+
+  std::stringstream ss;
+  ss << "/tmp/testWriteSparseSparse." << size << "." << blockOrder << "."
+     << (useOgawa ? "ogawa" : "hdf5")
+     << ".f3d";
+  const std::string filename(ss.str());
+
+  Field3DOutputFile::useOgawa(useOgawa);
+
+  // Setup
+  const float
+    dim = float(size),
+    w = float(halfWidth), // narrow band half-width
+    dx = 1.0f / dim,
+    backgroundValue = w * dx,
+    radius = (0.5 - backgroundValue) / dx;
+
+  const int center = int(0.5 / dx);
+  int i, j, k, m = 1;
+  float x2, x2y2, x2y2z2;
+
+  // Generate data ---
+
+  SparseField<float>::Ptr sparsePtr(new SparseField<float>);
+  SparseField<float> *sparse = sparsePtr.get();
+  sparse->name = "default";
+  sparse->attribute = "surface";
+  sparse->setBlockOrder(blockOrder);
+  sparse->setSize(Box3i(V3i(rangeMin), V3i(rangeMax)));
+
+  // Gen level-set sphere
+  for (i = rangeMin; i <= rangeMax; ++i) {
+    x2 = i - center;
+    x2 *= x2;
+    for (j = rangeMin; j <= rangeMax; ++j) {
+      x2y2 = j - center;
+      x2y2 *= x2y2;
+      x2y2 += x2;
+      for (k = rangeMin; k <= rangeMax; k += m) {
+        x2y2z2 = k - center;
+        x2y2z2 *= x2y2z2;
+        x2y2z2 += x2y2;
+
+        const float v = std::sqrt(x2y2z2) - radius, d = std::abs(v);
+        m = 1;
+
+        // Flipped the i & k coordinates here to account for Field3D's optimal memory mapping. 
+        if (d < w) sparse->fastLValue(k, j, i) = dx * v; 
+        else m += int(std::floor(d - w));
+      }
+    }
+  }
+
+  // Run test ---
+
+  DECLARE_TIMING_VARIABLES;
+  
+  for (int s = 0; s < samples; ++s) {
+  
+    ALLOC_TIMER;
+    
+    UPDATE_ALLOC_TIME(ms);
+
+    RUN_TIMER;
+
+    Field3DOutputFile out;
+    out.create(filename);
+    out.writeScalarLayer<float>(sparsePtr);
+
+    UPDATE_RUN_TIME(ms);
+
+    memRSS = currentRSS();
+    memUsage = sparse->memSize();
+    checkSum = checksumF3DSparse(*sparse);
+  }
+
+  return Stats(allocTime, runTime, memUsage, memRSS, checkSum);  
+}
+
+//----------------------------------------------------------------------------//
+
+template<openvdb::Index Log2Dim>
+Stats
+testWriteSparseVDB(int halfWidth, int size, int samples)
+{
+  typedef typename tree::Tree4<float, 5, 4, Log2Dim>::Type TreeType;
+  typedef Grid<TreeType> GridType;
+
+  std::stringstream ss;
+  ss << "/tmp/testWriteSparseVDB." << size << "." << Log2Dim << ".vdb";
+  const std::string filename(ss.str());
+
+  int rangeMin = 0, rangeMax = size - 1;
+
+  const float
+    dim = float(size),
+    w = float(halfWidth), // narrow band half-width
+    dx = 1.0f / dim,
+    backgroundValue = w * dx,
+    radius = (0.5 - backgroundValue) / dx;
+
+  const int center = int(0.5 / dx);
+
+  openvdb::Coord ijk;
+  int &i = ijk[0], &j = ijk[1], &k = ijk[2], m=1;
+  float x2, x2y2, x2y2z2;
+
+  // Generate data ---
+
+  typename GridType::Ptr grid = GridType::create(0.0);
+
+  tree::ValueAccessor<TreeType> accessor(grid->tree());
+
+  // Gen. level-set sphere
+  for (i = rangeMin; i <= rangeMax; ++i) {
+    x2 = i - center;
+    x2 *= x2;
+    for (j = rangeMin; j <= rangeMax; ++j) {
+      x2y2 = j - center;
+      x2y2 *= x2y2;
+      x2y2 += x2;
+      for (k = rangeMin; k <= rangeMax; k += m) {
+        x2y2z2 = k - center;
+        x2y2z2 *= x2y2z2;
+        x2y2z2 += x2y2;
+
+        const float v = std::sqrt(x2y2z2) - radius, d = std::abs(v);
+
+        m = 1;
+        if (d < w) accessor.setValue(ijk, dx * v);                        
+        else m += int(std::floor(d - w));
+      }
+    }
+  }
+
+  // Run the test ---
+
+  DECLARE_TIMING_VARIABLES;
+
+  for (int s = 0; s < samples; ++s) {
+    
+    ALLOC_TIMER;
+
+    UPDATE_ALLOC_TIME(ms);
+
+    RUN_TIMER;
+                
+    openvdb::io::File file(filename);
+
+    GridPtrVec grids;
+    grids.push_back(grid);
+      
+    file.write(grids);
+    file.close();
+
+    UPDATE_RUN_TIME(ms);
+
+    memRSS = currentRSS();
+    memUsage = grid->tree().memUsage();
+    checkSum = checksumVDB(grid->tree());
+  }
+  
+  return Stats(allocTime, runTime, memUsage, memRSS, checkSum);
+}
+
+//----------------------------------------------------------------------------//
+// testWriteDense
+//----------------------------------------------------------------------------//
+
+void
+testWriteDense(int size, int samples)
+{
+  cout << "Dense write "<< size << "^3\n";
+
+  const int narrowBand = 3;
+
+  if (size <= 800) {
+    printStats("Dense (og)", testWriteDenseDense(narrowBand, true, size, samples));
+    printStats("Dense (h5)", testWriteDenseDense(narrowBand, false, size, samples));
+  }
+  
+  printStats("Sparse 8 (og)", testWriteDenseSparse(narrowBand, true, size, 3, samples));
+  printStats("Sparse 8 (h5)", testWriteDenseSparse(narrowBand, false, size, 3, samples));
+  printStats("VDB 8", testWriteDenseVDB<3>(narrowBand, size, samples));
+  
+  printStats("Sparse 16 (og)", testWriteDenseSparse(narrowBand, true, size, 4, samples));
+  printStats("Sparse 16 (h5)", testWriteDenseSparse(narrowBand, false, size, 4, samples));
+  printStats("VDB 16", testWriteDenseVDB<4>(narrowBand, size, samples));
+
+  printStats("Sparse 32 (og)", testWriteDenseSparse(narrowBand, true, size, 5, samples));
+  printStats("Sparse 32 (h5)", testWriteDenseSparse(narrowBand, false, size, 5, samples));
+  printStats("VDB 32", testWriteDenseVDB<5>(narrowBand, size, samples));
+}
+
+//----------------------------------------------------------------------------//
+
+Stats testWriteDenseDense(int halfWidth, bool useOgawa, int size, int samples)
+{
+  int rangeMin = 0, rangeMax = size - 1;
+
+  std::stringstream ss;
+  ss << "/tmp/testWriteDenseDense." << size << "." 
+     << (useOgawa ? "ogawa" : "hdf5")
+     << ".f3d";
+  const std::string filename(ss.str());
+
+  Field3DOutputFile::useOgawa(useOgawa);
+
+  // Setup
+  const float
+    dim = float(size),
+    w = float(halfWidth), // narrow band half-width
+    dx = 1.0f / dim,
+    backgroundValue = w * dx,
+    radius = (0.5 - backgroundValue) / dx;
+
+  const int center = int(0.5 / dx);
+  int i, j, k, m = 1;
+  float x2, x2y2, x2y2z2;
+
+  // Construct data ---
+
+  DenseField<float>::Ptr densePtr(new DenseField<float>);
+  DenseField<float> *dense = densePtr.get();
+
+  dense->name = "default";
+  dense->attribute = "surface";
+  dense->setSize(Box3i(V3i(rangeMin), V3i(rangeMax)));
+
+  // Gen level-set sphere
+  for (i = rangeMin; i <= rangeMax; ++i) {
+    x2 = i - center;
+    x2 *= x2;
+    for (j = rangeMin; j <= rangeMax; ++j) {
+      x2y2 = j - center;
+      x2y2 *= x2y2;
+      x2y2 += x2;
+      for (k = rangeMin; k <= rangeMax; k += m) {
+        x2y2z2 = k - center;
+        x2y2z2 *= x2y2z2;
+        x2y2z2 += x2y2;
+
+        const float v = std::sqrt(x2y2z2) - radius;
+        dense->fastLValue(k, j, i) = dx * v;
+      }
+    }
+  }
+
+  // Run test ---
+
+  DECLARE_TIMING_VARIABLES;
+  
+  for (int s = 0; s < samples; ++s) {
+  
+    ALLOC_TIMER;
+
+    UPDATE_ALLOC_TIME(ms);
+
+    RUN_TIMER;
+
+    Field3DOutputFile out;
+    out.create(filename);
+    out.writeScalarLayer<float>(densePtr);
+
+    UPDATE_RUN_TIME(ms);
+
+    memRSS = currentRSS();
+    memUsage = dense->memSize();
+    checkSum = checksumF3DDense(*dense);
+  }
+  
+  return Stats(allocTime, runTime, memUsage, memRSS, checkSum);  
+}
+
+
+//----------------------------------------------------------------------------//
+
+Stats testWriteDenseSparse(int halfWidth, bool useOgawa, int size, int blockOrder, int samples)
+{
+  int rangeMin = 0, rangeMax = size - 1;
+
+  std::stringstream ss;
+  ss << "/tmp/testWriteDenseSparse." << size << "." << blockOrder << "."
+     << (useOgawa ? "ogawa" : "hdf5")
+     << ".f3d";
+  const std::string filename(ss.str());
+
+  Field3DOutputFile::useOgawa(useOgawa);
+
+  // Setup
+  const float
+    dim = float(size),
+    w = float(halfWidth), // narrow band half-width
+    dx = 1.0f / dim,
+    backgroundValue = w * dx,
+    radius = (0.5 - backgroundValue) / dx;
+
+  const int center = int(0.5 / dx);
+  int i, j, k, m = 1;
+  float x2, x2y2, x2y2z2;
+
+  // Generate data ---
+
+  SparseField<float>::Ptr sparsePtr(new SparseField<float>);
+  SparseField<float> *sparse = sparsePtr.get();
+  sparse->name = "default";
+  sparse->attribute = "surface";
+  sparse->setBlockOrder(blockOrder);
+  sparse->setSize(Box3i(V3i(rangeMin), V3i(rangeMax)));
+
+  // Gen level-set sphere
+  for (i = rangeMin; i <= rangeMax; ++i) {
+    x2 = i - center;
+    x2 *= x2;
+    for (j = rangeMin; j <= rangeMax; ++j) {
+      x2y2 = j - center;
+      x2y2 *= x2y2;
+      x2y2 += x2;
+      for (k = rangeMin; k <= rangeMax; k += m) {
+        x2y2z2 = k - center;
+        x2y2z2 *= x2y2z2;
+        x2y2z2 += x2y2;
+
+        const float v = std::sqrt(x2y2z2) - radius;
+        sparse->fastLValue(k, j, i) = dx * v;
+      }
+    }
+  }
+
+  // Run test ---
+
+  DECLARE_TIMING_VARIABLES;
+  
+  for (int s = 0; s < samples; ++s) {
+  
+    ALLOC_TIMER;
+    
+    UPDATE_ALLOC_TIME(ms);
+
+    RUN_TIMER;
+
+    Field3DOutputFile out;
+    out.create(filename);
+    out.writeScalarLayer<float>(sparsePtr);
+
+    UPDATE_RUN_TIME(ms);
+
+    memRSS = currentRSS();
+    memUsage = sparse->memSize();
+    checkSum = checksumF3DSparse(*sparse);
+  }
+
+  return Stats(allocTime, runTime, memUsage, memRSS, checkSum);  
+}
+
+//----------------------------------------------------------------------------//
+
+template<openvdb::Index Log2Dim>
+Stats
+testWriteDenseVDB(int halfWidth, int size, int samples)
+{
+  typedef typename tree::Tree4<float, 5, 4, Log2Dim>::Type TreeType;
+  typedef Grid<TreeType> GridType;
+
+  std::stringstream ss;
+  ss << "/tmp/testWriteDenseVDB." << size << "." << Log2Dim << ".vdb";
+  const std::string filename(ss.str());
+
+  int rangeMin = 0, rangeMax = size - 1;
+
+  const float
+    dim = float(size),
+    w = float(halfWidth), // narrow band half-width
+    dx = 1.0f / dim,
+    backgroundValue = w * dx,
+    radius = (0.5 - backgroundValue) / dx;
+
+  const int center = int(0.5 / dx);
+
+  openvdb::Coord ijk;
+  int &i = ijk[0], &j = ijk[1], &k = ijk[2], m=1;
+  float x2, x2y2, x2y2z2;
+
+  // Generate data ---
+
+  typename GridType::Ptr grid = GridType::create(0.0);
+
+  tree::ValueAccessor<TreeType> accessor(grid->tree());
+
+  // Gen. level-set sphere
+  for (i = rangeMin; i <= rangeMax; ++i) {
+    x2 = i - center;
+    x2 *= x2;
+    for (j = rangeMin; j <= rangeMax; ++j) {
+      x2y2 = j - center;
+      x2y2 *= x2y2;
+      x2y2 += x2;
+      for (k = rangeMin; k <= rangeMax; k += m) {
+        x2y2z2 = k - center;
+        x2y2z2 *= x2y2z2;
+        x2y2z2 += x2y2;
+
+        const float v = std::sqrt(x2y2z2) - radius;
+        accessor.setValueOnly(ijk, dx * v);
+      }
+    }
+  }
+
+  // Run the test ---
+
+  DECLARE_TIMING_VARIABLES;
+
+  for (int s = 0; s < samples; ++s) {
+    
+    ALLOC_TIMER;
+
+    UPDATE_ALLOC_TIME(ms);
+
+    RUN_TIMER;
+                
+    openvdb::io::File file(filename);
+
+    GridPtrVec grids;
+    grids.push_back(grid);
+      
+    file.write(grids);
+    file.close();
+
+    UPDATE_RUN_TIME(ms);
+
+    memRSS = currentRSS();
+    memUsage = grid->tree().memUsage();
+    checkSum = checksumVDB(grid->tree());
+  }
+  
+  return Stats(allocTime, runTime, memUsage, memRSS, checkSum);
+}
+
+//----------------------------------------------------------------------------//
+// testReadSparse
+//----------------------------------------------------------------------------//
+
+void
+testReadSparse(int size, int samples)
+{
+  cout << "Sparse read "<< size << "^3\n";
+
+  const int narrowBand = 3;
+
+  if (size <= 800) {
+    printStats("Dense (og)", testReadSparseDense(narrowBand, true, size, samples));
+    printStats("Dense (h5)", testReadSparseDense(narrowBand, false, size, samples));
+  }
+  
+  printStats("Sparse 8 (og)", testReadSparseSparse(narrowBand, true, size, 3, samples));
+  printStats("Sparse 8 (h5)", testReadSparseSparse(narrowBand, false, size, 3, samples));
+  printStats("VDB 8", testReadSparseVDB<3>(narrowBand, size, samples));
+  
+  printStats("Sparse 16 (og)", testReadSparseSparse(narrowBand, true, size, 4, samples));
+  printStats("Sparse 16 (h5)", testReadSparseSparse(narrowBand, false, size, 4, samples));
+  // printStats("VDB 16", testReadSparseVDB<4>(narrowBand, size, samples));
+
+  printStats("Sparse 32 (og)", testReadSparseSparse(narrowBand, true, size, 5, samples));
+  printStats("Sparse 32 (h5)", testReadSparseSparse(narrowBand, false, size, 5, samples));
+  // printStats("VDB 32", testReadSparseVDB<5>(narrowBand, size, samples));
+}
+
+//----------------------------------------------------------------------------//
+
+Stats testReadSparseDense(int halfWidth, bool useOgawa, int size, int samples)
+{
+  int rangeMin = 0, rangeMax = size - 1;
+
+  std::stringstream ss;
+  ss << "/tmp/testWriteSparseDense." << size << "." 
+     << (useOgawa ? "ogawa" : "hdf5")
+     << ".f3d";
+  const std::string filename(ss.str());
+
+  // Run test ---
+
+  DECLARE_TIMING_VARIABLES;
+  
+  for (int s = 0; s < samples; ++s) {
+  
+    ALLOC_TIMER;
+
+    UPDATE_ALLOC_TIME(ms);
+
+    RUN_TIMER;
+
+    Field3DInputFile in;
+    in.open(filename);
+    in.readScalarLayers<float>();
+
+    UPDATE_RUN_TIME(ms);
+
+    memRSS = currentRSS();
+  }
+  
+  return Stats(allocTime, runTime, memUsage, memRSS, checkSum);  
+}
+
+
+//----------------------------------------------------------------------------//
+
+Stats testReadSparseSparse(int halfWidth, bool useOgawa, int size, int blockOrder, int samples)
+{
+  int rangeMin = 0, rangeMax = size - 1;
+
+  std::stringstream ss;
+  ss << "/tmp/testWriteSparseSparse." << size << "." << blockOrder << "."
+     << (useOgawa ? "ogawa" : "hdf5")
+     << ".f3d";
+  const std::string filename(ss.str());
+
+  // Run test ---
+
+  DECLARE_TIMING_VARIABLES;
+  
+  for (int s = 0; s < samples; ++s) {
+  
+    ALLOC_TIMER;
+    
+    UPDATE_ALLOC_TIME(ms);
+
+    RUN_TIMER;
+
+    Field3DInputFile in;
+    in.open(filename);
+    in.readScalarLayers<float>();
+
+    UPDATE_RUN_TIME(ms);
+
+    memRSS = currentRSS();
+  }
+
+  return Stats(allocTime, runTime, memUsage, memRSS, checkSum);  
+}
+
+//----------------------------------------------------------------------------//
+
+template<openvdb::Index Log2Dim>
+Stats
+testReadSparseVDB(int halfWidth, int size, int samples)
+{
+  typedef typename tree::Tree4<float, 5, 4, Log2Dim>::Type TreeType;
+  typedef Grid<TreeType> GridType;
+
+  std::stringstream ss;
+  ss << "/tmp/testWriteSparseVDB." << size << "." << Log2Dim << ".vdb";
+  const std::string filename(ss.str());
+
+  // Run the test ---
+
+  DECLARE_TIMING_VARIABLES;
+
+  for (int s = 0; s < samples; ++s) {
+    
+    ALLOC_TIMER;
+
+    UPDATE_ALLOC_TIME(ms);
+
+    RUN_TIMER;
+                
+    openvdb::io::File file(filename);
+    file.open();
+
+    openvdb::GridBase::Ptr baseGrid;
+    for (openvdb::io::File::NameIterator nameIter = file.beginName();
+         nameIter != file.endName(); ++nameIter)
+    {
+      file.readGrid(nameIter.gridName());
+    }
+
+    file.close();
+
+    UPDATE_RUN_TIME(ms);
+
+    memRSS = currentRSS();
+  }
+  
+  return Stats(allocTime, runTime, memUsage, memRSS, checkSum);
+}
+
+//----------------------------------------------------------------------------//
+// testReadDense
+//----------------------------------------------------------------------------//
+
+void
+testReadDense(int size, int samples)
+{
+  cout << "Dense read "<< size << "^3\n";
+
+  const int narrowBand = 3;
+
+  printStats("Dense (og)", testReadDenseDense(narrowBand, true, size, samples));
+  printStats("Dense (h5)", testReadDenseDense(narrowBand, false, size, samples));
+  
+  printStats("Sparse 8 (og)", testReadDenseSparse(narrowBand, true, size, 3, samples));
+  printStats("Sparse 8 (h5)", testReadDenseSparse(narrowBand, false, size, 3, samples));
+  printStats("VDB 8", testReadDenseVDB<3>(narrowBand, size, samples));
+  
+  printStats("Sparse 16 (og)", testReadDenseSparse(narrowBand, true, size, 4, samples));
+  printStats("Sparse 16 (h5)", testReadDenseSparse(narrowBand, false, size, 4, samples));
+  // printStats("VDB 16", testReadDenseVDB<4>(narrowBand, size, samples));
+
+  printStats("Sparse 32 (og)", testReadDenseSparse(narrowBand, true, size, 5, samples));
+  printStats("Sparse 32 (h5)", testReadDenseSparse(narrowBand, false, size, 5, samples));
+  // printStats("VDB 32", testReadDenseVDB<5>(narrowBand, size, samples));
+}
+
+//----------------------------------------------------------------------------//
+
+Stats testReadDenseDense(int halfWidth, bool useOgawa, int size, int samples)
+{
+  int rangeMin = 0, rangeMax = size - 1;
+
+  std::stringstream ss;
+  ss << "/tmp/testWriteDenseDense." << size << "." 
+     << (useOgawa ? "ogawa" : "hdf5")
+     << ".f3d";
+  const std::string filename(ss.str());
+
+  // Run test ---
+
+  DECLARE_TIMING_VARIABLES;
+  
+  for (int s = 0; s < samples; ++s) {
+  
+    ALLOC_TIMER;
+
+    UPDATE_ALLOC_TIME(ms);
+
+    RUN_TIMER;
+
+    Field3DInputFile in;
+    in.open(filename);
+    in.readScalarLayers<float>();
+
+    UPDATE_RUN_TIME(ms);
+
+    memRSS = currentRSS();
+  }
+  
+  return Stats(allocTime, runTime, memUsage, memRSS, checkSum);  
+}
+
+
+//----------------------------------------------------------------------------//
+
+Stats testReadDenseSparse(int halfWidth, bool useOgawa, int size, int blockOrder, int samples)
+{
+  int rangeMin = 0, rangeMax = size - 1;
+
+  std::stringstream ss;
+  ss << "/tmp/testWriteDenseSparse." << size << "." << blockOrder << "."
+     << (useOgawa ? "ogawa" : "hdf5")
+     << ".f3d";
+  const std::string filename(ss.str());
+
+  // Run test ---
+
+  DECLARE_TIMING_VARIABLES;
+  
+  for (int s = 0; s < samples; ++s) {
+  
+    ALLOC_TIMER;
+    
+    UPDATE_ALLOC_TIME(ms);
+
+    RUN_TIMER;
+
+    Field3DInputFile in;
+    in.open(filename);
+    in.readScalarLayers<float>();
+
+    UPDATE_RUN_TIME(ms);
+
+    memRSS = currentRSS();
+  }
+
+  return Stats(allocTime, runTime, memUsage, memRSS, checkSum);  
+}
+
+//----------------------------------------------------------------------------//
+
+template<openvdb::Index Log2Dim>
+Stats
+testReadDenseVDB(int halfWidth, int size, int samples)
+{
+  typedef typename tree::Tree4<float, 5, 4, Log2Dim>::Type TreeType;
+  typedef Grid<TreeType> GridType;
+
+  std::stringstream ss;
+  ss << "/tmp/testWriteDenseVDB." << size << "." << Log2Dim << ".vdb";
+  const std::string filename(ss.str());
+
+  // Run the test ---
+
+  DECLARE_TIMING_VARIABLES;
+
+  for (int s = 0; s < samples; ++s) {
+    
+    ALLOC_TIMER;
+
+    UPDATE_ALLOC_TIME(ms);
+
+    RUN_TIMER;
+                
+    openvdb::io::File file(filename);
+    file.open();
+
+    openvdb::GridBase::Ptr baseGrid;
+    for (openvdb::io::File::NameIterator nameIter = file.beginName();
+         nameIter != file.endName(); ++nameIter)
+    {
+      file.readGrid(nameIter.gridName());
+    }
+
+    file.close();
+
+    UPDATE_RUN_TIME(ms);
+
+    memRSS = currentRSS();
+  }
+  
   return Stats(allocTime, runTime, memUsage, memRSS, checkSum);
 }
 
@@ -2311,7 +3212,6 @@ void testDenseLevelSetSphere(int size, int samples)
 }
 
 //----------------------------------------------------------------------------//
-
 
 Stats testDenseLevelSetSphereDense(int size, int samples)
 {

@@ -129,7 +129,7 @@ namespace detail {
       Box3i srcDw = m_src.dataWindow();
 
       // Coordinate frame conversion constants
-      const float tgtToSrcMult    = static_cast<float>(1 << m_level);
+      const float tgtToSrcMult    = 2.0;
       const float filterCoordMult = 1.0f / (tgtToSrcMult);
     
       // Filter info
@@ -309,7 +309,7 @@ namespace detail {
     }
 
     // Coordinate frame conversion constants
-    const float tgtToSrcMult    = static_cast<float>(1 << level);
+    const float tgtToSrcMult    = 2.0;
     const float filterCoordMult = 1.0f / (tgtToSrcMult);
     
     // Resize new field
@@ -364,31 +364,36 @@ namespace detail {
   //--------------------------------------------------------------------------//
 
   template <typename Field_T, typename FilterOp_T>
-  void mipResample(const Field_T &src, Field_T &tgt, const size_t level, 
-                   const FilterOp_T &filterOp, const size_t numThreads)
+  void mipResample(const Field_T &base, const Field_T &src, Field_T &tgt, 
+                   const size_t level, const FilterOp_T &filterOp, 
+                   const size_t numThreads)
   {
     using std::ceil;
 
     // Compute new res
+    const Box3i baseDw  = base.dataWindow();
+    const V3i   baseRes = baseDw.size() + V3i(1);
+    const V3i   newRes  = mipResolution(baseRes, level);
+
+    // Source res
     const Box3i srcDw  = src.dataWindow();
-    const V3i   oldRes = srcDw.size() + V3i(1);
-    const V3i   newRes = mipResolution(oldRes, level);
+    const V3i   srcRes = srcDw.size() + V3i(1);
 
     // Temporary field for y component
     Field_T tmp;
 
     // X axis (src into tgt)
-    mipSeparable(src, tgt, oldRes, newRes, level, filterOp, 0, numThreads);
+    mipSeparable(src, tgt, srcRes, newRes, level, filterOp, 0, numThreads);
     // Y axis (tgt into temp)
-    mipSeparable(tgt, tmp, oldRes, newRes, level, filterOp, 1, numThreads);
+    mipSeparable(tgt, tmp, srcRes, newRes, level, filterOp, 1, numThreads);
     // Z axis (temp into tgt)
-    mipSeparable(tmp, tgt, oldRes, newRes, level, filterOp, 2, numThreads);
+    mipSeparable(tmp, tgt, srcRes, newRes, level, filterOp, 2, numThreads);
 
     // Update final target with mapping and metadata
-    tgt.name      = src.name;
-    tgt.attribute = src.attribute;
-    tgt.setMapping(src.mapping());
-    tgt.copyMetadata(src);
+    tgt.name      = base.name;
+    tgt.attribute = base.attribute;
+    tgt.setMapping(base.mapping());
+    tgt.copyMetadata(base);
   }
 
   //--------------------------------------------------------------------------//
@@ -435,7 +440,8 @@ makeMIP(const typename MIPField_T::NestedType &base, const int minSize,
          (res.x > 1 && res.y > 1 && res.z > 1)) {
     // Perform filtering
     SrcPtr nextField(new Src_T);
-    mipResample(base, *nextField, level, TriangleFilter(), numThreads);
+    mipResample(base, *result.back(), *nextField, level, 
+                TriangleFilter(), numThreads);
     // Add to vector of filtered fields
     result.push_back(nextField);
     // Set up for next iteration

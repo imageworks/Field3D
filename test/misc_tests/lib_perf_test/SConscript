@@ -8,11 +8,67 @@ import os
 from os.path import join
 
 # ------------------------------------------------------------------------------
+# Strings
+# ------------------------------------------------------------------------------
+
+field3DName    = "Field3D"
+
+buildDirPath   = "build"
+installDirPath = "install"
+
+release        = "release"
+debug          = "debug"
+export         = "export"
+include        = "include"
+src            = "src"
+
+stdMathHeader  = "StdMathLib.h"
+
+siteFile       = "Site.py"
+
+typesHeader    = "Types.h"
+
+arch32         = "m32"
+arch64         = "m64"
+
+# ------------------------------------------------------------------------------
+# Paths
+# ------------------------------------------------------------------------------
+
+systemIncludePaths = {
+    "darwin" : { arch32 : ["/usr/local/include",
+                           "/opt/local/include"],
+                 arch64 : ["/usr/local/include",
+                           "/opt/local/include"]},
+    "linux2" : { arch32 : ["/usr/local/include"],
+                 arch64 : ["/usr/local64/include"]}
+}
+
+systemLibPaths = {
+    "darwin" : { arch32 : ["/usr/local/lib",
+                           "/opt/local/lib"],
+                 arch64 : ["/usr/local/lib",
+                           "/opt/local/lib"]},
+    "linux2" : { arch32 : ["/usr/local/lib"],
+                 arch64 : ["/usr/local64/lib"]}
+}
+
+systemLibs = {
+    "darwin" : [],
+    "linux2" : ["dl"]
+    }
+
+# ------------------------------------------------------------------------------
 # HELPER FUNCTIONS
 # ------------------------------------------------------------------------------
 
 def red(s):
     return "\033[1m" + s + "\033[0m"
+
+# ------------------------------------------------------------------------------
+
+def isDebugBuild():
+    return ARGUMENTS.get('debug', 0)
 
 # ------------------------------------------------------------------------------
 
@@ -60,59 +116,103 @@ def getOptions(env):
 
 # ------------------------------------------------------------------------------
 
-def setupEnv(env):
-    # System paths
-    env.Append(CPPPATH = ["/usr/local/include"])
-    env.Append(CPPPATH = ["/opt/local/include"])
-    env.Append(LIBPATH = ["/usr/local/lib"])
-    env.Append(LIBPATH = ["/opt/local/lib"])
+def setupEnv(env, pathToRoot = "."):
+    baseIncludePaths = systemIncludePaths[sys.platform][architectureStr()]
+    baseLibPaths = systemLibPaths[sys.platform][architectureStr()]
+    baseLibs = systemLibs[sys.platform]
+    # Compiler
+    compiler = ARGUMENTS.get('compiler', '')
+    if compiler != '':
+        env.Replace(CXX = compiler)
+    # System include paths
+    env.Append(CPPPATH = baseIncludePaths)
+    # System lib paths
+    env.Append(LIBPATH = baseLibPaths)
+    # System libs
+    env.Append(LIBS = baseLibs)
     # SPI locations
     #env.Append(CPPPATH = ["/usr/include/OpenEXR"])
     #env.Append(CPPPATH = ["/net/apps/spinux1/intel/tbb/include"])
     #env.Append(LIBPATH = ["/usr/lib64"])
     #env.Append(LIBPATH = ["/net/apps/spinux1/intel/tbb/lib/intel64/"])
     # Pixar locations
-    # env.Append(CPPPATH = ["/pixar/d2/sets/tools-28/include/"])
-    # env.Append(CPPPATH = ["/pixar/d2/sets/tools-28/include/OpenEXR"])
-    env.Append(CPPPATH = 
-           ["/dist/3rdpartyrels/houdini/13.0.322/toolkit/include",
-            "/dist/3rdpartyrels/houdini/13.0.322/toolkit/include/OpenEXR"])
-    env.Append(LIBPATH = 
-           ["/dist/3rdpartyrels/houdini/13.0.322/dsolib"])
-    # Special case for OpenEXR
-    env.Append(CPPPATH = ["/usr/local/include/OpenEXR"])
-    env.Append(CPPPATH = ["/opt/local/include/OpenEXR"])
+    env.Append(CPPPATH = ["/pixar/d2/sets/tools-base-02c/include/"])
+    env.Append(CPPPATH = ["/pixar/d2/sets/tools-base-02c/include/OpenEXR"])
+    # Check if Site.py exists
+    siteExists = False
+    if os.path.exists(join(pathToRoot, siteFile)):
+        sys.path.append(pathToRoot)
+        import Site
+        siteExists = True
+    # Choose math library
+    if siteExists and \
+           hasattr(Site, "mathInc") and \
+           hasattr(Site, "mathIncPaths") and \
+           hasattr(Site, "mathLibs") and \
+           hasattr(Site, "mathLibPaths"):
+        env.Append(CPPPATH = Site.mathIncPaths)
+        env.Append(LIBS = Site.mathLibs)
+        env.Append(LIBPATH = Site.mathLibPaths)
+        env.Append(RPATH = Site.mathLibPaths)
+    else:
+        for path in baseIncludePaths:
+            env.Append(CPPPATH = join(path, "OpenEXR"))
+        env.Append(LIBS = ["Half"])
+        env.Append(LIBS = ["Iex"])
+        env.Append(LIBS = ["Imath"])
+    # Add in site-specific paths
+    if siteExists and hasattr(Site, "incPaths"):
+        env.AppendUnique(CPPPATH = Site.incPaths)
+    if siteExists and hasattr(Site, "libPaths"):
+        env.AppendUnique(LIBPATH = Site.libPaths)
+        env.AppendUnique(RPATH = Site.libPaths)
+    # Custom namespace
+    if siteExists and hasattr(Site, "extraNamespace"):
+        namespaceDict = {"FIELD3D_EXTRA_NAMESPACE" : Site.extraNamespace}
+        env.AppendUnique(CPPDEFINES = namespaceDict)
     # System libs
     env.Append(LIBS = ["z", "pthread"])
     # Hdf5 lib
     env.Append(LIBS = ["hdf5"])
-    # OpenEXR
-    if "SP_PLATFORM" in os.environ:
-        env.Append(LIBS = ["SpiHalf"])
-        env.Append(LIBS = ["SpiIex"])
-        env.Append(LIBS = ["SpiImath"])
-        env.Append(LIBS = ["dl"])
-        env.Append(LIBS = ["boost_thread"])
-    else:
-        env.Append(LIBS = ["Half"])
-        env.Append(LIBS = ["Iex"])
-        env.Append(LIBS = ["Imath"])
-        env.Append(LIBS = ["boost_thread"])
-        env.Append(LIBS = ["boost_system"])
+    # Boost system
+    env.Append(LIBS = ["boost_system-mt"])
     # TBB
     env.Append(LIBS = ["tbb"])
     # Field3D
     env.Append(CPPPATH = "Field3D_here/export")
     env.Append(CPPPATH = "Field3D_here/include")
     # OpenVDB
-    # env.Append(CPPPATH = "OpenVDB_here")
-    env.Append(LIBS = ["openvdb_sesi"])
-    # Compiler flags
-    env.Append(CCFLAGS = ["-g", "-O3"])
-    env.Append(CPPDEFINES = ["NDEBUG"])
-    # env.Append(CCFLAGS = ["-Wall"])
-    env.Append(CCFLAGS = ["-m64"])
-    env.Append(LINKFLAGS = ["-m64"])
+    env.Append(CPPPATH = "OpenVDB_here")
+    # Boost threads
+    if siteExists and hasattr(Site, "boostThreadLib"):
+        env.Append(LIBS = [Site.boostThreadLib])
+    else:
+        env.Append(LIBS = ["boost_thread-mt"])
+    # Compile flags
+    if isDebugBuild():
+        env.Append(CCFLAGS = ["-g"])
+    else:
+        env.Append(CCFLAGS = ["-g", "-O3"])
+    env.Append(CCFLAGS = ["-Wall"])
+    env.Append(CCFLAGS = ["-Wextra"])
+    # Set number of jobs to use
+    env.SetOption('num_jobs', numCPUs())
+    # 64 bit setup
+    if architectureStr() == arch64:
+        env.Append(CCFLAGS = ["-m64"])
+        env.Append(LINKFLAGS = ["-m64"])
+    else:
+        env.Append(CCFLAGS = ["-m32"])
+        env.Append(LINKFLAGS = ["-m32"])
+    # Prettify SCons output
+    if ARGUMENTS.get("verbose", 0) != "1":
+        env["ARCOMSTR"] = "AR $TARGET"
+        env["CXXCOMSTR"] = "Compiling " + red("$TARGET")
+        env["SHCXXCOMSTR"] = "Compiling " + red("$TARGET")
+        env["LDMODULECOMSTR"] = "Compiling " + red("$TARGET")
+        env["LINKCOMSTR"] = "Linking " + red("$TARGET")
+        env["SHLINKCOMSTR"] = "Linking " + red("$TARGET")
+        env["INSTALLSTR"] = "Installing " + red("$TARGET")
    
 # ------------------------------------------------------------------------------
 # BUILD SCRIPT

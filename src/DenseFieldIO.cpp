@@ -366,6 +366,223 @@ DenseFieldIO::write(OgOGroup &layerGroup, FieldBase::Ptr field)
 }
 
 //----------------------------------------------------------------------------//
+// Templated methods
+//----------------------------------------------------------------------------//
+
+//! \todo Tune the chunk size of the gzip call
+template <class Data_T>
+bool DenseFieldIO::writeInternal(hid_t layerGroup, 
+                                 typename DenseField<Data_T>::Ptr field)
+{
+  using namespace Exc;
+  using namespace Hdf5Util;
+
+  const V3i& memSize = field->internalMemSize();
+  int size[3];
+  size[0] = memSize.x;
+  size[1] = memSize.y;
+  size[2] = memSize.z;
+
+  int components = FieldTraits<Data_T>::dataDims();
+
+  hsize_t totalSize[1];
+  totalSize[0] = size[0] * size[1] * size[2] * components;
+
+  // Make sure chunk size isn't too big.
+  hsize_t preferredChunkSize = 4096 * 16;
+  const hsize_t chunkSize = std::min(preferredChunkSize, totalSize[0] / 2);
+
+  Box3i ext(field->extents()), dw(field->dataWindow());
+
+  // Add extents attribute ---
+
+  int extents[6] = 
+    { ext.min.x, ext.min.y, ext.min.z, ext.max.x, ext.max.y, ext.max.z };
+
+  if (!writeAttribute(layerGroup, k_extentsStr, 6, extents[0])) {
+    throw WriteAttributeException("Couldn't write attribute " + k_extentsStr);
+  }
+
+  // Add data window attribute ---
+
+  int dataWindow[6] = 
+    { dw.min.x, dw.min.y, dw.min.z, dw.max.x, dw.max.y, dw.max.z };
+
+  if (!writeAttribute(layerGroup, k_dataWindowStr, 6, dataWindow[0])) {
+    throw WriteAttributeException("Couldn't write attribute " + k_dataWindowStr);
+  }
+
+  // Add components attribute ---
+
+  if (!writeAttribute(layerGroup, k_componentsStr, 1, components)) {
+    throw WriteAttributeException("Couldn't write attribute " + k_componentsStr);
+  }
+
+  // Add the bits per component attribute ---
+
+  int bits = DataTypeTraits<Data_T>::h5bits();
+  if (!writeAttribute(layerGroup, k_bitsPerComponentStr, 1, bits)) {
+    Msg::print(Msg::SevWarning, "Error adding bits per component attribute.");
+    return false;
+  }
+
+  // Add data to file ---
+
+  H5ScopedScreate dataSpace(H5S_SIMPLE);
+
+  if (dataSpace.id() < 0) {
+    throw CreateDataSpaceException("Couldn't create data space in "
+                                   "DenseFieldIO::writeInternal");
+  }
+
+  // Create a "simple" data structure ---
+
+  H5Sset_extent_simple(dataSpace.id(), 1, totalSize, NULL);
+
+  // Set up gzip property list
+  bool gzipAvailable = checkHdf5Gzip();
+  hid_t dcpl = H5Pcreate(H5P_DATASET_CREATE);
+  if (gzipAvailable) {
+    herr_t status = H5Pset_deflate(dcpl, 9);
+    if (status < 0) {
+      return false;
+    }
+    status = H5Pset_chunk(dcpl, 1, &chunkSize);
+    if (status < 0) {
+      return false;
+    }    
+  }
+  
+  H5ScopedDcreate dataSet(layerGroup, k_dataStr, 
+                          DataTypeTraits<Data_T>::h5type(), 
+                          dataSpace.id(), 
+                          H5P_DEFAULT, dcpl, H5P_DEFAULT);
+
+  if (dataSet.id() < 0) {
+    throw CreateDataSetException("Couldn't create data set in "
+                                 "DenseFieldIO::writeInternal");
+  }
+
+  // Call out to the templated function, it will figure out how to get
+  // the data into the file in the appropriate fashion.
+  if (!writeData<Data_T>(dataSet.id(), field, Data_T(0.0f))) {
+    throw WriteLayerException("Error writing layer");
+  }
+
+  return true; 
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+bool DenseFieldIO::writeInternal(OgOGroup &layerGroup, 
+                                 typename DenseField<Data_T>::Ptr field)
+{
+  using namespace Exc;
+
+  const int    components  = FieldTraits<Data_T>::dataDims();
+  const V3i&   memSize     = field->internalMemSize();
+  const int    bits        = DataTypeTraits<Data_T>::h5bits();
+  
+  Box3i ext(field->extents()), dw(field->dataWindow());
+
+  // Add extents attributes ---
+
+  OgOAttribute<veci32_t> extMinAttr(layerGroup, k_extentsMinStr, ext.min);
+  OgOAttribute<veci32_t> extMaxAttr(layerGroup, k_extentsMaxStr, ext.max);
+  
+  // Add data window attributes ---
+  
+  OgOAttribute<veci32_t> dwMinAttr(layerGroup, k_dataWindowMinStr, dw.min);
+  OgOAttribute<veci32_t> dwMaxAttr(layerGroup, k_dataWindowMaxStr, dw.max);
+
+  // Add components attribute ---
+
+  OgOAttribute<int> componentsAttr(layerGroup, k_componentsStr, components);
+
+  // Add the bits per component attribute ---
+
+  OgOAttribute<int> bitsAttr(layerGroup, k_bitsPerComponentStr, bits);
+
+  // Add data to file ---
+
+  const size_t length = memSize[0] * memSize[1] * memSize[2];
+
+  OgODataset<Data_T> data(layerGroup, k_dataStr);
+  data.addData(length, &(*field->begin()));
+
+  return true;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+bool DenseFieldIO::writeData(hid_t dataSet, 
+                             typename DenseField<Data_T>::Ptr field,
+                             Data_T /* dummy */)
+{ 
+  using namespace Hdf5Util;
+
+  hid_t err = H5Dwrite(dataSet, 
+                       DataTypeTraits<Data_T>::h5type(), 
+                       H5S_ALL, H5S_ALL, 
+                       H5P_DEFAULT, &(*field->begin()));
+
+  if (err < 0) {
+    throw Exc::WriteLayerException("Error writing layer in "
+                                   "DenseFieldIO::writeData");
+  }
+
+  return true;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+typename DenseField<Data_T>::Ptr 
+DenseFieldIO::readData(hid_t dataSet, const Box3i &extents, const Box3i &dataW)
+{
+  typename DenseField<Data_T>::Ptr field(new DenseField<Data_T>);
+  field->setSize(extents, dataW);
+
+  if (H5Dread(dataSet, DataTypeTraits<Data_T>::h5type(), 
+              H5S_ALL, H5S_ALL, H5P_DEFAULT, &(*field->begin())) < 0) 
+  {
+    std::string typeName = "DenseField<" + 
+      DataTypeTraits<Data_T>::name() + ">";
+    throw Exc::Hdf5DataReadException("Couldn't read " + typeName + " data");
+  } 
+
+  return field;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+typename DenseField<Data_T>::Ptr 
+DenseFieldIO::readData(const OgIGroup &layerGroup, const Box3i &extents, 
+                       const Box3i &dataW)
+{
+  typename DenseField<Data_T>::Ptr field(new DenseField<Data_T>);
+  field->setSize(extents, dataW);
+
+  // Open the dataset
+  OgIDataset<Data_T> data = layerGroup.findDataset<Data_T>(k_dataStr);
+  if (!data.isValid()) {
+    throw Exc::ReadDataException("DenseFieldIO::readData() couldn't open "
+                                 "the dataset.");
+  }
+
+  // Read the data
+  if (!data.getData(0, &(*field->begin()), OGAWA_THREAD)) {
+    throw Exc::ReadDataException("DenseFieldIO::readData() couldn't read "
+                                 "the dataset.");
+  }
+
+  return field;
+}
+
+//----------------------------------------------------------------------------//
 
 FIELD3D_NAMESPACE_SOURCE_CLOSE
 

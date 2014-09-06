@@ -297,9 +297,6 @@ namespace detail {
   {
     using namespace std;
 
-    // To ensure we don't sample outside source data
-    Box3i srcDw = src.dataWindow();
-
     // Compute new res
     V3i res;
     if (dim == 2) {

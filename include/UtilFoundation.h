@@ -37,9 +37,9 @@
 #define _Alembic_Util_Foundation_h_
 
 // tr1/memory is not avaliable in Visual Studio.
-#if !defined(_MSC_VER)
+#if !defined(_MSC_VER) && !defined(__APPLE__)
 
-#if defined(__GXX_EXPERIMENTAL_CXX0X) || __cplusplus >= 201103L
+#if defined(__GXX_EXPERIMENTAL_CXX0X) || __cplusplus >= 201103L || defined(__APPLE__)
 #include <unordered_map>
 #else
 #include <tr1/memory>
@@ -103,7 +103,7 @@ namespace Alembic {
 namespace Util {
 namespace ALEMBIC_VERSION_NS {
 
-#if defined( _MSC_VER ) && _MSC_VER <= 1600
+#if defined( _MSC_VER ) && _MSC_VER <= 1600 || defined(__APPLE__)
 using boost::dynamic_pointer_cast;
 using boost::enable_shared_from_this;
 using boost::shared_ptr;

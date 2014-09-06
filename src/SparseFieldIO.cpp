@@ -256,7 +256,7 @@ public:
         // Wait to write data
         while (m_state.nextBlockToWrite != blockIdx) {
           // Spin
-          boost::this_thread::sleep(boost::posix_time::milliseconds(0.00001));
+          boost::this_thread::sleep(boost::posix_time::microseconds(1));
         }
         // Do the writing
         m_state.data.addData(cmpLen, &m_cache[0]);

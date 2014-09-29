@@ -38,16 +38,17 @@
 #ifndef _INCLUDED_Field3D_StdMathLib_H_
 #define _INCLUDED_Field3D_StdMathLib_H_
 
-#include <OpenEXR/half.h> 
-#include <OpenEXR/ImathHalfLimits.h>
 #include <OpenEXR/ImathBox.h> 
 #include <OpenEXR/ImathBoxAlgo.h>
 #include <OpenEXR/ImathColor.h>
+#include <OpenEXR/ImathHalfLimits.h>
 #include <OpenEXR/ImathMatrix.h>
-#include <OpenEXR/ImathVec.h>
-#include <OpenEXR/ImathRoots.h>
 #include <OpenEXR/ImathMatrixAlgo.h>
+#include <OpenEXR/ImathPlane.h>
 #include <OpenEXR/ImathRandom.h> 
+#include <OpenEXR/ImathRoots.h>
+#include <OpenEXR/ImathVec.h>
+#include <OpenEXR/half.h> 
 
 //----------------------------------------------------------------------------//
 
@@ -67,7 +68,9 @@ typedef Imath::V3f           V3f;
 typedef Imath::V3d           V3d;
 typedef Imath::Box3i         Box3i;
 typedef Imath::Box3d         Box3d;
+typedef Imath::Line3d        Ray3d;
 typedef Imath::M44d          M44d;
+typedef Imath::Plane3d       Plane3d;
 
 #define FIELD3D_VEC3_T       Imath::Vec3
 

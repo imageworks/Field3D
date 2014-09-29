@@ -202,6 +202,17 @@ private:
 };
 
 //----------------------------------------------------------------------------//
+// Utilities
+//----------------------------------------------------------------------------//
+
+//! Computes a voxel space bounds given a bounding box in world space.
+//! This is done by transforming each corner vertex from world to voxel 
+//! space and bounding the result.
+void worldToVoxel(const Field3D::FieldMapping* mapping,
+                  const Box3d &wsBounds,
+                  Box3d &vsBounds);
+
+//----------------------------------------------------------------------------//
 // NullFieldMapping
 //----------------------------------------------------------------------------//
 

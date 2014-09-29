@@ -167,6 +167,35 @@ void FieldMapping::voxelToLocal(const V3d &vsP, V3d &lsP) const
 }
 
 //----------------------------------------------------------------------------//
+// Utilities
+//----------------------------------------------------------------------------//
+
+void worldToVoxel(const Field3D::FieldMapping* mapping,
+                  const Box3d &wsBounds,
+                  Box3d &vsBounds)
+{
+  V3d test1, test2;
+  mapping->worldToVoxel(test1, test2);
+  //! \todo Make this integrate over time
+  V3d wsVerts[] = {
+    V3d(wsBounds.min.x, wsBounds.min.y, wsBounds.min.z),
+    V3d(wsBounds.max.x, wsBounds.min.y, wsBounds.min.z),
+    V3d(wsBounds.min.x, wsBounds.max.y, wsBounds.min.z),
+    V3d(wsBounds.max.x, wsBounds.max.y, wsBounds.min.z),
+    V3d(wsBounds.min.x, wsBounds.min.y, wsBounds.max.z),
+    V3d(wsBounds.max.x, wsBounds.min.y, wsBounds.max.z),
+    V3d(wsBounds.min.x, wsBounds.max.y, wsBounds.max.z),
+    V3d(wsBounds.max.x, wsBounds.max.y, wsBounds.max.z)
+  };
+  vsBounds.makeEmpty();
+  V3d vsP;
+  for (int i = 0; i < 8; i++) {
+    mapping->worldToVoxel(wsVerts[i], vsP);
+    vsBounds.extendBy(vsP);
+  }
+}
+
+//----------------------------------------------------------------------------//
 // NullFieldMapping
 //----------------------------------------------------------------------------//
 

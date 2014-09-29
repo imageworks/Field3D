@@ -54,6 +54,36 @@
 #endif
 
 //----------------------------------------------------------------------------//
+// Interval
+//----------------------------------------------------------------------------//
+
+//! Represents a single integration interval. 
+//! The interval is assumed to be inclusive, i.e. [t0,t1].
+struct Interval
+{
+  // Constructor ---------------------------------------------------------------
+
+  //! Default constructor
+  Interval(double start, double end, double step)
+    : t0(start), t1(end), stepLength(step) 
+  { }
+
+  // Public data members -------------------------------------------------------
+
+  //! The start of the interval (inclusive)
+  double t0;
+  //! The end of the interval (inclusive)
+  double t1;
+  //! The world space step length that is reasonable to use for the given 
+  //! interval.
+  double stepLength;
+};
+
+//----------------------------------------------------------------------------//
+
+typedef std::vector<Interval> IntervalVec;
+
+//----------------------------------------------------------------------------//
 
 #endif // Include guard
 

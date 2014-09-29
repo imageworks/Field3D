@@ -1106,6 +1106,34 @@ inline V3d discToCont(const V3i &discCoord)
 
 //----------------------------------------------------------------------------//
 
+inline Box3d continuousBounds(const Box3i &bbox)
+{
+  Box3d result;
+  result.min.x = static_cast<float>(bbox.min.x);
+  result.min.y = static_cast<float>(bbox.min.y);
+  result.min.z = static_cast<float>(bbox.min.z);
+  result.max.x = static_cast<float>(bbox.max.x + 1);
+  result.max.y = static_cast<float>(bbox.max.y + 1);
+  result.max.z = static_cast<float>(bbox.max.z + 1);
+  return result;
+}
+
+//----------------------------------------------------------------------------//
+
+inline Box3i discreteBounds(const Box3d &bbox)
+{
+  Box3i result;
+  result.min.x = static_cast<int>(std::floor(bbox.min.x));
+  result.min.y = static_cast<int>(std::floor(bbox.min.y));
+  result.min.z = static_cast<int>(std::floor(bbox.min.z));
+  result.max.x = static_cast<int>(std::ceil(bbox.max.x));
+  result.max.y = static_cast<int>(std::ceil(bbox.max.y));
+  result.max.z = static_cast<int>(std::ceil(bbox.max.z));
+  return result;
+}
+
+//----------------------------------------------------------------------------//
+
 inline Box3i clipBounds(const Box3i &bbox, const Box3i &bounds)
 {
   Box3i result;

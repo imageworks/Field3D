@@ -526,7 +526,8 @@ void MIPField<Field_T>::mappingChanged()
   for (size_t i = 1; i < m_fields.size(); i++) {
     if (m_fields[i]) {
       FieldMapping::Ptr mapping = 
-        detail::adjustedMIPFieldMapping(base::mapping(), baseRes, i);
+        detail::adjustedMIPFieldMapping(base::mapping(), baseRes, 
+                                        m_fields[i]->extents(), i);
       m_fields[i]->setMapping(mapping);
     }
   }
@@ -636,7 +637,8 @@ void MIPField<Field_T>::loadLevelFromDisk(size_t level) const
       // Update the mapping of the loaded field
       V3i baseRes = base::dataWindow().size() + V3i(1);
       FieldMapping::Ptr mapping = 
-        detail::adjustedMIPFieldMapping(base::mapping(), baseRes, level);
+        detail::adjustedMIPFieldMapping(base::mapping(), baseRes, 
+                                        m_fields[level]->extents(), level);
       m_fields[level]->setMapping(mapping);
     }
   }

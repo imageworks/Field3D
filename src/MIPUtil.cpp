@@ -55,6 +55,31 @@ namespace detail {
 
   //--------------------------------------------------------------------------//
 
+  //! Coordinate system from basis vectors
+  template <typename Vec_T>
+  M44d coordinateSystem(const Vec_T &e1,
+                        const Vec_T &e2,
+                        const Vec_T &e3,
+                        const Vec_T &origin)
+  {
+    M44d m;
+    m[0][0] = e1.x;
+    m[0][1] = e1.y;
+    m[0][2] = e1.z;
+    m[1][0] = e2.x;
+    m[1][1] = e2.y;
+    m[1][2] = e2.z;
+    m[2][0] = e3.x;
+    m[2][1] = e3.y;
+    m[2][2] = e3.z;
+    m[3][0] = origin.x;
+    m[3][1] = origin.y;
+    m[3][2] = origin.z;
+    return m;
+  }
+  
+  //--------------------------------------------------------------------------//
+
   V3i mipResolution(const V3i &baseRes, const size_t level)
   {
     const float factor = 1.0 / (1 << level);
@@ -67,28 +92,48 @@ namespace detail {
   //--------------------------------------------------------------------------//
 
   FieldMapping::Ptr adjustedMIPFieldMapping(const FieldMapping::Ptr mapping, 
-                                            const V3i &baseRes,
+                                            const V3i &/*baseRes*/,
+                                            const Box3i &extents, 
                                             const size_t level)
   {
     typedef MatrixFieldMapping::MatrixCurve MatrixCurve;
 
+    const float mult = 1 << level;
+    const V3i   res  = extents.size() + V3i(1);
+      
     if (MatrixFieldMapping::Ptr mfm = 
         field_dynamic_cast<MatrixFieldMapping>(mapping)) {
-      // Determine padding
-      const int mult          = 1 << level;
-      const V3i currentRes    = mipResolution(baseRes, level);
-      const V3i currentAtBase = currentRes * mult;
-      const V3f padding       = V3f(currentAtBase) / V3f(baseRes);
+      // Local space positions
+      const V3d lsOrigin(0.0), lsX(1.0, 0.0, 0.0), lsY(0.0, 1.0, 0.0), 
+        lsZ(0.0, 0.0, 0.1);
+      // Find base voxel size
+      const V3f wsBaseVoxelSize = mfm->wsVoxelSize(0, 0, 0);
+      // Compute current levels' voxel size
+      const V3f wsVoxelSize = wsBaseVoxelSize * mult;
       // Grab the matrices
       const MatrixCurve::SampleVec lsToWsSamples = mfm->localToWorldSamples();
       // New mapping to construct
       MatrixFieldMapping::Ptr newMapping(new MatrixFieldMapping);
-      // For each matrix, append the padding
-      BOOST_FOREACH (const MatrixCurve::Sample &sample, lsToWsSamples) {
-        M44d lsToWs = sample.second;
-        M44d scaling;
-        scaling.setScale(padding);
-        newMapping->setLocalToWorld(sample.first, scaling * lsToWs);
+      // For each time sample
+      BOOST_FOREACH (const MatrixCurve::Sample &sample, lsToWsSamples){
+        // Find origin and orientation vectors
+        V3d wsOrigin, wsX, wsY, wsZ;
+        mfm->localToWorld(lsOrigin, wsOrigin, sample.first);
+        mfm->localToWorld(lsX, wsX, sample.first);
+        mfm->localToWorld(lsY, wsY, sample.first);
+        mfm->localToWorld(lsZ, wsZ, sample.first);
+        // Normalize orientation vectors
+        wsX = (wsX - wsOrigin).normalized();
+        wsY = (wsY - wsOrigin).normalized();
+        wsZ = (wsZ - wsOrigin).normalized();
+        // Mult by voxel size
+        wsX *= wsVoxelSize.x * res.x;
+        wsY *= wsVoxelSize.y * res.y;
+        wsZ *= wsVoxelSize.z * res.z;
+        // Construct new mapping
+        M44d mtx = coordinateSystem(wsX, wsY, wsZ, wsOrigin);
+        // Update mapping
+        newMapping->setLocalToWorld(sample.first, mtx);
       }
       // Done
       return newMapping;

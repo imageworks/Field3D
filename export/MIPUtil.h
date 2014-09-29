@@ -400,6 +400,7 @@ namespace detail {
 
   FieldMapping::Ptr adjustedMIPFieldMapping(const FieldMapping::Ptr baseMapping,
                                             const V3i &baseRes,
+                                            const Box3i &extents, 
                                             const size_t level);
 
   //--------------------------------------------------------------------------//

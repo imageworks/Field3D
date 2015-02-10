@@ -73,6 +73,9 @@ class CubicGenericFieldInterp;
   \ingroup field
   \brief This subclass of Field stores data in a contiguous std::vector.
 
+  Regarding threading granularity - DenseField considers each scanline
+  (i.e. continuous X coords) to be one grain. Thus, numGrains is res.y * res.z.
+
   Refer to \ref using_fields for examples of how to use this in your code.
 */
 
@@ -108,6 +111,13 @@ public:
 
   //! Clears all the voxels in the storage
   virtual void clear(const Data_T &value);
+
+  // Threading-related ---------------------------------------------------------
+
+  //! Number of 'grains' to use with threaded access
+  size_t numGrains() const;
+  //! Bounding box of the given 'grain'
+  bool   getGrainBounds(const size_t idx, Box3i &vsBounds) const;  
 
   // From Field base class -----------------------------------------------------
 
@@ -446,6 +456,35 @@ template <class Data_T>
 void DenseField<Data_T>::clear(const Data_T &value)
 {
   std::fill(m_data.begin(), m_data.end(), value);
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+size_t DenseField<Data_T>::numGrains() const
+{
+  // Grain resolution
+  const V3i res = base::m_dataWindow.size() + V3i(1);
+  // Num grains is Y * Z
+  return res.y * res.z;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+bool DenseField<Data_T>::getGrainBounds(const size_t idx, Box3i &bounds) const
+{
+  // Grain resolution
+  const V3i res   = base::m_dataWindow.size() + V3i(1);
+  // Compute coordinate
+  const int y     = idx % res.y;
+  const int z     = idx / res.y;
+  // Build bbox
+  const V3i start = base::m_dataWindow.min + V3i(0, y, z);
+  const V3i end   = base::m_dataWindow.min + V3i(res.x, y, z);
+  bounds = Field3D::clipBounds(Box3i(start, end), base::m_dataWindow);
+  // Done
+  return true;
 }
 
 //----------------------------------------------------------------------------//

@@ -223,16 +223,37 @@ public:
   {
     using namespace Hdf5Util;
 
-    // Lock HDF5 access
-    boost::mutex::scoped_lock lock(ms_hdf5Mutex);
+    hid_t file;
+    boost::shared_ptr<H5ScopedGopen> levelGroup;
 
-    hid_t file = H5Fopen(m_filename.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
-    if (file < 0)
-      throw Exc::NoSuchFileException(m_filename);
-    H5ScopedGopen levelGroup(file, m_path);
+    {
+      // Hold lock while calling H5Fopen
+      GlobalLock lock(g_hdf5Mutex);
+      
+      // Open the HDF5 file
+      file = H5Fopen(m_filename.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+      if (file < 0) {
+        throw Exc::NoSuchFileException(m_filename);
+      }
+      levelGroup.reset(new H5ScopedGopen(file, m_path));
+    }
+
+    // Instantiate I/O
     FieldIO::Ptr io = 
       ClassFactory::singleton().createFieldIO(Field_T::staticClassName());
-    FieldBase::Ptr field = io->read(levelGroup, m_filename, m_path, m_typeEnum);
+    // Read the data
+    FieldBase::Ptr field = io->read(*levelGroup, m_filename, 
+                                    m_path, m_typeEnum);
+    
+    {
+      // Hold lock again
+      GlobalLock lock(g_hdf5Mutex);
+      // Close the file
+      if (H5Fclose(file) < 0) {
+        Msg::print("Error closing file: " + m_filename);
+      } 
+    }
+    // Done
     return field_dynamic_cast<Field_T>(field);
   }
 

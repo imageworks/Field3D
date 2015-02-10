@@ -2455,7 +2455,7 @@ void testMIPMake()
     Msg::print("Testing makeMIP" + 
                string(MIPType::staticClassType()) + " with " 
                + lexical_cast<string>(*i) + " # of threads.");
-    typename MIPType::Ptr mipField = makeMIP<MIPType>(*level0, 32, *i);
+    typename MIPType::Ptr mipField = makeMIP<MIPType, TriangleFilter>(*level0, 32, *i);
     mipField->name = "mip";
     mipField->attribute = "density";
   

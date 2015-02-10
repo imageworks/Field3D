@@ -129,15 +129,14 @@ template <typename MIPField_T>
 MIPLinearInterp<MIPField_T>::MIPLinearInterp(const MIPField_T &mip)
   : m_mip(mip)
 {
-  // Grab the world space voxel size for each MIP level
+  // Base voxel size (represents finest level)
+  const V3f   wsVoxelSize    = mip.mapping()->wsVoxelSize(0, 0, 0);
+  const float wsMinVoxelSize = 
+    std::min(std::min(wsVoxelSize.x, wsVoxelSize.y), wsVoxelSize.z);
+  // All subsequent levels are a 2x mult on the base voxel size
   for (size_t i = 0, end = mip.numLevels(); i < end; ++i) {
-    // Grab current level's voxel size
-    const V3f wsVoxelSize = mip.mipLevel(i)->mapping()->wsVoxelSize(0, 0, 0);
-    // Filter by min voxel size
-    const float wsMinVoxelSize = 
-      std::min(std::min(wsVoxelSize.x, wsVoxelSize.y), wsVoxelSize.z);
-    // Store the min size
-    m_wsVoxelSize.push_back(wsMinVoxelSize);
+    const float factor = std::pow(2.0f, static_cast<float>(i));
+    m_wsVoxelSize.push_back(wsMinVoxelSize * factor);
   }
 }
 

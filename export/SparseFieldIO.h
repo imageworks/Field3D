@@ -177,13 +177,13 @@ bool SparseFieldIO::writeInternal(hid_t layerGroup,
   using namespace Hdf5Util;
   using namespace Sparse;
 
+  GlobalLock lock(g_hdf5Mutex);
+
   Box3i ext(field->extents()), dw(field->dataWindow());
 
   int components = FieldTraits<Data_T>::dataDims();
 
   int valuesPerBlock = (1 << (field->m_blockOrder * 3)) * components;
-
-
 
   // Add extents attribute ---
 

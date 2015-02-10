@@ -472,6 +472,14 @@ public:
   //! Decrements the block ref count for the given block
   void decBlockRef(const int blockId) const;
 
+  // Threading-related ---------------------------------------------------------
+
+  //! Number of 'grains' to use with threaded access
+  size_t numGrains() const;
+  //! Bounding box of the given 'grain'
+  //! \return Whether the grain is contiguous in memory
+  bool   getGrainBounds(const size_t idx, Box3i &vsBounds) const;
+
   // From Field base class -----------------------------------------------------
 
   //! \name From Field
@@ -659,6 +667,23 @@ typedef SparseField<double> SparseFieldd;
 typedef SparseField<V3h>    SparseField3h;
 typedef SparseField<V3f>    SparseField3f;
 typedef SparseField<V3d>    SparseField3d;
+
+//------------------------------------------------------------------------------
+// Helper functions
+//------------------------------------------------------------------------------
+
+template <typename Data_T>
+Box3i blockCoords(const Box3i &dvsBounds, const SparseField<Data_T> *f)
+{
+  Box3i dbsBounds;
+  if (f) {
+    f->getBlockCoord(dvsBounds.min.x, dvsBounds.min.y, dvsBounds.min.z,
+                     dbsBounds.min.x, dbsBounds.min.y, dbsBounds.min.z);
+    f->getBlockCoord(dvsBounds.max.x, dvsBounds.max.y, dvsBounds.max.z,
+                     dbsBounds.max.x, dbsBounds.max.y, dbsBounds.max.z);
+  } 
+  return dbsBounds;
+}
 
 //----------------------------------------------------------------------------//
 // Helper functors
@@ -1307,11 +1332,11 @@ SparseField<Data_T>::copySparseField(const SparseField<Data_T> &o)
     // allocate m_blocks, sets m_blockRes, m_blockXYSize, m_blocks
     setupBlocks();
     m_fileManager = o.m_fileManager;
-    SparseFile::Reference<Data_T> &oldReference =
+    SparseFile::Reference<Data_T> *oldReference =
       m_fileManager->reference<Data_T>(o.m_fileId);
-    addReference(oldReference.filename, oldReference.layerPath,
-                 oldReference.valuesPerBlock,
-                 oldReference.occupiedBlocks);
+    addReference(oldReference->filename, oldReference->layerPath,
+                 oldReference->valuesPerBlock,
+                 oldReference->occupiedBlocks);
     copyBlockStates(o);
     setupReferenceBlocks();
   } else {
@@ -1345,11 +1370,11 @@ void SparseField<Data_T>::addReference(const std::string &filename,
   m_fileManager = &SparseFileManager::singleton();
   m_fileId = m_fileManager->getNextId<Data_T>(filename, layerPath);
   // Set up the manager data
-  SparseFile::Reference<Data_T> &reference =
+  SparseFile::Reference<Data_T> *reference =
     m_fileManager->reference<Data_T>(m_fileId);
-  reference.valuesPerBlock = valuesPerBlock;
-  reference.occupiedBlocks = occupiedBlocks;
-  reference.setNumBlocks(m_numBlocks);
+  reference->valuesPerBlock = valuesPerBlock;
+  reference->occupiedBlocks = occupiedBlocks;
+  reference->setNumBlocks(m_numBlocks);
 }
 
 //----------------------------------------------------------------------------//
@@ -1373,12 +1398,12 @@ void SparseField<Data_T>::setupReferenceBlocks()
 {
   if (!m_fileManager || m_fileId < 0) return;
 
-  SparseFile::Reference<Data_T> &reference =
+  SparseFile::Reference<Data_T> *reference =
     m_fileManager->reference<Data_T>(m_fileId);
 
-  std::vector<int>::iterator fb = reference.fileBlockIndices.begin();
+  std::vector<int>::iterator fb = reference->fileBlockIndices.begin();
   typename SparseFile::Reference<Data_T>::BlockPtrs::iterator bp =
-    reference.blocks.begin();
+    reference->blocks.begin();
   int nextBlockIdx = 0;
   for (size_t i = 0; i < m_numBlocks; ++i, ++fb, ++bp) {
     if (m_blocks[i].isAllocated) {
@@ -1880,6 +1905,33 @@ template <class Data_T>
 void SparseField<Data_T>::decBlockRef(const int blockId) const
 {
   m_fileManager->decBlockRef<Data_T>(m_fileId, blockId);
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+size_t SparseField<Data_T>::numGrains() const
+{
+  return m_numBlocks;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+bool SparseField<Data_T>::getGrainBounds(const size_t idx, Box3i &bounds) const
+{
+  // Block size
+  const size_t blockSide = (1 << m_blockOrder);
+  // Block coordinate
+  const V3i bCoord       = indexToCoord(idx, m_blockRes);
+  // Block bbox
+  const V3i   start(bCoord * blockSide + base::m_dataWindow.min);
+  const V3i   end  (start + Imath::V3i(blockSide - 1));
+  // Bounds must be clipped against data window
+  const Box3i unclipped(start, end);
+  bounds = clipBounds(unclipped, base::m_dataWindow);
+  // Whether it's a contiguous block
+  return bounds == unclipped;
 }
 
 //----------------------------------------------------------------------------//

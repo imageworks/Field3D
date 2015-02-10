@@ -49,6 +49,9 @@
 //----------------------------------------------------------------------------//
 #include <boost/intrusive_ptr.hpp> 
 
+#include <boost/shared_ptr.hpp>
+#include <boost/weak_ptr.hpp>
+
 #ifdef FIELD3D_USE_ATOMIC_COUNT
 #include <boost/detail/atomic_count.hpp>
 #else
@@ -86,6 +89,19 @@ FIELD3D_NAMESPACE_OPEN
   DEFINE_MATCH_RTTI_CALL                        \
 
 //----------------------------------------------------------------------------//
+// null_deleter (for shared_ptr)
+//----------------------------------------------------------------------------//
+
+//! Used to let a shared pointer exist that doesn't delete anything.
+//! This is used by RefBase to hold a shared pointer to *this without
+//! actually deleting twice when the object goes out of scope.
+struct null_deleter
+{
+  void operator()(void const *) const
+  { }
+};
+
+//----------------------------------------------------------------------------//
 
 class FIELD3D_API RefBase 
 {
@@ -94,6 +110,7 @@ public:
   // Typedefs ------------------------------------------------------------------
 
   typedef boost::intrusive_ptr<RefBase> Ptr;
+  typedef boost::weak_ptr<RefBase>      WeakPtr;
 
   // Constructors --------------------------------------------------------------
 
@@ -101,13 +118,17 @@ public:
   //! \{
 
   RefBase() 
-    : m_counter(0) 
-  {}
-    
+    : m_counter(0), 
+      m_sharedPtr(this, null_deleter()) 
+  { }
+
   //! Copy constructor
+  //! \note The null_deleter ensures we never try to actually delete this
+  //! object using the shared pointer.
   RefBase(const RefBase&) 
-    : m_counter(0) 
-  {}
+    : m_counter(0),
+      m_sharedPtr(this, null_deleter()) 
+  { }
 
   //! Assignment operator
   RefBase& operator= (const RefBase&)
@@ -145,6 +166,11 @@ public:
     // to delete the object ourselves.
   }
   
+  // Cache handling ------------------------------------------------------------
+
+  WeakPtr weakPtr() const
+  { return m_sharedPtr; }
+
   // RTTI replacement ----------------------------------------------------------
 
   /*! \note A note on why the RTTI replacement is needed:
@@ -189,6 +215,10 @@ private:
   mutable boost::mutex m_refMutex;     
 #endif
 
+  //! For use by the FieldCache only:
+  //! The shared pointer lets us see if this object is still alive.
+  boost::shared_ptr<RefBase> m_sharedPtr;
+
 };
 
 //----------------------------------------------------------------------------//
@@ -203,6 +233,8 @@ intrusive_ptr_add_ref(RefBase* r)
 
 //----------------------------------------------------------------------------//
 
+//! \todo Communicate with the FieldCache to prevent any cache updates from
+//! happening while this releases its count.
 inline void
 intrusive_ptr_release(RefBase* r)
 {

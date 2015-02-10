@@ -48,6 +48,7 @@
 
 #include <hdf5.h>
 #include <string.h> // for memcpy
+
 #include "Hdf5Util.h"
 
 //----------------------------------------------------------------------------//
@@ -112,6 +113,8 @@ SparseDataReader<Data_T>::SparseDataReader(hid_t location, int valuesPerBlock,
   using namespace Hdf5Util;
   using namespace Exc;
 
+  GlobalLock lock(g_hdf5Mutex);
+
   hsize_t dims[2];
   hsize_t memDims[1];
 
@@ -152,6 +155,8 @@ void SparseDataReader<Data_T>::readBlock(int idx, Data_T &result)
   using namespace Hdf5Util;
   using namespace Exc;
 
+  GlobalLock lock(g_hdf5Mutex);
+
   hsize_t offset[2];
   hsize_t count[2];
   herr_t status;
@@ -163,8 +168,9 @@ void SparseDataReader<Data_T>::readBlock(int idx, Data_T &result)
 
   status = H5Sselect_hyperslab(m_fileDataSpace.id(), H5S_SELECT_SET, 
                                offset, NULL, count, NULL);
+    
   if (status < 0) {
-    throw ReadHyperSlabException("Couldn't select slab " + 
+    throw ReadHyperSlabException("Couldn't select slab in readBlock(): " + 
                                  boost::lexical_cast<std::string>(idx));
   }
 
@@ -182,6 +188,8 @@ void SparseDataReader<Data_T>::readBlockList
   using namespace Hdf5Util;
   using namespace Exc;
 
+  GlobalLock lock(g_hdf5Mutex);
+
   hsize_t offset[2];
   hsize_t count[2];
   herr_t status;
@@ -194,7 +202,7 @@ void SparseDataReader<Data_T>::readBlockList
   status = H5Sselect_hyperslab(m_fileDataSpace.id(), H5S_SELECT_SET, 
                                offset, NULL, count, NULL);
   if (status < 0) {
-    throw ReadHyperSlabException("Couldn't select slab " + 
+    throw ReadHyperSlabException("Couldn't select slab in readBlockList():" + 
                                  boost::lexical_cast<std::string>(idxLo));
   }
 

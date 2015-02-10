@@ -107,7 +107,7 @@ namespace {
     return ret;
   }
 
-//----------------------------------------------------------------------------//
+  //--------------------------------------------------------------------------//
 
   //! Functor used with for_each to print a container
   template <class T>
@@ -126,23 +126,7 @@ namespace {
     int indent;
   };
 
-//----------------------------------------------------------------------------//
-
-  /*! \brief checks to see if a file/directory exists or not
-    \param[in] filename the file/directory to check
-    \retval true if it exists
-    \retval false if it does not exist
-   */
-  bool fileExists(const std::string &filename)
-  {
-#ifdef WIN32
-    struct __stat64 statbuf;
-    return (_stat64(filename.c_str(), &statbuf) != -1);
-#else
-    struct stat statbuf;
-    return (stat(filename.c_str(), &statbuf) != -1);
-#endif
-  }
+  //--------------------------------------------------------------------------//
 
   /*! \brief wrapper around fileExists. Throws instead if the file
     does not exist.
@@ -157,7 +141,7 @@ namespace {
     }
   }
 
-//----------------------------------------------------------------------------//
+  //--------------------------------------------------------------------------//
 
   bool isSupportedFileVersion(const int fileVersion[3],
                               const int minVersion[2])
@@ -194,7 +178,7 @@ namespace {
     return true;
   }
 
-//----------------------------------------------------------------------------//
+  //--------------------------------------------------------------------------//
 
   static herr_t localPrintError( hid_t estack_id, void *stream )
   {
@@ -202,7 +186,7 @@ namespace {
     return H5Eprint2(estack_id, static_cast<FILE*>(stream));
   }
   
-//----------------------------------------------------------------------------//
+  //--------------------------------------------------------------------------//
 
 } // end of local namespace
 
@@ -290,6 +274,8 @@ Partition::getVectorLayerNames(std::vector<std::string> &names) const
 Field3DFileBase::Field3DFileBase()
   : m_file(-1), m_metadata(this)
 {
+  GlobalLock lock(g_hdf5Mutex);
+
   // Suppressing HDF error messages
   // Explanation about the function for the error stack is here:
   // http://www.hdfgroup.org/HDF5/doc/RM/RM_H5E.html#Error-SetAuto2
@@ -502,6 +488,8 @@ bool Field3DFileBase::close()
 
 void Field3DFileBase::closeInternal()
 {
+  GlobalLock lock(g_hdf5Mutex);
+
   if (m_file != -1) {
     if (H5Fclose(m_file) < 0) {
       Msg::print(Msg::SevWarning, "Failed to close hdf5 file handle");
@@ -581,6 +569,8 @@ Field3DInputFile::~Field3DInputFile()
 
 bool Field3DInputFile::open(const string &filename)
 {
+  GlobalLock lock(g_hdf5Mutex);
+
   clear();
 
   bool success = true;
@@ -699,6 +689,8 @@ bool Field3DInputFile::open(const string &filename)
 bool Field3DInputFile::readPartitionAndLayerInfo()
 {
   using namespace InputFile;
+
+  GlobalLock lock(g_hdf5Mutex);
 
   // First, find the partitions ---
 
@@ -827,6 +819,7 @@ bool
 Field3DInputFile::
 readMetadata(hid_t metadata_id, FieldBase::Ptr field) const
 {
+  GlobalLock lock(g_hdf5Mutex);
 
   hsize_t num_attrs = H5Aget_num_attrs(metadata_id);
 
@@ -936,6 +929,7 @@ readMetadata(hid_t metadata_id, FieldBase::Ptr field) const
 bool  
 Field3DInputFile::readMetadata(hid_t metadata_id)
 {
+  GlobalLock lock(g_hdf5Mutex);
 
   hsize_t num_attrs = H5Aget_num_attrs(metadata_id);
 
@@ -1045,6 +1039,8 @@ bool
 Field3DInputFile::
 readGroupMembership(GroupMembershipMap &gpMembershipMap)
 {
+  GlobalLock lock(g_hdf5Mutex);
+
   if (!H5Lexists(m_file, "field3d_group_membership", H5P_DEFAULT)) {
     return false;
   }
@@ -1117,6 +1113,8 @@ namespace InputFile {
 herr_t parsePartitions(hid_t loc_id, const char *itemName, 
                        const H5L_info_t * /* linfo */, void *opdata)
 {
+  GlobalLock lock(g_hdf5Mutex);
+
   herr_t          status;
   H5O_info_t      infobuf;
 
@@ -1155,6 +1153,8 @@ herr_t parsePartitions(hid_t loc_id, const char *itemName,
 herr_t parseLayers(hid_t loc_id, const char *itemName, 
                    const H5L_info_t * /* linfo */, void *opdata)
 {
+  GlobalLock lock(g_hdf5Mutex);
+
   herr_t          status;
   H5O_info_t      infobuf;
   
@@ -1221,6 +1221,8 @@ Field3DOutputFile::~Field3DOutputFile()
 //! we should make sure that doesn't happen.
 bool Field3DOutputFile::create(const string &filename, CreateMode cm)
 {
+  GlobalLock lock(g_hdf5Mutex);
+
   closeInternal();
 
   bool success = true;
@@ -1278,6 +1280,8 @@ bool Field3DOutputFile::create(const string &filename, CreateMode cm)
 bool Field3DOutputFile::writeMapping(hid_t partitionGroup, 
                                      FieldMapping::Ptr mapping)
 {
+  GlobalLock lock(g_hdf5Mutex);
+
   try {
     // Make a group under the partition to store the mapping data
     H5ScopedGcreate mappingGroup(partitionGroup, k_mappingStr);
@@ -1461,6 +1465,7 @@ bool Field3DOutputFile::writeMetadata(hid_t metadataGroup)
 bool 
 Field3DOutputFile::writeGlobalMetadata()
 {
+  GlobalLock lock(g_hdf5Mutex);
 
   // Add metadata group and write it out  
   H5ScopedGcreate metadataGroup(m_file, "field3d_global_metadata");
@@ -1483,6 +1488,8 @@ Field3DOutputFile::writeGroupMembership()
 {
   using namespace std;
   using namespace Hdf5Util;
+
+  GlobalLock lock(g_hdf5Mutex);
 
   if (!m_groupMembership.size())
     return true;
@@ -1560,6 +1567,19 @@ void Field3DFileBase::printHierarchy() const
 
 //----------------------------------------------------------------------------//
 // Function Implementations
+//----------------------------------------------------------------------------//
+
+bool fileExists(const std::string &filename)
+{
+#ifdef WIN32
+  struct __stat64 statbuf;
+  return (_stat64(filename.c_str(), &statbuf) != -1);
+#else
+  struct stat statbuf;
+  return (stat(filename.c_str(), &statbuf) != -1);
+#endif
+}
+
 //----------------------------------------------------------------------------//
 
 bool writeField(hid_t layerGroup, FieldBase::Ptr field)

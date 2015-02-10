@@ -41,9 +41,17 @@
 
 //----------------------------------------------------------------------------//
 
+// Header include
 #include "MIPUtil.h"
 
+// System includes
+#include <cmath>
+
+// Library includes
 #include <boost/foreach.hpp>
+
+// Project includes
+#include "CoordSys.h"
 
 //----------------------------------------------------------------------------//
 
@@ -55,38 +63,13 @@ namespace detail {
 
   //--------------------------------------------------------------------------//
 
-  //! Coordinate system from basis vectors
-  template <typename Vec_T>
-  M44d coordinateSystem(const Vec_T &e1,
-                        const Vec_T &e2,
-                        const Vec_T &e3,
-                        const Vec_T &origin)
-  {
-    M44d m;
-    m[0][0] = e1.x;
-    m[0][1] = e1.y;
-    m[0][2] = e1.z;
-    m[1][0] = e2.x;
-    m[1][1] = e2.y;
-    m[1][2] = e2.z;
-    m[2][0] = e3.x;
-    m[2][1] = e3.y;
-    m[2][2] = e3.z;
-    m[3][0] = origin.x;
-    m[3][1] = origin.y;
-    m[3][2] = origin.z;
-    return m;
-  }
-  
-  //--------------------------------------------------------------------------//
-
   V3i mipResolution(const V3i &baseRes, const size_t level)
   {
     const float factor = 1.0 / (1 << level);
     const V3f   floatRes(baseRes);
-    return V3i(static_cast<int>(ceil(floatRes.x * factor)),
-               static_cast<int>(ceil(floatRes.y * factor)),
-               static_cast<int>(ceil(floatRes.z * factor)));
+    return V3i(static_cast<int>(std::ceil(floatRes.x * factor)),
+               static_cast<int>(std::ceil(floatRes.y * factor)),
+               static_cast<int>(std::ceil(floatRes.z * factor)));
   }
 
   //--------------------------------------------------------------------------//

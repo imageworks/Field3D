@@ -54,6 +54,8 @@
 #include <vector>
 
 #include <boost/lexical_cast.hpp>
+#include <boost/thread/mutex.hpp>
+#include <boost/thread/recursive_mutex.hpp>
 
 #include <hdf5.h>
 
@@ -66,6 +68,14 @@
 #include "ns.h"
 
 FIELD3D_NAMESPACE_OPEN
+
+//----------------------------------------------------------------------------//
+// Global HDF5 Mutex
+//----------------------------------------------------------------------------//
+
+extern boost::recursive_mutex g_hdf5Mutex;
+
+typedef boost::recursive_mutex::scoped_lock GlobalLock;
 
 //----------------------------------------------------------------------------//
 // Hdf5Util classes
@@ -105,18 +115,21 @@ class H5ScopedAopen : public H5Base
 public:
   H5ScopedAopen(hid_t location, const std::string &name)
   {
+    GlobalLock lock(g_hdf5Mutex);
     m_id = H5Aopen(location, name.c_str(), H5P_DEFAULT);
     if (m_id < 0)
       throw Exc::MissingAttributeException("Couldn't open attribute " + name);
   }
   H5ScopedAopen(hid_t location, const std::string &name, hid_t aapl_id)
   {
+    GlobalLock lock(g_hdf5Mutex);
     m_id = H5Aopen(location, name.c_str(), aapl_id);
     if (m_id < 0)
       throw Exc::MissingAttributeException("Couldn't open attribute " + name);
   }
   ~H5ScopedAopen()
   {
+    GlobalLock lock(g_hdf5Mutex);
     if (m_id >= 0)
       H5Aclose(m_id);
   }
@@ -131,6 +144,7 @@ class H5ScopedAopenIdx : public H5Base
 public:
   H5ScopedAopenIdx(hid_t location, unsigned idx)
   {
+    GlobalLock lock(g_hdf5Mutex);
     m_id = H5Aopen_idx(location, idx);
     if (m_id < 0)
       throw Exc::MissingAttributeException("Couldn't open attribute at index: " +
@@ -138,6 +152,7 @@ public:
   }
   ~H5ScopedAopenIdx()
   {
+    GlobalLock lock(g_hdf5Mutex);
     if (m_id >= 0)
       H5Aclose(m_id);
   }
@@ -152,18 +167,21 @@ class H5ScopedGcreate : public H5Base
 public:
   H5ScopedGcreate(hid_t parentLocation, const std::string &name)
   {
+    GlobalLock lock(g_hdf5Mutex);
     m_id = H5Gcreate(parentLocation, name.c_str(), 
                      H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
   }
   H5ScopedGcreate(hid_t parentLocation, const std::string &name,              
                   hid_t lcpl_id, hid_t gcpl_id, hid_t gapl_id)
   {
+    GlobalLock lock(g_hdf5Mutex);
     m_id = H5Gcreate(parentLocation, name.c_str(), 
                           lcpl_id, gcpl_id, gapl_id);
   }
 
   ~H5ScopedGcreate()
   {
+    GlobalLock lock(g_hdf5Mutex);
     if (m_id >= 0)
       H5Gclose(m_id);
   }
@@ -191,15 +209,18 @@ public:
   }
   void open(hid_t parentLocation, const std::string &name)
   {
+    GlobalLock lock(g_hdf5Mutex);
     m_id = H5Gopen(parentLocation, name.c_str(), H5P_DEFAULT);
   }
   void open(hid_t parentLocation, const std::string &name, hid_t gapl_id)
   {
+    GlobalLock lock(g_hdf5Mutex);
     m_id = H5Gopen(parentLocation, name.c_str(), gapl_id);
   }
 
   ~H5ScopedGopen()
   {
+    GlobalLock lock(g_hdf5Mutex);
     if (m_id >= 0)
       H5Gclose(m_id);
   }
@@ -224,10 +245,12 @@ public:
   }
   void create(H5S_class_t type)
   {
+    GlobalLock lock(g_hdf5Mutex);
     m_id = H5Screate(type);
   }
   ~H5ScopedScreate()
   {
+    GlobalLock lock(g_hdf5Mutex);
     if (m_id >= 0)
       H5Sclose(m_id);
   }
@@ -244,11 +267,13 @@ public:
                   hid_t dtype_id, hid_t space_id, hid_t lcpl_id, 
                   hid_t dcpl_id, hid_t dapl_id)
   {
+    GlobalLock lock(g_hdf5Mutex);
     m_id = H5Dcreate(parentLocation, name.c_str(), dtype_id, space_id,
                      lcpl_id, dcpl_id, dapl_id);
   }
   ~H5ScopedDcreate()
   {
+    GlobalLock lock(g_hdf5Mutex);
     if (m_id >= 0)
       H5Dclose(m_id);
   }
@@ -264,12 +289,14 @@ class H5ScopedAget_space : public H5Base
 public:
   H5ScopedAget_space(hid_t dataset_id)
   {
+    GlobalLock lock(g_hdf5Mutex);
     m_id = H5Aget_space(dataset_id);
     if (m_id < 0)
       throw Exc::AttrGetSpaceException("Couldn't get attribute space");
   }
   ~H5ScopedAget_space()
   {
+    GlobalLock lock(g_hdf5Mutex);
     if (m_id >= 0)
       H5Sclose(m_id);
   }
@@ -285,12 +312,14 @@ class H5ScopedAget_type : public H5Base
 public:
   H5ScopedAget_type(hid_t dataset_id)
   {
+    GlobalLock lock(g_hdf5Mutex);
     m_id = H5Aget_type(dataset_id);
     if (m_id < 0)
       throw Exc::AttrGetTypeException("Couldn't get attribute type");
   }
   ~H5ScopedAget_type()
   {
+    GlobalLock lock(g_hdf5Mutex);
     if (m_id >= 0)
       H5Tclose(m_id);
   }
@@ -306,12 +335,14 @@ class H5ScopedTget_native_type : public H5Base
 public:
   H5ScopedTget_native_type(hid_t dataset_id, H5T_direction_t direction)
   {
+    GlobalLock lock(g_hdf5Mutex);
     m_id = H5Tget_native_type(dataset_id, direction);
     if (m_id < 0)
       throw Exc::AttrGetNativeTypeException("Couldn't get native attribute type");
   }
   ~H5ScopedTget_native_type()
   {
+    GlobalLock lock(g_hdf5Mutex);
     if (m_id >= 0)
       H5Tclose(m_id);
   }
@@ -336,10 +367,12 @@ public:
   }
   void open(hid_t parentLocation, const std::string &name, hid_t dapl_id)
   {
+    GlobalLock lock(g_hdf5Mutex);
     m_id = H5Dopen(parentLocation, name.c_str(), dapl_id);
   }
   ~H5ScopedDopen()
   {
+    GlobalLock lock(g_hdf5Mutex);
     if (m_id >= 0) {
       H5Dclose(m_id);
     }
@@ -364,10 +397,12 @@ public:
   }
   void open(hid_t dataset_id)
   {
+    GlobalLock lock(g_hdf5Mutex);
     m_id = H5Dget_space(dataset_id);
   }
   ~H5ScopedDget_space()
   {
+    GlobalLock lock(g_hdf5Mutex);
     if (m_id >= 0)
       H5Sclose(m_id);
   }
@@ -392,10 +427,12 @@ public:
   }
   void open(hid_t dataset_id)
   {
+    GlobalLock lock(g_hdf5Mutex);
     m_id = H5Dget_type(dataset_id);
   }
   ~H5ScopedDget_type()
   {
+    GlobalLock lock(g_hdf5Mutex);
     if (m_id >= 0)
       H5Tclose(m_id);
   }
@@ -537,6 +574,8 @@ void writeSimpleData(hid_t location, const std::string &name,
 {
   using namespace Exc;
 
+  GlobalLock lock(g_hdf5Mutex);
+
   // Calculate the total number of entries. This factors in that
   // V3f uses 3 components per value, etc.
   hsize_t totalSize[1];
@@ -573,6 +612,8 @@ void readSimpleData(hid_t location, const std::string &name,
                      std::vector<T> &data)
 {
   using namespace Exc;
+
+  GlobalLock lock(g_hdf5Mutex);
 
   int components = FieldTraits<T>::dataDims();
   hsize_t dims[1];

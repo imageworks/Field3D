@@ -248,6 +248,11 @@ struct FieldGroup
   typedef typename fusion_ro::as_vector<MPLMIPDenseTypes>::type  MIPDenseTypes;
   typedef typename fusion_ro::as_vector<MPLMIPSparseTypes>::type MIPSparseTypes;
 
+  // Constants -----------------------------------------------------------------
+
+  //! Used by load() to indicate missing file
+  static const int k_missingFile = -1;
+
   // Ctors ---------------------------------------------------------------------
 
   //! Default constructor, does nothing
@@ -260,8 +265,9 @@ struct FieldGroup
   void setup(const Field3D::FieldRes::Vec &fields);
 
   //! Loads all fields from a given file and optional attribute pattern
-  //! \returns Success state
-  bool load(const std::string &filename, const std::string &attribute);
+  //! \returns Number of fields loaded, or a negative number if 
+  //! the file failed to open.
+  int load(const std::string &filename, const std::string &attribute);
   //! The number of fields in the group
   size_t size() const;
   //! Samples the group of fields at the given point. This call will not
@@ -276,15 +282,20 @@ struct FieldGroup
   void getMinMax(const Box3d &wsBounds, float *min, float *max) const;
   //! Returns the memory use in bytes for the fields in the group
   long long int memSize() const;
+  //! Returns a vector of FieldRes::Ptrs to the fields in the group
+  const FieldRes::Vec& fields() const
+  { return m_allFields; }
 
 private:
 
   // Data members --------------------------------------------------------------
   
-  DenseTypes     dense;
-  SparseTypes    sparse;
-  MIPDenseTypes  mipDense;
-  MIPSparseTypes mipSparse;
+  DenseTypes     m_dense;
+  SparseTypes    m_sparse;
+  MIPDenseTypes  m_mipDense;
+  MIPSparseTypes m_mipSparse;
+
+  FieldRes::Vec  m_allFields;
   
   // Functors ------------------------------------------------------------------
 
@@ -330,17 +341,17 @@ FieldGroup<BaseTypeList_T, Dims_T>::setup(const Field3D::FieldRes::Vec &fields)
   // Pick out only scalar fields
   for (size_t i = 0, end = fields.size(); i < end; ++i) {
     GrabFields op(fields[i]);
-    fusion::for_each(dense, op);
-    fusion::for_each(sparse, op);
-    fusion::for_each(mipDense, op);
-    fusion::for_each(mipSparse, op);
+    fusion::for_each(m_dense, op);
+    fusion::for_each(m_sparse, op);
+    fusion::for_each(m_mipDense, op);
+    fusion::for_each(m_mipSparse, op);
   }
 }
 
 //------------------------------------------------------------------------------
 
 template <typename BaseTypeList_T, int Dims_T>
-bool 
+int
 FieldGroup<BaseTypeList_T, Dims_T>::load
 (const std::string &filename, const std::string &attribute)
 {
@@ -348,6 +359,7 @@ FieldGroup<BaseTypeList_T, Dims_T>::load
   
   FieldRes::Vec results;
 
+  // Track number of fields in group before loading.
   const size_t sizeBeforeLoading = size();
 
   // Open each file ---
@@ -359,7 +371,7 @@ FieldGroup<BaseTypeList_T, Dims_T>::load
 
     Field3DInputFile in;
     if (!in.open(fn)) {
-      return false;
+      return k_missingFile;
     }
 
     // Use partition names to determine if fields should be loaded
@@ -373,11 +385,14 @@ FieldGroup<BaseTypeList_T, Dims_T>::load
 
   }
 
+  // Record all the loaded fields
+  m_allFields = results;
+
   // Set up from fields
   setup(results);
 
-  // Done. Check whether we loaded anything and return false if we didn't.
-  return size() != sizeBeforeLoading;
+  // Done. Return the number of fields that were loaded.
+  return size() - sizeBeforeLoading;
 }
 
 //------------------------------------------------------------------------------
@@ -387,10 +402,10 @@ size_t
 FieldGroup<BaseTypeList_T, Dims_T>::size() const
 {
   CountFields op;
-  fusion::for_each(dense, op);
-  fusion::for_each(sparse, op);
-  fusion::for_each(mipDense, op);
-  fusion::for_each(mipSparse, op);
+  fusion::for_each(m_dense, op);
+  fusion::for_each(m_sparse, op);
+  fusion::for_each(m_mipDense, op);
+  fusion::for_each(m_mipSparse, op);
   return op.count;
 }
 
@@ -403,8 +418,8 @@ FieldGroup<BaseTypeList_T, Dims_T>::sample(const V3d &vsP,
                                            bool isVs) const
 {
   Sample op(vsP, result, isVs);
-  fusion::for_each(dense, op);
-  fusion::for_each(sparse, op);
+  fusion::for_each(m_dense, op);
+  fusion::for_each(m_sparse, op);
 }
 
 //------------------------------------------------------------------------------
@@ -417,8 +432,8 @@ FieldGroup<BaseTypeList_T, Dims_T>::sampleMIP(const V3d &vsP,
                                               bool isVs) const
 {
   SampleMIP op(vsP, wsSpotSize, result, isVs);
-  fusion::for_each(mipDense, op);
-  fusion::for_each(mipSparse, op);
+  fusion::for_each(m_mipDense, op);
+  fusion::for_each(m_mipSparse, op);
 }
 
 //------------------------------------------------------------------------------
@@ -429,10 +444,10 @@ FieldGroup<BaseTypeList_T, Dims_T>::getIntersections
 (const Ray3d &ray, IntervalVec &intervals) const
 {
   GetIntersections op(ray, intervals);
-  fusion::for_each(dense, op);
-  fusion::for_each(sparse, op);
-  fusion::for_each(mipDense, op);
-  fusion::for_each(mipSparse, op);
+  fusion::for_each(m_dense, op);
+  fusion::for_each(m_sparse, op);
+  fusion::for_each(m_mipDense, op);
+  fusion::for_each(m_mipSparse, op);
   return intervals.size() > 0;
 }
 
@@ -445,11 +460,11 @@ FieldGroup<BaseTypeList_T, Dims_T>::getMinMax(const Box3d &wsBounds,
                                               float *max) const
 {
   GetMinMax op(wsBounds, min, max);
-  fusion::for_each(dense, op);
-  fusion::for_each(sparse, op);
+  fusion::for_each(m_dense, op);
+  fusion::for_each(m_sparse, op);
   GetMinMaxMIP opMIP(wsBounds, min, max);
-  fusion::for_each(mipDense, opMIP);
-  fusion::for_each(mipSparse, opMIP);    
+  fusion::for_each(m_mipDense, opMIP);
+  fusion::for_each(m_mipSparse, opMIP);    
 }
 
 //------------------------------------------------------------------------------
@@ -460,10 +475,10 @@ FieldGroup<BaseTypeList_T, Dims_T>::memSize() const
 {
   long long int result = 0;
   MemSize op(result);
-  fusion::for_each(dense, op);
-  fusion::for_each(sparse, op);
-  fusion::for_each(mipDense, op);
-  fusion::for_each(mipSparse, op);
+  fusion::for_each(m_dense, op);
+  fusion::for_each(m_sparse, op);
+  fusion::for_each(m_mipDense, op);
+  fusion::for_each(m_mipSparse, op);
   return result;
 }
 
@@ -632,11 +647,10 @@ struct FieldGroup<BaseTypeList_T, Dims_T>::GetIntersections
     }
     if (t0 < t1) {
       t0 = std::max(t0, 0.0);
-      const double wsLength    = (m_wsRay(t0) - m_wsRay(1)).length();
       const V3d    wsVoxelSize = mtx->wsVoxelSize(0, 0, 0);
       const double minLen      = min(min(wsVoxelSize.x, wsVoxelSize.y),
                                      wsVoxelSize.z);
-      m_intervals.push_back(Interval(t0, t1, wsLength / minLen));
+      m_intervals.push_back(Interval(t0, t1, minLen));
     }
   }
   //! Functor

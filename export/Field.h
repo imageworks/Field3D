@@ -917,6 +917,10 @@ FIELD3D_CLASSTYPE_TEMPL_INSTANTIATION(ResizableField);
 template <class Data_T>
 void ResizableField<Data_T>::setSize(const V3i &size)
 {
+  assert(size.x >= 0);
+  assert(size.y >= 0);
+  assert(size.z >= 0);
+
   Field<Data_T>::m_extents.min = V3i(0);
   Field<Data_T>::m_extents.max = size - V3i(1);
   Field<Data_T>::m_dataWindow = Field<Data_T>::m_extents;
@@ -942,7 +946,6 @@ template <class Data_T>
 void ResizableField<Data_T>::setSize(const Box3i &extents, 
                                      const Box3i &dataWindow)
 { 
-    
   Field<Data_T>::m_extents = extents;
   Field<Data_T>::m_dataWindow = dataWindow;
   // Tell subclasses that the size changed so they can update themselves.
@@ -954,9 +957,13 @@ void ResizableField<Data_T>::setSize(const Box3i &extents,
 template <class Data_T>
 void ResizableField<Data_T>::setSize(const V3i &size, int padding)
 { 
+  assert(size.x >= 0);
+  assert(size.y >= 0);
+  assert(size.z >= 0);
+  assert(padding >= 0);
+
   setSize(Box3i(V3i(0), size - V3i(1)),
-          Box3i(V3i(-padding), 
-                size + V3i(padding - 1))); 
+          Box3i(V3i(-padding), size + V3i(padding - 1))); 
 }
 
 //----------------------------------------------------------------------------//
@@ -1172,6 +1179,16 @@ void advance(Iter_T &iter, int num, const Iter_T &end)
   for (int i=0; i<num && iter != end; ++i, ++iter) {
     // Empty
   }
+}
+
+//----------------------------------------------------------------------------//
+
+inline V3i indexToCoord(const size_t idx, const V3i &res)
+{
+  const int i = idx % res.x;
+  const int j = (idx / res.x) % res.y;
+  const int k = idx / (res.x * res.y);
+  return V3i(i, j, k);
 }
 
 //----------------------------------------------------------------------------//

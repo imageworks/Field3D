@@ -81,90 +81,139 @@ bool resample(const Field_T &src, Field_T &tgt, const V3i &newRes,
               const FilterOp_T &filter);
 
 //----------------------------------------------------------------------------//
+// Filter
+//----------------------------------------------------------------------------//
+
+struct Filter
+{
+  // Typedefs ---
+
+  typedef boost::shared_ptr<Filter>       Ptr;
+  typedef boost::shared_ptr<const Filter> CPtr;
+
+  // To be overridden by subclasses ---
+
+  //! Evaluates the filter at coordinate 't'
+  virtual float eval(const float t) const = 0;
+  //! Radial width of the filter (half of diameter)
+  virtual float support()           const = 0;
+
+};
+
+//----------------------------------------------------------------------------//
 // BoxFilter
 //----------------------------------------------------------------------------//
 
-struct BoxFilter
+struct BoxFilter : public Filter
 {
-  float operator() (const float t) const
+  // Typedefs
+  typedef boost::shared_ptr<BoxFilter>       Ptr;
+  typedef boost::shared_ptr<const BoxFilter> CPtr;
+  // Ctors
+  BoxFilter()
+    : m_width(1.0)
+  { }
+  BoxFilter(const float width)
+    : m_width(width)
+  { }
+  // From Filter base class 
+  virtual float eval(const float x) const
   {
+    const float t = x / m_width;
     if (t <= 0.5f) {
       return 1.0f;
     } else {
       return 0.0f;
     }
   }
-  float support() const
+  virtual float support() const
   { 
-    return 0.5f; 
+    return 0.5f * m_width; 
   }
-  bool isSeparable() const
-  { 
-    return true; 
-  }
+private:
+  const float m_width;
 };
 
 //----------------------------------------------------------------------------//
 // TriangleFilter
 //----------------------------------------------------------------------------//
 
-struct TriangleFilter
+struct TriangleFilter : public Filter
 {
-  float operator() (const float t) const
+  // Typedefs
+  typedef boost::shared_ptr<TriangleFilter>       Ptr;
+  typedef boost::shared_ptr<const TriangleFilter> CPtr;
+  // Ctors
+  TriangleFilter()
+    : m_width(1.0)
+  { }
+  TriangleFilter(const float width)
+    : m_width(width)
+  { }
+  // From Filter base class 
+  virtual float eval(const float x) const
   {
+    const float t = x / m_width;
     if (t > 1.0) {
       return 0.0f;
     }
     return 1.0f - t;
   }
-  float support() const
+  virtual float support() const
   {
-    return 1.0f;
+    return 1.0f * m_width;
   }
-  bool isSeparable() const
-  { 
-    return true; 
-  }
+private:
+  const float m_width;
 };
 
 //----------------------------------------------------------------------------//
 // GaussianFilter
 //----------------------------------------------------------------------------//
 
-struct GaussianFilter
+struct GaussianFilter : public Filter
 {
+  // Typedefs
+  typedef boost::shared_ptr<GaussianFilter>       Ptr;
+  typedef boost::shared_ptr<const GaussianFilter> CPtr;
+  // Ctor 
   GaussianFilter(const float alpha = 2.0, const float width = 2.0)
     : m_alpha(alpha), 
-      m_exp(std::exp(-alpha * width * width))
+      m_exp(std::exp(-alpha * width * width)),
+      m_width(width)
   { /* Empty */ }
-  float operator() (const float x) const
+  // From Filter base class 
+  virtual float eval(const float t) const
   {
+    const float x = t / m_width;
     return std::max(0.0f, std::exp(-m_alpha * x * x) - m_exp);
   }
-  float support() const
+  virtual float support() const
   {
-    return 2.0f;
-  }
-  bool isSeparable() const
-  { 
-    return true; 
+    return 2.0f * m_width;
   }
 private:
-  const float m_alpha, m_exp;
+  const float m_alpha, m_exp, m_width;
 };
 
 //----------------------------------------------------------------------------//
 // MitchellFilter
 //----------------------------------------------------------------------------//
 
-struct MitchellFilter
+struct MitchellFilter : public Filter
 {
-  MitchellFilter(const float B = 1.0 / 3.0, const float C = 1.0 / 3.0)
-    : m_B(B), m_C(C)
+  // Typedefs
+  typedef boost::shared_ptr<MitchellFilter>       Ptr;
+  typedef boost::shared_ptr<const MitchellFilter> CPtr;
+  // Ctor 
+  MitchellFilter(const float width = 1.0, 
+                 const float B = 1.0 / 3.0, const float C = 1.0 / 3.0)
+    : m_B(B), m_C(C), m_width(width)
   { /* Empty */ }
-  float operator() (const float x) const
+  // From Filter base class 
+  virtual float eval(const float x) const
   {
-    const float ax = std::abs(x);
+    const float ax = std::abs(x / m_width);
     if (ax < 1) {
       return ((12 - 9 * m_B - 6 * m_C) * ax * ax * ax +
               (-18 + 12 * m_B + 6 * m_C) * ax * ax + (6 - 2 * m_B)) / 6;
@@ -176,16 +225,13 @@ struct MitchellFilter
       return 0;
     }
   }
-  float support() const
+  virtual float support() const
   {
-    return 2.0f;
-  }
-  bool isSeparable() const
-  { 
-    return true; 
+    return 2.0f * m_width;
   }
 private:
   const float m_B, m_C;
+  const float m_width;
 };
 
 //----------------------------------------------------------------------------//
@@ -265,7 +311,7 @@ namespace detail {
             // Weights
             const float srcP   = discToCont(V3i(xIdx, yIdx, zIdx)[dim]);
             const float dist   = getDist(doUpres, srcP, tgtP, srcSize, tgtSize);
-            const float weight = filterOp(dist);
+            const float weight = filterOp.eval(dist);
             // Update
             accumWeight += weight;
             accumValue  += value * weight;
@@ -292,10 +338,6 @@ namespace detail {
     using namespace detail;
   
     typedef typename Field_T::value_type T;
-
-    if (!filterOp.isSeparable()) {
-      return false;
-    }
 
     if (!src.dataWindow().hasVolume()) {
       return false;
@@ -342,82 +384,7 @@ template <typename Field_T, typename FilterOp_T>
 bool resample(const Field_T &src, Field_T &tgt, const V3i &newRes,
               const FilterOp_T &filterOp)
 {
-  using namespace detail;
-  
-  typedef typename Field_T::value_type T;
-
-  if (filterOp.isSeparable()) {
-    return detail::separableResample(src, tgt, newRes, filterOp);
-  }
-
-  if (!src.dataWindow().hasVolume()) {
-    return false;
-  }
-
-  if (src.dataWindow().min != V3i(0)) {
-    return false;
-  }
-
-  const V3i srcRes    = src.dataWindow().size() + V3i(1);
-  const V3f srcDomain = V3f(srcRes);
-  const V3f tgtDomain = V3f(newRes);
-  const V3f srcSize   = V3f(1.0) / srcDomain;
-  const V3f tgtSize   = V3f(1.0) / tgtDomain;
-
-  // Filter info
-  const float support = filterOp.support();
-
-  // Resize the target to the new resolution
-  tgt.name      = src.name;
-  tgt.attribute = src.attribute;
-  tgt.setSize(newRes);
-  tgt.setMapping(src.mapping());
-  tgt.copyMetadata(src);
-
-  // Check if we're up-res'ing
-  const V3i doUpres(newRes.x > srcRes.x ? 1 : 0,
-                    newRes.y > srcRes.y ? 1 : 0,
-                    newRes.z > srcRes.z ? 1 : 0);
-
-  // For each output voxel
-  for (int k = 0; k < newRes.z; ++k) {
-    for (int j = 0; j < newRes.y; ++j) {
-      for (int i = 0; i < newRes.x; ++i) {
-        T     accumValue  = static_cast<T>(0.0);
-        float accumWeight = 0.0f;
-        // Current position in target coordinates
-        const V3f tgtP = discToCont(V3i(i, j ,k));
-        // Transform support to source coordinates
-        Box3i srcBox = srcSupportBBox(tgtP, support, doUpres, srcSize, tgtSize);
-        // Clip against new data window
-        srcBox = clipBounds(srcBox, src.dataWindow());
-        // For each input voxel
-        for (int sk = srcBox.min.z; sk <= srcBox.max.z; ++sk) {
-          for (int sj = srcBox.min.y; sj <= srcBox.max.y; ++sj) {
-            for (int si = srcBox.min.x; si <= srcBox.max.x; ++si) {
-              // Value
-              const T value      = src.fastValue(si, sj, sk);
-              // Weights
-              const V3f srcP     = discToCont(V3i(si, sj, sk));
-              const V3f dist     = getDist(doUpres, srcP, tgtP, 
-                                           srcSize, tgtSize);
-              const float weight = 
-                filterOp(dist.x) * filterOp(dist.y) * filterOp(dist.z);
-              // Update
-              accumWeight += weight;
-              accumValue  += value * weight;
-            }
-          }
-        }
-        // Update final value
-        if (accumWeight > 0.0f && accumValue != static_cast<T>(0.0)) {
-          tgt.fastLValue(i, j, k) = accumValue / accumWeight;
-        }
-      }
-    }
-  }
-
-  return true;
+  return detail::separableResample(src, tgt, newRes, filterOp);
 }
 
 //----------------------------------------------------------------------------//

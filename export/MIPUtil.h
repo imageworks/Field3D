@@ -52,6 +52,7 @@
 #include <boost/thread/mutex.hpp>
 
 #include "Resample.h"
+#include "SparseField.h"
 #include "Types.h"
 
 //----------------------------------------------------------------------------//
@@ -65,7 +66,7 @@ FIELD3D_NAMESPACE_OPEN
 //----------------------------------------------------------------------------//
 
 //! Constructs a MIP representation of the given field.
-template <class MIPField_T>
+template <typename MIPField_T, typename Filter_T>
 typename MIPField_T::Ptr
 makeMIP(const typename MIPField_T::NestedType &base, const int minSize,
         const size_t numThreads);
@@ -75,6 +76,22 @@ makeMIP(const typename MIPField_T::NestedType &base, const int minSize,
 //----------------------------------------------------------------------------//
 
 namespace detail {
+
+  //--------------------------------------------------------------------------//
+
+  //! Used to delegate the choice of bit depth to process at
+  template <typename T>
+  struct ComputationType
+  {
+    typedef T type;
+  };
+
+  //! Specialization for half float
+  template <>
+  struct ComputationType<Field3D::half>
+  {
+    typedef float type;
+  };
 
   //--------------------------------------------------------------------------//
 
@@ -98,11 +115,60 @@ namespace detail {
 
   //--------------------------------------------------------------------------//
 
+  template <typename Data_T>
+  bool checkInputEmpty(const SparseField<Data_T> &src, 
+                       const SparseField<Data_T> &tgt, 
+                       const Box3i &tgtBox, const float support,
+                       const size_t dim)
+  {
+    const int intSupport = static_cast<int>(std::ceil(support * 0.5));
+    const int pad        = std::max(0, intSupport);
+    Box3i     tgtBoxPad  = tgtBox;
+    tgtBoxPad.min[dim]  -= pad;
+    tgtBoxPad.max[dim]  += pad;
+    Box3i     srcBoxPad  = tgtBoxPad;
+    srcBoxPad.min[dim]  *= 2;
+    srcBoxPad.max[dim]  *= 2;
+
+    // Get the block coordinates
+    const Box3i dbsBounds = blockCoords(clipBounds(srcBoxPad, src.dataWindow()),
+                                        &src);
+
+    static boost::mutex mutex;
+    boost::mutex::scoped_lock lock(mutex);
+
+    // Check all blocks
+    for (int k = dbsBounds.min.z; k <= dbsBounds.max.z; ++k) {
+      for (int j = dbsBounds.min.y; j <= dbsBounds.max.y; ++j) {
+        for (int i = dbsBounds.min.x; i <= dbsBounds.max.x; ++i) {
+          if (src.blockIsAllocated(i, j, k) ||
+              src.getBlockEmptyValue(i, j, k) != static_cast<Data_T>(0)) {
+            return false;
+          }
+        }
+      } 
+    }
+
+    // No hits. Empty
+    return true;
+  }
+
+  //--------------------------------------------------------------------------//
+
+  //! Fallback version always returns false
+  template <typename Field_T>
+  bool checkInputEmpty(const Field_T &src, const Field_T &tgt, 
+                       const Box3i &tgtBox, const float support,
+                       const size_t dim)
+  {
+    return false;
+  }
+
+  //--------------------------------------------------------------------------//
+
   template <typename Field_T, typename FilterOp_T>
   struct MIPSeparableThreadOp
   {
-    typedef typename Field_T::value_type T;
-
     MIPSeparableThreadOp(const Field_T &src, Field_T &tgt, 
                          const size_t level, const FilterOp_T &filterOp, 
                          const size_t dim, 
@@ -125,6 +191,10 @@ namespace detail {
     {
       using namespace std;
 
+      // Defer to ComputationType to determine the processing data type
+      typedef typename Field_T::value_type           Data_T;
+      typedef typename ComputationType<Data_T>::type Value_T;
+
       // To ensure we don't sample outside source data
       Box3i srcDw = m_src.dataWindow();
 
@@ -146,46 +216,51 @@ namespace detail {
       while (idx < m_numBlocks) {
         // Grab the bounds
         const Box3i box =  m_blocks[idx];
-        // For each output voxel
-        for (int k = box.min.z; k <= box.max.z; ++k) {
-          for (int j = box.min.y; j <= box.max.y; ++j) {
-            for (int i = box.min.x; i <= box.max.x; ++i) {
-              T     accumValue   = static_cast<T>(0.0);
-              float accumWeight  = 0.0f;
-              // Transform from current point in target frame to source frame
-              const int   curTgt = V3i(i, j, k)[m_dim];
-              const float curSrc = discToCont(curTgt) * tgtToSrcMult;
-              // Find interval
-              int startSrc = 
-                static_cast<int>(std::floor(curSrc - support * tgtToSrcMult));
-              int endSrc   = 
-                static_cast<int>(std::ceil(curSrc + support * tgtToSrcMult)) - 1;
-              startSrc     = std::max(startSrc, srcDw.min[m_dim]);
-              endSrc       = std::min(endSrc, srcDw.max[m_dim]);
-              // Loop over source voxels
-              for (int s = startSrc; s <= endSrc; ++s) {
-                // Source index
-                const int xIdx = m_dim == 0 ? s : i;
-                const int yIdx = m_dim == 1 ? s : j;
-                const int zIdx = m_dim == 2 ? s : k;
-                // Source voxel in continuous coords
-                const float srcP   = discToCont(s);
-                // Compute filter weight in source space (twice as wide)
-                const float weight = m_filterOp(std::abs(srcP - curSrc) * 
-                                                filterCoordMult);
-                // Value
-                const T value      = m_src.fastValue(xIdx, yIdx, zIdx);
-                // Update
-                accumWeight += weight;
-                accumValue  += value * weight;
-              }
-              // Update final value
-              if (accumWeight > 0.0f && accumValue != static_cast<T>(0.0)) {
-                m_tgt.fastLValue(i, j, k) = accumValue / accumWeight;
+        // Early exit if input blocks are all empty
+        if (!detail::checkInputEmpty(m_src, m_tgt, box, support, m_dim)) {
+          // For each output voxel
+          for (int k = box.min.z; k <= box.max.z; ++k) {
+            for (int j = box.min.y; j <= box.max.y; ++j) {
+              for (int i = box.min.x; i <= box.max.x; ++i) {
+                Value_T accumValue   = static_cast<Value_T>(0.0);
+                float   accumWeight  = 0.0f;
+                // Transform from current point in target frame to source frame
+                const int   curTgt = V3i(i, j, k)[m_dim];
+                const float curSrc = discToCont(curTgt) * tgtToSrcMult;
+                // Find interval
+                int startSrc = 
+                  static_cast<int>(std::floor(curSrc - support * tgtToSrcMult));
+                int endSrc   = 
+                  static_cast<int>(std::ceil(curSrc + support * 
+                                             tgtToSrcMult)) - 1;
+                startSrc     = std::max(startSrc, srcDw.min[m_dim]);
+                endSrc       = std::min(endSrc, srcDw.max[m_dim]);
+                // Loop over source voxels
+                for (int s = startSrc; s <= endSrc; ++s) {
+                  // Source index
+                  const int xIdx = m_dim == 0 ? s : i;
+                  const int yIdx = m_dim == 1 ? s : j;
+                  const int zIdx = m_dim == 2 ? s : k;
+                  // Source voxel in continuous coords
+                  const float srcP   = discToCont(s);
+                  // Compute filter weight in source space (twice as wide)
+                  const float weight = m_filterOp.eval(std::abs(srcP - curSrc) *
+                                                       filterCoordMult);
+                  // Value
+                  const Value_T value = m_src.fastValue(xIdx, yIdx, zIdx);
+                  // Update
+                  accumWeight += weight;
+                  accumValue  += value * weight;
+                }
+                // Update final value
+                if (accumWeight > 0.0f && 
+                    accumValue != static_cast<Value_T>(0.0)) {
+                  m_tgt.fastLValue(i, j, k) = accumValue / accumWeight;
+                }
               }
             }
           }
-        }
+        } // Empty input
         // Get next index
         {
           boost::mutex::scoped_lock lock(m_mutex);
@@ -220,8 +295,6 @@ namespace detail {
                     const FilterOp_T &filterOp, const size_t dim, 
                     const size_t numThreads)
   {
-    typedef typename Field_T::value_type T;
-
     using namespace std;
 
     // To ensure we don't sample outside source data
@@ -282,87 +355,6 @@ namespace detail {
 
   //--------------------------------------------------------------------------//
 
-  //! Single threaded implementation of separable MIP filtering
-  template <typename Field_T, typename FilterOp_T>
-  void mipSeparable(const Field_T &src, Field_T &tgt, 
-                    const V3i &oldRes, const V3i &newRes, const size_t level, 
-                    const FilterOp_T &filterOp, const size_t dim)
-  {
-    typedef typename Field_T::value_type T;
-
-    using namespace std;
-
-    // To ensure we don't sample outside source data
-    Box3i srcDw = src.dataWindow();
-
-    // Filter info
-    const float support = filterOp.support();
-
-    // Compute new res
-    V3i res;
-    if (dim == 2) {
-      res = newRes;
-    } else if (dim == 1) {
-      res = V3i(newRes.x, newRes.y, oldRes.z);
-    } else {
-      res = V3i(newRes.x, oldRes.y, oldRes.z);
-    }
-
-    // Coordinate frame conversion constants
-    const float tgtToSrcMult    = 2.0;
-    const float filterCoordMult = 1.0f / (tgtToSrcMult);
-    
-    // Resize new field
-    tgt.setSize(res);
-    
-    // Determine granularity
-    const size_t blockSize = threadingBlockSize(src);
-
-    // For each output voxel
-    for (int k = 0; k < res.z; ++k) {
-      for (int j = 0; j < res.y; ++j) {
-        for (int i = 0; i < res.x; ++i) {
-          T     accumValue   = static_cast<T>(0.0);
-          float accumWeight  = 0.0f;
-          // Transform from current point in target frame to source frame
-          const int   curTgt = V3i(i, j, k)[dim];
-          const float curSrc = discToCont(curTgt) * tgtToSrcMult;
-          // Find interval
-          int startSrc = 
-            static_cast<int>(std::floor(curSrc - support * tgtToSrcMult));
-          int endSrc   = 
-            static_cast<int>(std::ceil(curSrc + support * tgtToSrcMult)) - 1;
-          startSrc     = std::max(startSrc, srcDw.min[dim]);
-          endSrc       = std::min(endSrc, srcDw.max[dim]);
-          // Loop over source voxels
-          for (int s = startSrc; s <= endSrc; ++s) {
-            // Source index
-            const int xIdx = dim == 0 ? s : i;
-            const int yIdx = dim == 1 ? s : j;
-            const int zIdx = dim == 2 ? s : k;
-            // Source voxel in continuous coords
-            const float srcP   = discToCont(s);
-            // Compute filter weight in source space (twice as wide)
-            const float weight = filterOp(std::abs(srcP - curSrc) * 
-                                          filterCoordMult);
-            // Value
-            const T value      = src.fastValue(xIdx, yIdx, zIdx);
-            // Update
-            accumWeight += weight;
-            accumValue  += value * weight;
-          }
-          // Update final value
-          if (accumWeight > 0.0f && accumValue != static_cast<T>(0.0)) {
-            tgt.fastLValue(i, j, k) = accumValue / accumWeight;
-          }
-        }
-      }
-    }
-
-  }
-
-  //--------------------------------------------------------------------------//
-
   template <typename Field_T, typename FilterOp_T>
   void mipResample(const Field_T &base, const Field_T &src, Field_T &tgt, 
                    const size_t level, const FilterOp_T &filterOp, 
@@ -411,7 +403,7 @@ namespace detail {
 // Function implementations
 //----------------------------------------------------------------------------//
 
-template <class MIPField_T>
+template <typename MIPField_T, typename Filter_T>
 typename MIPField_T::Ptr
 makeMIP(const typename MIPField_T::NestedType &base, const int minSize,
         const size_t numThreads)
@@ -442,7 +434,7 @@ makeMIP(const typename MIPField_T::NestedType &base, const int minSize,
     // Perform filtering
     SrcPtr nextField(new Src_T);
     mipResample(base, *result.back(), *nextField, level, 
-                TriangleFilter(), numThreads);
+                Filter_T(), numThreads);
     // Add to vector of filtered fields
     result.push_back(nextField);
     // Set up for next iteration

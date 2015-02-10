@@ -46,8 +46,9 @@
 
 //----------------------------------------------------------------------------//
 
-#include <vector>
+#include <deque>
 #include <list>
+#include <vector>
 
 #include <hdf5.h>
 
@@ -98,6 +99,13 @@ public:
 
   // Typedefs ------------------------------------------------------------------
 
+#define USE_SHPTR 0
+  
+#if USE_SHPTR
+  typedef boost::shared_ptr<Reference>              Ptr;
+#else
+  typedef Reference*                                Ptr;
+#endif
   typedef std::vector<Sparse::SparseBlock<Data_T>*> BlockPtrs;
 
   // Public data members -------------------------------------------------------
@@ -133,18 +141,15 @@ public:
 
   // Ctors, dtor ---------------------------------------------------------------
 
-  //! Constructor. Requires the filename and layer path of the field to be known
-  Reference(const std::string filename, const std::string layerPath);
+  //! Destructor
   ~Reference();
-
-  //! Copy constructor. Clears ref counts and rebuilds mutex array.
-  Reference(const Reference &o);
-
-  //! Assignment operator.  Clears ref counts and rebuilds mutex array.
-  Reference & operator=(const Reference &o);
 
   // Main methods --------------------------------------------------------------
 
+  //! Returns a shared pointer to a reference. Preferred way of creating 
+  //! References
+  static Ptr create(const std::string a_filename, 
+                    const std::string a_layerPath);
   //! Checks if the file used by this reference is open already
   bool fileIsOpen();
   //! Sets the number of blocks used by the SparseField we're supporting
@@ -153,6 +158,8 @@ public:
   //! This is delayed so that the original file open  has closed the file and
   //! doesn't cause any Hdf5 hiccups.
   void openFile();
+  //! Closes the file. Will be re-opened as needed.
+  void closeFile();
   //! Loads the block with the given index into memory. We don't pass in 
   //! a reference to where the data should go since this is already know in the
   //! blocks data member.
@@ -183,6 +190,21 @@ public:
 
 private:
 
+  typedef boost::mutex Mutex;
+
+  // Private constructors ---
+
+  //! Constructor. Requires the filename and layer path of the field to be known
+  Reference(const std::string filename, const std::string layerPath);
+  
+  //! Copy constructor. Clears ref counts and rebuilds mutex array.
+  Reference(const Reference &o);
+
+  //! Assignment operator.  Clears ref counts and rebuilds mutex array.
+  Reference & operator=(const Reference &o);
+
+  // Data members ---
+
   //! Holds the Hdf5 handle to the file
   hid_t m_fileHandle;
   
@@ -195,29 +217,46 @@ private:
   SparseDataReader<Data_T> *m_reader;
 
   //! Mutex to prevent two threads from modifying conflicting data
-  boost::mutex m_mutex;
+  // boost::mutex m_mutex;
+  Mutex m_mutex;
+
+  //! Number of currently active blocks
+  size_t m_numActiveBlocks;
 
 };
 
 //----------------------------------------------------------------------------//
-// References
+// FileReferences
 //----------------------------------------------------------------------------//
 
 class FileReferences
 {
 public:
 
+  /* A note on thread safety
+
+     FileReferences uses a std::deque to store the References, which means
+     that already-added references 'stay put' in memory, even as more elements
+     are added. For threading purposes, we only need to lock during append()
+     and numRefs(), but ref() is safe, since we never remove references.
+
+   */
+
+  // Ctors, dtor ---------------------------------------------------------------
+
+  ~FileReferences();
+
   // Main methods --------------------------------------------------------------
 
   //! Returns a reference to the index. This is specialized so that the
   //! correct data member is accessed.
   template <class Data_T>
-  Reference<Data_T>& ref(size_t idx);
+  Reference<Data_T>* ref(size_t idx);
 
   //! Appends a reference to the collection. This is specialized so that the
   //! correct data member is accessed.
   template <class Data_T>
-  size_t append(const Reference<Data_T>& ref);
+  size_t append(typename Reference<Data_T>::Ptr ref);
 
   //! Returns the number of file references of the corresponding collection
   template <class Data_T>
@@ -227,12 +266,18 @@ private:
 
   // Data members --------------------------------------------------------------
 
-  std::vector<Reference<half> > m_hRefs;
-  std::vector<Reference<V3h> > m_vhRefs;
-  std::vector<Reference<float> > m_fRefs;
-  std::vector<Reference<V3f> > m_vfRefs;
-  std::vector<Reference<double> > m_dRefs;
-  std::vector<Reference<V3d> > m_vdRefs;
+  std::deque<Reference<half>::Ptr>   m_hRefs;
+  std::deque<Reference<V3h>::Ptr>    m_vhRefs;
+  std::deque<Reference<float>::Ptr>  m_fRefs;
+  std::deque<Reference<V3f>::Ptr>    m_vfRefs;
+  std::deque<Reference<double>::Ptr> m_dRefs;
+  std::deque<Reference<V3d>::Ptr>    m_vdRefs;
+
+  // Mutexes -------------------------------------------------------------------
+
+  typedef boost::mutex Mutex;
+
+  mutable Mutex m_mutex;
 
 };
 
@@ -395,7 +440,7 @@ protected:
 
   //! Returns a reference to the Reference object with the given index
   template <class Data_T>
-  SparseFile::Reference<Data_T> &reference(int index);
+  SparseFile::Reference<Data_T>* reference(int index);
 
   //! Returns the id of the next cache item. This is stored in the SparseField
   //! in order to reference its fields at a later time
@@ -476,7 +521,9 @@ Reference<Data_T>::Reference(const std::string a_filename,
                              const std::string a_layerPath)
   : filename(a_filename), layerPath(a_layerPath),
     valuesPerBlock(-1), occupiedBlocks(-1),
-    blockMutex(NULL), m_fileHandle(-1), m_reader(NULL) { 
+    blockMutex(NULL), m_fileHandle(-1), m_reader(NULL),
+    m_numActiveBlocks(0)
+{ 
   /* Empty */ 
 }
 
@@ -485,6 +532,8 @@ Reference<Data_T>::Reference(const std::string a_filename,
 template <class Data_T>
 Reference<Data_T>::~Reference()
 {
+  closeFile();
+
   if (m_reader)
     delete m_reader;
 
@@ -508,6 +557,10 @@ template <class Data_T>
 Reference<Data_T> &
 Reference<Data_T>::operator=(const Reference<Data_T> &o)
 {
+  if (this == &o) {
+    return *this;
+  }
+  
   // Copy public member variables (where appropriate)
   filename = o.filename;
   layerPath = o.layerPath;
@@ -523,18 +576,35 @@ Reference<Data_T>::operator=(const Reference<Data_T> &o)
     delete[] blockMutex;
   blockMutex = new boost::mutex[blocks.size()];
 
+#if 0
+  // MW: Should this be copying the file handle? Never seems to happen,
+  // but it also seems bad. Ifdef'ing out for now.
   // Copy private member variables (where appropriate)
   m_fileHandle = o.m_fileHandle;
   // Don't copy id, let hdf5 generate a new one.
   if (m_fileHandle >= 0) {
     m_layerGroup.open(m_fileHandle, layerPath.c_str());
   }
+#else
+  m_fileHandle = -1;
+#endif
 
+  // Re-allocate reader
   if (m_reader)
     delete m_reader;
   m_reader = NULL;
 
   return *this;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+typename Reference<Data_T>::Ptr
+Reference<Data_T>::create(const std::string a_filename, 
+                          const std::string a_layerPath)
+{
+  return Ptr(new Reference(a_filename, a_layerPath));
 }
 
 //----------------------------------------------------------------------------//
@@ -578,20 +648,43 @@ void Reference<Data_T>::openFile()
     return;
   }
 
-  m_fileHandle = H5Fopen(filename.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
-  if (m_fileHandle < 0)
-    throw NoSuchFileException(filename);
-
-  m_layerGroup.open(m_fileHandle, layerPath.c_str());
-  if (m_layerGroup.id() < 0) {
-    Msg::print(Msg::SevWarning, "In SparseFile::Reference::openFile: "
-              "Couldn't find layer group " + layerPath + 
-              " in .f3d file ");
-    throw FileIntegrityException(filename);
+  {
+    // Hold the global lock
+    GlobalLock lock(g_hdf5Mutex);
+    // Open the file
+    m_fileHandle = H5Fopen(filename.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+    if (m_fileHandle < 0) {
+      printf("openFile(): No file handle. Dying.\n");
+      throw NoSuchFileException(filename);
+    }
+    // Open the layer group
+    m_layerGroup.open(m_fileHandle, layerPath.c_str());
+    if (m_layerGroup.id() < 0) {
+      Msg::print(Msg::SevWarning, "In SparseFile::Reference::openFile: "
+                 "Couldn't find layer group " + layerPath + 
+                 " in .f3d file ");
+      throw FileIntegrityException(filename);
+    }
   }
 
+  // Re-allocate reader
+  if (m_reader) {
+    delete m_reader;
+  }
   m_reader = new SparseDataReader<Data_T>(m_layerGroup.id(), valuesPerBlock, 
                                           occupiedBlocks);
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+void Reference<Data_T>::closeFile()
+{
+  if (m_fileHandle >= 0) {
+    if (H5Fclose(m_fileHandle) < 0) {
+      Msg::print("In ~Reference(): Error closing file " + filename);
+    }
+  }
 }
 
 //----------------------------------------------------------------------------//
@@ -609,6 +702,8 @@ void Reference<Data_T>::loadBlock(int blockIdx)
   m_reader->readBlock(fileBlockIndices[blockIdx], *blocks[blockIdx]->data);
   // Mark block as loaded
   blockLoaded[blockIdx] = 1;
+  // Track count
+  m_numActiveBlocks++;
 }
 
 //----------------------------------------------------------------------------//
@@ -618,9 +713,16 @@ void Reference<Data_T>::unloadBlock(int blockIdx)
 {
   // Deallocate the block
   blocks[blockIdx]->clear();
-
   // Mark block as unloaded
   blockLoaded[blockIdx] = 0;
+  // Track count
+  m_numActiveBlocks--;
+#if 0
+  // If no active blocks, close the file. De-activate for now.
+  if (m_numActiveBlocks == 0) {
+    closeFile();
+  }
+#endif
 }
 
 //----------------------------------------------------------------------------//
@@ -744,63 +846,115 @@ namespace SparseFile {
 
 //----------------------------------------------------------------------------//
 
+inline FileReferences::~FileReferences()
+{
+#if !USE_SHPTR
+  for (size_t i = 0, end = m_hRefs.size(); i < end; ++i) {
+    delete m_hRefs[i];
+  }
+  for (size_t i = 0, end = m_fRefs.size(); i < end; ++i) {
+    delete m_fRefs[i];
+  }
+  for (size_t i = 0, end = m_dRefs.size(); i < end; ++i) {
+    delete m_dRefs[i];
+  }
+  for (size_t i = 0, end = m_vhRefs.size(); i < end; ++i) {
+    delete m_vhRefs[i];
+  }
+  for (size_t i = 0, end = m_vfRefs.size(); i < end; ++i) {
+    delete m_vfRefs[i];
+  }
+  for (size_t i = 0, end = m_vdRefs.size(); i < end; ++i) {
+    delete m_vdRefs[i];
+  }
+#endif  
+}
+
+//----------------------------------------------------------------------------//
+
 template <>
-inline Reference<half>& 
+inline Reference<half>* 
 FileReferences::ref(size_t idx)
 {
+#if USE_SHPTR
+  return m_hRefs[idx].get();
+#else
   return m_hRefs[idx];
+#endif
 }
 
 //----------------------------------------------------------------------------//
 
 template <>
-inline Reference<V3h>& 
+inline Reference<V3h>* 
 FileReferences::ref(size_t idx)
 {
+#if USE_SHPTR
+  return m_vhRefs[idx].get();
+#else
   return m_vhRefs[idx];
+#endif
 }
 
 //----------------------------------------------------------------------------//
 
 template <>
-inline Reference<float>& 
+inline Reference<float>* 
 FileReferences::ref(size_t idx)
 {
+#if USE_SHPTR
+  return m_fRefs[idx].get();
+#else
   return m_fRefs[idx];
+#endif
 }
 
 //----------------------------------------------------------------------------//
 
 template <>
-inline Reference<V3f>& 
+inline Reference<V3f>* 
 FileReferences::ref(size_t idx)
 {
+#if USE_SHPTR
+  return m_vfRefs[idx].get();
+#else
   return m_vfRefs[idx];
+#endif
 }
 
 //----------------------------------------------------------------------------//
 
 template <>
-inline Reference<double>& 
+inline Reference<double>* 
 FileReferences::ref(size_t idx)
 {
+#if USE_SHPTR
+  return m_dRefs[idx].get();
+#else
   return m_dRefs[idx];
+#endif
 }
 
 //----------------------------------------------------------------------------//
 
 template <>
-inline Reference<V3d>& 
+inline Reference<V3d>* 
 FileReferences::ref(size_t idx)
 {
+#if USE_SHPTR
+  return m_vdRefs[idx].get();
+#else
   return m_vdRefs[idx];
+#endif
 }
 
 //----------------------------------------------------------------------------//
 
 template <>
-inline size_t FileReferences::append(const Reference<half>& ref)
+inline size_t FileReferences::append<half>(Reference<half>::Ptr ref)
 {
+  Mutex::scoped_lock lock(m_mutex);
+
   m_hRefs.push_back(ref);
   return m_hRefs.size() - 1;
 }
@@ -808,8 +962,10 @@ inline size_t FileReferences::append(const Reference<half>& ref)
 //----------------------------------------------------------------------------//
 
 template <>
-inline size_t FileReferences::append(const Reference<V3h>& ref)
+inline size_t FileReferences::append<V3h>(Reference<V3h>::Ptr ref)
 {
+  Mutex::scoped_lock lock(m_mutex);
+
   m_vhRefs.push_back(ref);
   return m_vhRefs.size() - 1;
 }
@@ -817,8 +973,10 @@ inline size_t FileReferences::append(const Reference<V3h>& ref)
 //----------------------------------------------------------------------------//
 
 template <>
-inline size_t FileReferences::append(const Reference<float>& ref)
+inline size_t FileReferences::append<float>(Reference<float>::Ptr ref)
 {
+  Mutex::scoped_lock lock(m_mutex);
+
   m_fRefs.push_back(ref);
   return m_fRefs.size() - 1;
 }
@@ -826,8 +984,10 @@ inline size_t FileReferences::append(const Reference<float>& ref)
 //----------------------------------------------------------------------------//
 
 template <>
-inline size_t FileReferences::append(const Reference<V3f>& ref)
+inline size_t FileReferences::append<V3f>(Reference<V3f>::Ptr ref)
 {
+  Mutex::scoped_lock lock(m_mutex);
+
   m_vfRefs.push_back(ref);
   return m_vfRefs.size() - 1;
 }
@@ -835,8 +995,10 @@ inline size_t FileReferences::append(const Reference<V3f>& ref)
 //----------------------------------------------------------------------------//
 
 template <>
-inline size_t FileReferences::append(const Reference<double>& ref)
+inline size_t FileReferences::append<double>(Reference<double>::Ptr ref)
 {
+  Mutex::scoped_lock lock(m_mutex);
+
   m_dRefs.push_back(ref);
   return m_dRefs.size() - 1;
 }
@@ -844,8 +1006,10 @@ inline size_t FileReferences::append(const Reference<double>& ref)
 //----------------------------------------------------------------------------//
 
 template <>
-inline size_t FileReferences::append(const Reference<V3d>& ref)
+inline size_t FileReferences::append<V3d>(Reference<V3d>::Ptr ref)
 {
+  Mutex::scoped_lock lock(m_mutex);
+
   m_vdRefs.push_back(ref);
   return m_vdRefs.size() - 1;
 }
@@ -855,6 +1019,8 @@ inline size_t FileReferences::append(const Reference<V3d>& ref)
 template <>
 inline size_t FileReferences::numRefs<half>() const
 {
+  Mutex::scoped_lock lock(m_mutex);
+
   return m_hRefs.size();
 }
 
@@ -863,6 +1029,8 @@ inline size_t FileReferences::numRefs<half>() const
 template <>
 inline size_t FileReferences::numRefs<V3h>() const
 {
+  Mutex::scoped_lock lock(m_mutex);
+
   return m_vhRefs.size();
 }
 
@@ -871,6 +1039,8 @@ inline size_t FileReferences::numRefs<V3h>() const
 template <>
 inline size_t FileReferences::numRefs<float>() const
 {
+  Mutex::scoped_lock lock(m_mutex);
+
   return m_fRefs.size();
 }
 
@@ -879,6 +1049,8 @@ inline size_t FileReferences::numRefs<float>() const
 template <>
 inline size_t FileReferences::numRefs<V3f>() const
 {
+  Mutex::scoped_lock lock(m_mutex);
+
   return m_vfRefs.size();
 }
 
@@ -887,6 +1059,8 @@ inline size_t FileReferences::numRefs<V3f>() const
 template <>
 inline size_t FileReferences::numRefs<double>() const
 {
+  Mutex::scoped_lock lock(m_mutex);
+
   return m_dRefs.size();
 }
 
@@ -895,12 +1069,16 @@ inline size_t FileReferences::numRefs<double>() const
 template <>
 inline size_t FileReferences::numRefs<V3d>() const
 {
+  Mutex::scoped_lock lock(m_mutex);
+
   return m_vdRefs.size();
 }
 
 //----------------------------------------------------------------------------//
 // Implementations for FileReferences
 //----------------------------------------------------------------------------//
+
+#if 0
 
 template <class Data_T>
 Reference<Data_T>& FileReferences::ref(size_t idx)
@@ -942,6 +1120,8 @@ size_t FileReferences::numRefs() const
   return -1;
 }
 
+#endif
+
 //----------------------------------------------------------------------------//
 
 } // namespace SparseFile
@@ -957,7 +1137,11 @@ SparseFileManager::getNextId(const std::string filename,
 {
   using namespace SparseFile;
 
-  int id = m_fileData.append(Reference<Data_T>(filename, layerPath));
+  // Must hold a mutex while appending to m_fileData
+  boost::mutex::scoped_lock lock(m_mutex);
+
+  int id = m_fileData.append<Data_T>(Reference<Data_T>::create(filename, 
+                                                               layerPath));
   return id;
 }
 
@@ -970,7 +1154,7 @@ SparseFileManager::removeFieldFromCache(int refIdx)
   boost::mutex::scoped_lock lock(m_mutex);
 
   DataTypeEnum blockType = DataTypeTraits<Data_T>::typeEnum();
-  SparseFile::Reference<Data_T> &reference = m_fileData.ref<Data_T>(refIdx);
+  SparseFile::Reference<Data_T> *reference = m_fileData.ref<Data_T>(refIdx);
 
   CacheList::iterator it = m_blockCacheList.begin();
   CacheList::iterator end = m_blockCacheList.end();
@@ -985,7 +1169,7 @@ SparseFileManager::removeFieldFromCache(int refIdx)
       }
       next = it;
       ++next;
-      bytesFreed += reference.blockSize(it->blockIdx);
+      bytesFreed += reference->blockSize(it->blockIdx);
       m_blockCacheList.erase(it);
       it = next;
     } else {
@@ -994,22 +1178,22 @@ SparseFileManager::removeFieldFromCache(int refIdx)
   }
   m_memUse -= bytesFreed;
 
-  std::vector<int>().swap(reference.fileBlockIndices);
-  reference.fileBlockIndices.resize(reference.blocks.size(), -1);
+  std::vector<int>().swap(reference->fileBlockIndices);
+  reference->fileBlockIndices.resize(reference->blocks.size(), -1);
   typedef typename SparseFile::Reference<Data_T>::BlockPtrs BlockPtrs;
-  BlockPtrs().swap(reference.blocks);
-  std::vector<int>().swap(reference.blockLoaded);
-  std::vector<bool>().swap(reference.blockUsed);
-  std::vector<int>().swap(reference.loadCounts);
-  std::vector<int>().swap(reference.refCounts);
-  delete[] reference.blockMutex;
-  reference.blockMutex = NULL;
+  BlockPtrs().swap(reference->blocks);
+  std::vector<int>().swap(reference->blockLoaded);
+  std::vector<bool>().swap(reference->blockUsed);
+  std::vector<int>().swap(reference->loadCounts);
+  std::vector<int>().swap(reference->refCounts);
+  delete[] reference->blockMutex;
+  reference->blockMutex = NULL;
 }
 
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-SparseFile::Reference<Data_T> &
+SparseFile::Reference<Data_T>*
 SparseFileManager::reference(int index)
 { 
   return m_fileData.ref<Data_T>(index); 
@@ -1021,34 +1205,34 @@ template <class Data_T>
 void 
 SparseFileManager::activateBlock(int fileId, int blockIdx)
 {
-  SparseFile::Reference<Data_T> &reference = m_fileData.ref<Data_T>(fileId);
+  SparseFile::Reference<Data_T> *reference = m_fileData.ref<Data_T>(fileId);
 
-  if (reference.fileBlockIndices[blockIdx] >= 0) {
-    if (!reference.blockLoaded[blockIdx]) {
-      int blockSize = reference.blockSize(blockIdx);
+  if (reference->fileBlockIndices[blockIdx] >= 0) {
+    if (!reference->blockLoaded[blockIdx]) {
+      int blockSize = reference->blockSize(blockIdx);
       if (m_limitMemUse) {
         // if we already have enough free memory, deallocateBlocks()
         // will just return
         deallocateBlocks(blockSize);
       }
 
-      if (!reference.fileIsOpen()) {
-        reference.openFile();
+      if (!reference->fileIsOpen()) {
+        reference->openFile();
       }
 
       boost::mutex::scoped_lock lock_A(m_mutex);
-      boost::mutex::scoped_lock lock_B(reference.blockMutex[blockIdx]);
+      boost::mutex::scoped_lock lock_B(reference->blockMutex[blockIdx]);
       // check to see if it was loaded between when the function
       // started and we got the lock on the block
-      if (!reference.blockLoaded[blockIdx]) {
-        reference.loadBlock(blockIdx);
-        reference.loadCounts[blockIdx]++;
+      if (!reference->blockLoaded[blockIdx]) {
+        reference->loadBlock(blockIdx);
+        reference->loadCounts[blockIdx]++;
         addBlockToCache(DataTypeTraits<Data_T>::typeEnum(), fileId, blockIdx);
         m_memUse += blockSize;
       }
     }
   }
-  reference.blockUsed[blockIdx] = true;
+  reference->blockUsed[blockIdx] = true;
 }
 
 //----------------------------------------------------------------------------//
@@ -1057,10 +1241,10 @@ template <class Data_T>
 void 
 SparseFileManager::incBlockRef(int fileId, int blockIdx)
 {
-  SparseFile::Reference<Data_T> &reference = m_fileData.ref<Data_T>(fileId);
+  SparseFile::Reference<Data_T> *reference = m_fileData.ref<Data_T>(fileId);
 
-  if (reference.fileBlockIndices[blockIdx] >= 0) {
-    reference.incBlockRef(blockIdx);
+  if (reference->fileBlockIndices[blockIdx] >= 0) {
+    reference->incBlockRef(blockIdx);
   }
 }
 
@@ -1070,10 +1254,10 @@ template <class Data_T>
 void 
 SparseFileManager::decBlockRef(int fileId, int blockIdx)
 {
-  SparseFile::Reference<Data_T> &reference = m_fileData.ref<Data_T>(fileId);
+  SparseFile::Reference<Data_T> *reference = m_fileData.ref<Data_T>(fileId);
 
-  if (reference.fileBlockIndices[blockIdx] >= 0) {
-    reference.decBlockRef(blockIdx);
+  if (reference->fileBlockIndices[blockIdx] >= 0) {
+    reference->decBlockRef(blockIdx);
   }
 }
 

@@ -232,6 +232,8 @@ public:
 #endif
   //! Returns a raw pointer to a MIP level
   const Field_T* rawMipLevel(const size_t level) const;
+  //! Returns a concretely typed pointer to a MIP level
+  typename Field_T::Ptr concreteMipLevel(const size_t level) const;
 
 protected:
 
@@ -474,6 +476,20 @@ MIPField<Field_T>::rawMipLevel(size_t level) const
     loadLevelFromDisk(level);
   } 
   return m_rawFields[level];
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Field_T>
+typename Field_T::Ptr
+MIPField<Field_T>::concreteMipLevel(size_t level) const
+{
+  assert(level < base::m_numLevels);
+  // Ensure level is loaded.
+  if (!m_rawFields[level]) {
+    loadLevelFromDisk(level);
+  } 
+  return m_fields[level];
 }
 
 //----------------------------------------------------------------------------//

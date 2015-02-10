@@ -1,7 +1,7 @@
 //----------------------------------------------------------------------------//
 
 /*
- * Copyright (c) 2009 Sony Pictures Imageworks Inc
+ * Copyright (c) 2014 Sony Pictures Imageworks Inc
  *
  * All rights reserved.
  *
@@ -35,20 +35,20 @@
 
 //----------------------------------------------------------------------------//
 
-#ifndef _INCLUDED_Field3D_StdMathLib_H_
-#define _INCLUDED_Field3D_StdMathLib_H_
+/*! \file FileSequence.h
+  \brief Contains the FileSequence class which can be used to turn strings
+  such as "file.1-20#.f3d" into a vector of strings
+*/
 
-#include <OpenEXR/ImathBox.h> 
-#include <OpenEXR/ImathBoxAlgo.h>
-#include <OpenEXR/ImathColor.h>
-#include <OpenEXR/ImathHalfLimits.h>
-#include <OpenEXR/ImathMatrix.h>
-#include <OpenEXR/ImathMatrixAlgo.h>
-#include <OpenEXR/ImathPlane.h>
-#include <OpenEXR/ImathRandom.h> 
-#include <OpenEXR/ImathRoots.h>
-#include <OpenEXR/ImathVec.h>
-#include <OpenEXR/half.h> 
+//----------------------------------------------------------------------------//
+
+#ifndef _INCLUDED_Field3D_FileSequence_H_
+#define _INCLUDED_Field3D_FileSequence_H_
+
+//----------------------------------------------------------------------------//
+
+#include <string>
+#include <vector>
 
 //----------------------------------------------------------------------------//
 
@@ -57,31 +57,50 @@
 FIELD3D_NAMESPACE_OPEN
 
 //----------------------------------------------------------------------------//
+// FileSequence
+//----------------------------------------------------------------------------//
 
-typedef ::half               half;
-typedef Imath::V2i           V2i;
-typedef Imath::V2d           V2d;
-typedef Imath::C3f           C3f;
-typedef Imath::V3i           V3i;
-typedef Imath::Vec3<half>    V3h;
-typedef Imath::V3f           V3f;
-typedef Imath::V3d           V3d;
-typedef Imath::Box3i         Box3i;
-typedef Imath::Box3d         Box3d;
-typedef Imath::Line3d        Ray3d;
-typedef Imath::M44d          M44d;
-typedef Imath::Plane3d       Plane3d;
+class FileSequence
+{
 
-#define FIELD3D_BOX_T        Imath::Box
-#define FIELD3D_MTX_T        Imath::Matrix44
-#define FIELD3D_VEC3_T       Imath::Vec3
+public:
 
-#define FIELD3D_CLIP         Imath::clip
-#define FIELD3D_LERP         Imath::lerp
-#define FIELD3D_LERPFACTOR   Imath::lerpfactor
-#define FIELD3D_EXTRACT_SHRT Imath::extractSHRT
+  // Typedefs ---
 
-#define FIELD3D_RAND48       Imath::Rand48
+  typedef std::vector<std::string> StringVec;
+
+  // Ctors, dtor ---
+
+  //! Default constructor. Creates an empty sequence
+  FileSequence()
+  { }
+  //! Construct from a sequence string. If the sequence string is an actual
+  //! filename, we become a 1-length sequence. If the sequence can't be 
+  //! resolved, we become a 0-length sequence. 
+  //! \note Apart from checking if the sequence is itself a filename, no
+  //! checks are made to see that the actual resulting files exist.
+  FileSequence(const std::string &sequence);
+
+  //! Number of files in sequence
+  size_t size() const
+  { return m_filenames.size(); }
+
+  //! Returns a single filename
+  const std::string& filename(const size_t idx) const
+  { return m_filenames[idx]; }
+
+  //! Returns the full list of all filenames
+  const StringVec& filenames() const
+  { return m_filenames; }
+
+private:
+
+  // Data members ------------------------------------------------------------
+
+  //! Stores the resulting filenames
+  std::vector<std::string> m_filenames;
+
+};
 
 //----------------------------------------------------------------------------//
 

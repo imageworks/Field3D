@@ -62,6 +62,7 @@
 #include "FieldMetadata.h"
 #include "ClassFactory.h"
 #include "Hdf5Util.h"
+#include "FieldCache.h"
 
 //----------------------------------------------------------------------------//
 
@@ -734,6 +735,12 @@ private:
 // Utility functions
 //----------------------------------------------------------------------------//
 
+/*! \brief checks to see if a file/directory exists or not
+  \param[in] filename the file/directory to check
+  \retval true if it exists
+  \retval false if it does not exist
+*/
+bool fileExists(const std::string &filename);
 
 //----------------------------------------------------------------------------//
 // Field3DOutputFile
@@ -1047,8 +1054,12 @@ Field3DInputFile::readLayer(const std::string &intPartitionName,
   using namespace std;
   using namespace Hdf5Util;
 
+  typedef typename Field<Data_T>::Ptr FieldPtr;
+
+  GlobalLock lock(g_hdf5Mutex);
+
   // Instantiate a null pointer for easier code reading
-  typename Field<Data_T>::Ptr nullPtr;
+  FieldPtr nullPtr;
 
   // Find the partition
   File::Partition::Ptr part = partition(intPartitionName);
@@ -1086,7 +1097,21 @@ Field3DInputFile::readLayer(const std::string &intPartitionName,
     return nullPtr;
   }
 
+  // Check the cache
+
+  FieldCache<Data_T> &cache       = FieldCache<Data_T>::singleton();
+  FieldPtr            cachedField = cache.getCachedField(m_filename, layerPath);
+
+  if (cachedField) {
+    return cachedField;
+  } 
+
   // Construct the field and load the data
+
+  // Unlock the g_hdf5Mutex while calling readField() so that other threads
+  // have a chance to pre-empt loading in between (prevents deadlocks with
+  // sparse reader)
+  lock.unlock();
 
   typename Field<Data_T>::Ptr field;
   field = readField<Data_T>(className, layerGroup.id(), m_filename, layerPath);
@@ -1099,6 +1124,9 @@ Field3DInputFile::readLayer(const std::string &intPartitionName,
     return nullPtr;
   }
 
+  // Now we need to use Hdf5 again, so re-aquire the lock.
+  lock.lock();
+
   // read the metadata 
   string metadataPath = layerPath + "/metadata";
   H5ScopedGopen metadataGroup(m_file, metadataPath.c_str());
@@ -1110,6 +1138,11 @@ Field3DInputFile::readLayer(const std::string &intPartitionName,
   field->name = removeUniqueId(intPartitionName);
   field->attribute = layerName;
   field->setMapping(part->mapping);
+
+  // Cache the field for future use
+  if (field) {
+    cache.cacheField(field, m_filename, layerPath);
+  }
 
   return field;
 }
@@ -1125,6 +1158,8 @@ Field3DInputFile::readProxyLayer(const std::string &partitionName,
   using namespace boost;
   using namespace std;
   using namespace Hdf5Util;
+
+  GlobalLock lock(g_hdf5Mutex);
 
   // Instantiate a null pointer for easier code reading
   typename EmptyField<Data_T>::Vec emptyList, output;
@@ -1214,6 +1249,8 @@ Field3DInputFile::readProxyLayer(hid_t location,
   using namespace Hdf5Util;
 
   typename EmptyField<Data_T>::Ptr null;
+
+  GlobalLock lock(g_hdf5Mutex);
 
   // Read the extents and data window
   Box3i extents, dataW;
@@ -1345,6 +1382,8 @@ Field3DOutputFile::createNewPartition(const std::string &partitionName,
   using namespace Hdf5Util;
   using namespace Exc;
   
+  GlobalLock lock(g_hdf5Mutex);
+
   File::Partition::Ptr newPart(new File::Partition);
 
   newPart->name = partitionName;
@@ -1410,6 +1449,8 @@ Field3DOutputFile::writeLayer(const std::string &userPartitionName,
   using namespace std;
   using namespace Exc;
   using namespace Hdf5Util;
+
+  GlobalLock lock(g_hdf5Mutex);
 
   if (!field) {
     Msg::print(Msg::SevWarning, 

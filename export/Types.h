@@ -47,6 +47,8 @@
 
 //----------------------------------------------------------------------------//
 
+#include <vector>
+
 #ifdef FIELD3D_CUSTOM_MATH_LIB
 #  include FIELD3D_MATH_LIB_INCLUDE
 #else

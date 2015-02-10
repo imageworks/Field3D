@@ -60,6 +60,14 @@ FIELD3D_NAMESPACE_OPEN
 
 using namespace Exc;
 
+//----------------------------------------------------------------------------//
+// Implementations
+//----------------------------------------------------------------------------//
+
+boost::recursive_mutex g_hdf5Mutex;
+
+//----------------------------------------------------------------------------//
+
 namespace Hdf5Util {
 
 //----------------------------------------------------------------------------//
@@ -69,6 +77,8 @@ namespace Hdf5Util {
 bool 
 readAttribute(hid_t location, const string& attrName, string& value)
 {
+  GlobalLock lock(g_hdf5Mutex);
+
   H5T_class_t typeClass;
   H5A_info_t attrInfo;
   hsize_t strLen;
@@ -110,6 +120,8 @@ bool
 readAttribute(hid_t location, const string& attrName, 
               unsigned int attrSize, int &value)
 {
+  GlobalLock lock(g_hdf5Mutex);
+
   H5T_class_t typeClass;
 
   if (H5Aexists(location, attrName.c_str()) < 1)
@@ -151,6 +163,8 @@ bool
 readAttribute(hid_t location, const string& attrName, 
              unsigned int attrSize, float &value)
 {
+  GlobalLock lock(g_hdf5Mutex);
+
   H5T_class_t typeClass;
 
   if (H5Aexists(location, attrName.c_str()) < 1)
@@ -191,6 +205,8 @@ bool
 readAttribute(hid_t location, const string& attrName, 
              unsigned int attrSize, double &value)
 {
+  GlobalLock lock(g_hdf5Mutex);
+
   H5T_class_t typeClass;
 
   if (H5Aexists(location, attrName.c_str()) < 0)
@@ -231,6 +247,8 @@ bool
 readAttribute(hid_t location, const string& attrName, 
               std::vector<unsigned int> &attrSize, int &value)
 {
+  GlobalLock lock(g_hdf5Mutex);
+
   H5T_class_t typeClass;
   size_t rank = attrSize.size();
 
@@ -275,6 +293,8 @@ bool
 readAttribute(hid_t location, const string& attrName, 
               std::vector<unsigned int> &attrSize, float &value)
 {
+  GlobalLock lock(g_hdf5Mutex);
+
   H5T_class_t typeClass;
   size_t rank = attrSize.size();
 
@@ -319,6 +339,7 @@ bool
 readAttribute(hid_t location, const string& attrName, 
               std::vector<unsigned int> &attrSize, double &value)
 {
+  GlobalLock lock(g_hdf5Mutex);
 
   H5T_class_t typeClass;
   size_t rank = attrSize.size();
@@ -363,6 +384,8 @@ readAttribute(hid_t location, const string& attrName,
 bool 
 writeAttribute(hid_t location, const string& attrName, const string &value)
 {
+  GlobalLock lock(g_hdf5Mutex);
+
   hid_t attr = -1;
   hid_t attrSpace;
   hid_t attrType;
@@ -415,6 +438,8 @@ bool
 writeAttribute(hid_t location, const string &attrName, 
              unsigned int attrSize, const int &value)
 {
+  GlobalLock lock(g_hdf5Mutex);
+
   hid_t attr;
   hid_t attrSpace;
   hsize_t dims[1];
@@ -456,6 +481,8 @@ bool
 writeAttribute(hid_t location, const string& attrName, 
              unsigned int attrSize, const float &value)
 {
+  GlobalLock lock(g_hdf5Mutex);
+
   hid_t attr;
   hid_t attrSpace;
   hsize_t dims[1];
@@ -497,6 +524,8 @@ bool
 writeAttribute(hid_t location, const string& attrName, 
              unsigned int attrSize, const double &value)
 {
+  GlobalLock lock(g_hdf5Mutex);
+
   hid_t attr;
   hid_t attrSpace;
   hsize_t dims[1];
@@ -539,6 +568,8 @@ bool
 writeAttribute(hid_t location, const string& attrName,
                std::vector<unsigned int> &attrSize, const int &value)
 {
+  GlobalLock lock(g_hdf5Mutex);
+
   hid_t attr;
   hid_t attrSpace;
   size_t rank = attrSize.size();
@@ -589,6 +620,8 @@ bool
 writeAttribute(hid_t location, const string& attrName,
                std::vector<unsigned int> &attrSize, const float &value)
 {
+  GlobalLock lock(g_hdf5Mutex);
+
   hid_t attr;
   hid_t attrSpace;
   size_t rank = attrSize.size();
@@ -639,6 +672,8 @@ bool
 writeAttribute(hid_t location, const string& attrName,
                std::vector<unsigned int> &attrSize, const double &value)
 {
+  GlobalLock lock(g_hdf5Mutex);
+
   hid_t attr;
   hid_t attrSpace;
   size_t rank = attrSize.size();
@@ -686,6 +721,8 @@ writeAttribute(hid_t location, const string& attrName,
 
 bool checkHdf5Gzip()
 {
+  GlobalLock lock(g_hdf5Mutex);
+
   htri_t avail = H5Zfilter_avail(H5Z_FILTER_DEFLATE);
   if (!avail)
     return false;

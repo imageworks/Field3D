@@ -91,11 +91,17 @@ ADD_LIBRARY ( Field3D SHARED
   src/FieldInterp.cpp
   src/FieldMapping.cpp
   src/FieldMappingIO.cpp
+  src/FileSequence.cpp
   src/Hdf5Util.cpp
   src/InitIO.cpp
   src/Log.cpp
   src/MACFieldIO.cpp
+  src/MIPFieldIO.cpp
+  src/MIPUtil.cpp
+  src/PatternMatch.cpp
   src/PluginLoader.cpp
+  src/ProceduralField.cpp
+  src/Resample.cpp
   src/SparseFieldIO.cpp
   src/SparseFile.cpp
 )

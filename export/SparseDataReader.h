@@ -174,9 +174,15 @@ void SparseDataReader<Data_T>::readBlock(int idx, Data_T &result)
                                  boost::lexical_cast<std::string>(idx));
   }
 
+  const size_t preRss = currentRSS();
+
   status = H5Dread(m_dataSet.id(), DataTypeTraits<Data_T>::h5type(), 
                    m_memDataSpace.id(), m_fileDataSpace.id(), 
                    H5P_DEFAULT, &result);
+
+  const size_t postRss = currentRSS();
+
+  g_hdf5LeakCounter += postRss - preRss;
 }
 
 //----------------------------------------------------------------------------//

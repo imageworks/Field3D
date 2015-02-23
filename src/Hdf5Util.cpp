@@ -65,6 +65,74 @@ using namespace Exc;
 //----------------------------------------------------------------------------//
 
 boost::recursive_mutex g_hdf5Mutex;
+size_t                 g_hdf5LeakCounter = 0;
+
+//----------------------------------------------------------------------------//
+
+std::string bytesToString(int64_t bytes)
+{
+  using std::stringstream;
+
+  stringstream ss;
+  ss.precision(3);
+  ss.setf(std::ios::fixed, std:: ios::floatfield);
+
+  // Make it work for negative numbers
+  if (bytes < 0) {
+    ss << "-";
+    bytes = -bytes;
+  }
+
+  if (bytes < 1024) {
+    // Bytes
+    ss << bytes << "  B";
+    return ss.str();
+  } else if (bytes < (1024 * 1024)) {
+    // Kilobytes
+    ss << bytes / static_cast<float>(1024) << " KB";
+    return ss.str();
+  } else if (bytes < (1024 * 1024 * 1024)) {
+    // Megabytes
+    ss << bytes / static_cast<float>(1024 * 1024) << " MB";
+    return ss.str();
+  } else {
+    // Gigabytes
+    ss << bytes / static_cast<float>(1024 * 1024 * 1024) << " GB";
+    return ss.str();
+  }
+}
+
+//----------------------------------------------------------------------------//
+
+size_t currentRSS()
+{
+  using std::ios_base;
+  using std::ifstream;
+  using std::string;
+  ifstream stat_stream("/proc/self/stat", ios_base::in);
+
+  string pid, comm, state, ppid, pgrp, session, tty_nr;
+  string tpgid, flags, minflt, cminflt, majflt, cmajflt;
+  string utime, stime, cutime, cstime, priority, nice;
+  string O, itrealvalue, starttime;
+
+  unsigned long vsize;
+  long rss;
+
+  stat_stream >> pid >> comm >> state >> ppid >> pgrp >> session >> tty_nr
+              >> tpgid >> flags >> minflt >> cminflt >> majflt >> cmajflt
+              >> utime >> stime >> cutime >> cstime >> priority >> nice
+              >> O >> itrealvalue >> starttime >> vsize >> rss; // don't care about the rest
+
+  stat_stream.close();
+
+  long page_size = sysconf(_SC_PAGE_SIZE); // in case x86-64 is configured to use 2MB pages
+
+  // vm_usage     = vsize / 1024.0;
+  // resident_set = rss * page_size;
+
+  return rss * page_size;
+}
 
 //----------------------------------------------------------------------------//
 

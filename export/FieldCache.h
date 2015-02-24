@@ -124,17 +124,6 @@ private:
 };
 
 //----------------------------------------------------------------------------//
-// FieldCache static member instantiation
-//----------------------------------------------------------------------------//
-
-template <typename Data_T>
-boost::mutex FieldCache<Data_T>::ms_creationMutex;
-template <typename Data_T>
-boost::mutex FieldCache<Data_T>::ms_accessMutex;
-template <typename Data_T>
-FieldCache<Data_T>* FieldCache<Data_T>::ms_singleton;
-
-//----------------------------------------------------------------------------//
 // Implementations
 //----------------------------------------------------------------------------//
 

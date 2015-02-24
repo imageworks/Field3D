@@ -893,7 +893,6 @@ bool Field3DInputFile::readPartitionAndLayerInfo()
 
   for (PartitionList::const_iterator i = m_partitions.begin();
        i != m_partitions.end(); ++i) {
-
     // Grab the name
     const std::string &partitionName = (**i).name;
     // Open the partition group
@@ -1243,6 +1242,8 @@ Field3DOutputFile::writeGroupMembership()
   }
 
 #if 0
+
+  //! \todo Finish
 
   using namespace std;
   using namespace Hdf5Util;

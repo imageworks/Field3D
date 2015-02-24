@@ -49,10 +49,6 @@
 
 //----------------------------------------------------------------------------//
 
-#include <unistd.h>
-#include <fstream>
-#include <sstream>
-
 #include <string>
 #include <exception>
 #include <vector>
@@ -78,17 +74,14 @@ FIELD3D_NAMESPACE_OPEN
 //----------------------------------------------------------------------------//
 
 FIELD3D_API extern boost::recursive_mutex g_hdf5Mutex;
-FIELD3D_API extern size_t                 g_hdf5LeakCounter;
 
 typedef boost::recursive_mutex::scoped_lock GlobalLock;
 
 //----------------------------------------------------------------------------//
-
-std::string bytesToString(int64_t bytes);
-
+// HDF5 memory leak tracker
 //----------------------------------------------------------------------------//
 
-size_t currentRSS();
+extern size_t g_h5readMemLeakCount;
 
 //----------------------------------------------------------------------------//
 // Hdf5Util classes

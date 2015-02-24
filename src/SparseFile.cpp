@@ -433,6 +433,51 @@ void SparseFileManager::resetCacheStatistics()
 }
 
 //----------------------------------------------------------------------------//
+
+long long int SparseFileManager::memSize() const
+{
+  return sizeof(*this) + m_fileData.memSize() + 
+    m_blockCacheList.size() * sizeof(SparseFile::CacheBlock);
+}
+
+//----------------------------------------------------------------------------//
+
+long long int SparseFile::FileReferences::memSize() const 
+{
+  long long int size = 0;
+
+  // Size of the std::deque's
+  size += m_hRefs.size() * sizeof(Reference<half>::Ptr);
+  size += m_vhRefs.size() * sizeof(Reference<V3h>::Ptr);
+  size += m_fRefs.size() * sizeof(Reference<float>::Ptr);
+  size += m_vfRefs.size() * sizeof(Reference<V3f>::Ptr);
+  size += m_dRefs.size() * sizeof(Reference<double>::Ptr);
+  size += m_vdRefs.size() * sizeof(Reference<V3d>::Ptr);
+
+  // Size of the references themselves
+  for (size_t i = 0, end = m_hRefs.size(); i < end; ++i) {
+    size += m_hRefs[i]->memSize();
+  }
+  for (size_t i = 0, end = m_vhRefs.size(); i < end; ++i) {
+    size += m_vhRefs[i]->memSize();
+  }
+  for (size_t i = 0, end = m_fRefs.size(); i < end; ++i) {
+    size += m_fRefs[i]->memSize();
+  }
+  for (size_t i = 0, end = m_vfRefs.size(); i < end; ++i) {
+    size += m_vfRefs[i]->memSize();
+  }
+  for (size_t i = 0, end = m_dRefs.size(); i < end; ++i) {
+    size += m_dRefs[i]->memSize();
+  }
+  for (size_t i = 0, end = m_vdRefs.size(); i < end; ++i) {
+    size += m_vdRefs[i]->memSize();
+  }
+  
+  return size;
+}
+
+//----------------------------------------------------------------------------//
 // Template implementations
 //----------------------------------------------------------------------------//
 

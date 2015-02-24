@@ -61,6 +61,7 @@
 #include "Field3DFileHDF5.h"
 #include "FieldMetadata.h"
 #include "ClassFactory.h"
+#include "FieldCache.h"
 #include "OgawaFwd.h"
 #include "FieldCache.h"
 

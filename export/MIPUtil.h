@@ -169,6 +169,8 @@ namespace detail {
   template <typename Field_T, typename FilterOp_T>
   struct MIPSeparableThreadOp
   {
+    typedef typename Field_T::value_type T;
+
     MIPSeparableThreadOp(const Field_T &src, Field_T &tgt, 
                          const size_t level, const FilterOp_T &filterOp, 
                          const size_t dim, 
@@ -261,6 +263,7 @@ namespace detail {
             }
           }
         } // Empty input
+
         // Get next index
         {
           boost::mutex::scoped_lock lock(m_mutex);
@@ -296,6 +299,9 @@ namespace detail {
                     const size_t numThreads)
   {
     using namespace std;
+
+    // To ensure we don't sample outside source data
+    Box3i srcDw = src.dataWindow();
 
     // Compute new res
     V3i res;

@@ -104,17 +104,30 @@ ADD_LIBRARY ( Field3D ${LIB_TYPE}
   src/ClassFactory.cpp
   src/DenseFieldIO.cpp
   src/Field3DFile.cpp
+  src/Field3DFileHDF5.cpp
+  src/FieldCache.cpp
   src/Field.cpp
   src/FieldInterp.cpp
   src/FieldMapping.cpp
   src/FieldMappingIO.cpp
+  src/FieldMetadata.cpp
   src/FileSequence.cpp
   src/Hdf5Util.cpp
+  src/IArchive.cpp
+  src/IData.cpp
+  src/IGroup.cpp
   src/InitIO.cpp
+  src/IStreams.cpp
   src/Log.cpp
   src/MACFieldIO.cpp
   src/MIPFieldIO.cpp
   src/MIPUtil.cpp
+  src/OArchive.cpp
+  src/OData.cpp
+  src/OgIGroup.cpp
+  src/OGroup.cpp
+  src/OgUtil.cpp
+  src/OStream.cpp
   src/PatternMatch.cpp
   src/PluginLoader.cpp
   src/ProceduralField.cpp

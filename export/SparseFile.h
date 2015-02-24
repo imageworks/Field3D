@@ -192,6 +192,8 @@ public:
   float averageLoads() const;
   //! Resets counts of total block loads
   void resetCacheStatistics();
+  //! Memory use for the Reference
+  long long int memSize() const;
 
 private:
 
@@ -277,6 +279,9 @@ public:
   //! Returns the number of file references of the corresponding collection
   template <class Data_T>
   size_t numRefs() const;
+
+  //! Returns the memory use for the refs
+  long long int memSize() const;
 
 private:
 
@@ -428,6 +433,9 @@ public:
 
   //! Resets block load
   void resetCacheStatistics();
+
+  //! Returns the number of bytes used by the SparseFileManager itself
+  long long int memSize() const;
 
   //--------------------------------------------------------------------------//
   // Utility functions
@@ -794,6 +802,23 @@ void Reference<Data_T>::resetCacheStatistics()
   std::vector<int>::iterator lend = loadCounts.end();
   for (; li != lend; ++li)
     *li = 0;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+long long int
+Reference<Data_T>::memSize() const
+{
+  return sizeof(*this) + 
+    fileBlockIndices.capacity() * sizeof(int) + 
+    blockLoaded.capacity() * sizeof(int) + 
+    blocks.capacity() * sizeof(Sparse::SparseBlock<Data_T>*) + 
+    blockUsed.capacity() * sizeof(bool) + 
+    loadCounts.capacity() * sizeof(int) + 
+    refCounts.capacity() * sizeof(int) + 
+    sizeof(boost::mutex) + 
+    sizeof(SparseDataReader<Data_T>);
 }
 
 //----------------------------------------------------------------------------//

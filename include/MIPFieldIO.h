@@ -278,7 +278,7 @@ public:
     // Instantiate I/O
     FieldIO::Ptr io = 
       ClassFactory::singleton().createFieldIO(Field_T::staticClassName());
-    FieldBase::Ptr field = io->read(levelGroup, m_filename, m_path, m_typeEnum);
+    FieldBase::Ptr field = io->read(*levelGroup, m_filename, m_path, m_typeEnum);
     if (!field) {
       throw Exc::MIPFieldIOException("Failed to read MIP level from disk.");
     }

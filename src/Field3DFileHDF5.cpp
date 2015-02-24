@@ -1586,19 +1586,6 @@ void Field3DFileHDF5Base::printHierarchy() const
 // Function Implementations
 //----------------------------------------------------------------------------//
 
-bool fileExists(const std::string &filename)
-{
-#ifdef WIN32
-  struct __stat64 statbuf;
-  return (_stat64(filename.c_str(), &statbuf) != -1);
-#else
-  struct stat statbuf;
-  return (stat(filename.c_str(), &statbuf) != -1);
-#endif
-}
-
-//----------------------------------------------------------------------------//
-
 bool writeField(hid_t layerGroup, FieldBase::Ptr field)
 {
   ClassFactory &factory = ClassFactory::singleton();

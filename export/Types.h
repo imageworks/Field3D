@@ -86,38 +86,6 @@ struct Interval
 typedef std::vector<Interval> IntervalVec;
 
 //----------------------------------------------------------------------------//
-// Ogawa Types
-//----------------------------------------------------------------------------//
-
-#if !defined(_MSC_VER)
-using ::uint8_t;
-using ::int8_t;
-using ::uint16_t;
-using ::int16_t;
-using ::uint32_t;
-using ::int32_t;
-using ::uint64_t;
-using ::int64_t;
-#else
-typedef unsigned char           uint8_t;
-typedef signed char             int8_t;
-typedef unsigned short          uint16_t;
-typedef signed short            int16_t;
-typedef unsigned int            uint32_t;
-typedef int                     int32_t;
-typedef unsigned long long      uint64_t;
-typedef long long               int64_t;
-#endif
-
-typedef half                    float16_t;
-typedef float                   float32_t;
-typedef double                  float64_t;
-
-typedef Field3D::V3h            vec16_t;
-typedef Field3D::V3f            vec32_t;
-typedef Field3D::V3d            vec64_t;
-
-//----------------------------------------------------------------------------//
 
 #endif // Include guard
 

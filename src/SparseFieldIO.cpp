@@ -761,7 +761,8 @@ SparseFieldIO::readData(const OgIGroup &location, const Box3i &extents,
   if (dynamicLoading) {
     // Set up the field reference
     //! \todo The valuesPerBlock is wrong. Fix
-    result->addReference(filename, layerPath, valuesPerBlock, occupiedBlocks);
+    result->addReference(filename, layerPath, valuesPerBlock, numVoxels,
+                         occupiedBlocks);
   }
 
   // Read the block info data sets ---
@@ -1159,7 +1160,7 @@ bool SparseFieldIO::readData(hid_t location,
   if (dynamicLoading) {
     // Set up the field reference
     result->addReference(filename, layerPath,
-                         valuesPerBlock,
+                         valuesPerBlock, numVoxels, 
                          occupiedBlocks);
   }
 

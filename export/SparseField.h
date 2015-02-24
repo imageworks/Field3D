@@ -568,7 +568,7 @@ public:
   //! Internal function to create a Reference for the current field,
   //! for use in dynamic reading.
   void addReference(const std::string &filename, const std::string &layerPath,
-                    int valuesPerBlock, int occupiedBlocks);
+                    int valuesPerBlock, int numVoxels, int occupiedBlocks);
   //! Internal function to setup the Reference's block pointers, for
   //! use with dynamic reading.
   void setupReferenceBlocks();
@@ -1336,6 +1336,7 @@ SparseField<Data_T>::copySparseField(const SparseField<Data_T> &o)
       m_fileManager->reference<Data_T>(o.m_fileId);
     addReference(oldReference->filename, oldReference->layerPath,
                  oldReference->valuesPerBlock,
+                 oldReference->numVoxels, 
                  oldReference->occupiedBlocks);
     copyBlockStates(o);
     setupReferenceBlocks();
@@ -1365,6 +1366,7 @@ template <class Data_T>
 void SparseField<Data_T>::addReference(const std::string &filename,
                                        const std::string &layerPath,
                                        int valuesPerBlock,
+                                       int numVoxels, 
                                        int occupiedBlocks)
 {
   m_fileManager = &SparseFileManager::singleton();
@@ -1373,6 +1375,7 @@ void SparseField<Data_T>::addReference(const std::string &filename,
   SparseFile::Reference<Data_T> *reference =
     m_fileManager->reference<Data_T>(m_fileId);
   reference->valuesPerBlock = valuesPerBlock;
+  reference->numVoxels = numVoxels;
   reference->occupiedBlocks = occupiedBlocks;
   reference->setNumBlocks(m_numBlocks);
 }

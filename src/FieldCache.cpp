@@ -1,7 +1,7 @@
 //----------------------------------------------------------------------------//
 
 /*
- * Copyright (c) 2009 Sony Pictures Imageworks Inc
+ * Copyright (c) 2015 Sony Pictures Imageworks Inc
  *
  * All rights reserved.
  *
@@ -35,70 +35,41 @@
 
 //----------------------------------------------------------------------------//
 
-/*! \file Log.h
-  \brief Contains the Log class which can be used to redirect output to an
-  arbitrary destination.  
+/*! \file FieldCache.cpp
+  Contains implementation of FieldCache class.
 */
 
 //----------------------------------------------------------------------------//
 
-#ifndef _INCLUDED_Field3D_Log_H_
-#define _INCLUDED_Field3D_Log_H_
+#include "FieldCache.h"
+
+#include "Traits.h"
 
 //----------------------------------------------------------------------------//
-
-#include <boost/lexical_cast.hpp>
-
-//----------------------------------------------------------------------------//
-
-#include "ns.h"
 
 FIELD3D_NAMESPACE_OPEN
 
 //----------------------------------------------------------------------------//
-// Msg namespace
+// FieldCache static member instantiation
 //----------------------------------------------------------------------------//
 
-//! Contains logging-related functions.
-namespace Msg {
+template <typename Data_T>
+boost::mutex FieldCache<Data_T>::ms_creationMutex;
+template <typename Data_T>
+boost::mutex FieldCache<Data_T>::ms_accessMutex;
+template <typename Data_T>
+FieldCache<Data_T>* FieldCache<Data_T>::ms_singleton;
 
-  //! Used by the Msg::print() call
-  enum Severity {
-    SevMessage, 
-    SevWarning
-  };
-
-  //! Sends the string to the assigned output, prefixing the message with
-  //! the severity
-  FIELD3D_API void print(Severity severity, const std::string &message);
-
-  //! Sends the string to the assigned output
-  inline void print(const std::string &message)
-  { print(SevMessage, message); }
-
-  //! Set the verbosity level of console output: 0 = do not echo anything
-  //! to the console; >=1 = echo all messages and warnings to the console.
-  FIELD3D_API void setVerbosity (int level=1);
-
-} // namespace Msg
-
-//----------------------------------------------------------------------------//
-// Logging helper functions
-//----------------------------------------------------------------------------//
-
-//! Converts a byte count into a human-readable string
-std::string bytesToString(int64_t bytes);
+template class FieldCache<half>;
+template class FieldCache<float>;
+template class FieldCache<double>;
+template class FieldCache<V3h>;
+template class FieldCache<V3f>;
+template class FieldCache<V3d>;
 
 //----------------------------------------------------------------------------//
 
-//! Returns the current resident memory size
-//! \warning Currently only supported on Linux platform. Returns 0 for others.
-size_t currentRSS();
+FIELD3D_NAMESPACE_SOURCE_CLOSE
 
 //----------------------------------------------------------------------------//
 
-FIELD3D_NAMESPACE_HEADER_CLOSE
-
-//----------------------------------------------------------------------------//
-
-#endif // Include guard

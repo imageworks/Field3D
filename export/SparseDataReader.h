@@ -50,6 +50,7 @@
 #include <string.h> // for memcpy
 
 #include "Hdf5Util.h"
+#include "Log.h"
 
 //----------------------------------------------------------------------------//
 
@@ -90,12 +91,10 @@ private:
 
   // Data members --------------------------------------------------------------
 
-  Hdf5Util::H5ScopedDopen m_dataSet;
-  Hdf5Util::H5ScopedDget_space m_fileDataSpace;
-  Hdf5Util::H5ScopedDget_type m_dataType;
-  Hdf5Util::H5ScopedScreate m_memDataSpace;
-  
+  hid_t m_location;
+
   int m_valuesPerBlock;
+  int m_occupiedBlocks;
 
   const std::string k_dataStr;
 };
@@ -107,44 +106,12 @@ private:
 template <class Data_T>
 SparseDataReader<Data_T>::SparseDataReader(hid_t location, int valuesPerBlock, 
                                            int occupiedBlocks) 
-  : m_valuesPerBlock(valuesPerBlock), 
+  : m_location(location), 
+    m_valuesPerBlock(valuesPerBlock), 
+    m_occupiedBlocks(occupiedBlocks), 
     k_dataStr("data")
 {
-  using namespace Hdf5Util;
-  using namespace Exc;
 
-  GlobalLock lock(g_hdf5Mutex);
-
-  hsize_t dims[2];
-  hsize_t memDims[1];
-
-  // Open the data set
-  m_dataSet.open(location, k_dataStr, H5P_DEFAULT);
-  if (m_dataSet.id() < 0) 
-    throw OpenDataSetException("Couldn't open data set: " + k_dataStr);
-    
-  // Get the space and type
-  m_fileDataSpace.open(m_dataSet.id());
-  m_dataType.open(m_dataSet.id());
-  if (m_fileDataSpace.id() < 0) 
-    throw GetDataSpaceException("Couldn't get data space");
-  if (m_dataType.id() < 0)
-    throw GetDataTypeException("Couldn't get data type");
-
-  // Make the memory data space
-  memDims[0] = m_valuesPerBlock;
-  m_memDataSpace.create(H5S_SIMPLE);
-  H5Sset_extent_simple(m_memDataSpace.id(), 1, memDims, NULL);
-
-  // Get the dimensions and check they match
-  H5Sget_simple_extent_dims(m_fileDataSpace.id(), dims, NULL);
-  if (dims[1] != static_cast<hsize_t>(m_valuesPerBlock)) {
-    throw FileIntegrityException("Block length mismatch in "
-                                 "SparseDataReader");
-  }
-  if (dims[0] != static_cast<hsize_t>(occupiedBlocks)) 
-    throw FileIntegrityException("Block count mismatch in "
-                                 "SparseDataReader");
 }
 
 //----------------------------------------------------------------------------//
@@ -157,6 +124,42 @@ void SparseDataReader<Data_T>::readBlock(int idx, Data_T &result)
 
   GlobalLock lock(g_hdf5Mutex);
 
+  Hdf5Util::H5ScopedDopen      dataSet;
+  Hdf5Util::H5ScopedDget_space fileDataSpace;
+  Hdf5Util::H5ScopedDget_type  dataType;
+  Hdf5Util::H5ScopedScreate    memDataSpace;
+
+  hsize_t dims[2];
+  hsize_t memDims[1];
+
+  // Open the data set
+  dataSet.open(m_location, k_dataStr, H5P_DEFAULT);
+  if (dataSet.id() < 0) 
+    throw OpenDataSetException("Couldn't open data set: " + k_dataStr);
+    
+  // Get the space and type
+  fileDataSpace.open(dataSet.id());
+  dataType.open(dataSet.id());
+  if (fileDataSpace.id() < 0) 
+    throw GetDataSpaceException("Couldn't get data space");
+  if (dataType.id() < 0)
+    throw GetDataTypeException("Couldn't get data type");
+
+  // Make the memory data space
+  memDims[0] = m_valuesPerBlock;
+  memDataSpace.create(H5S_SIMPLE);
+  H5Sset_extent_simple(memDataSpace.id(), 1, memDims, NULL);
+
+  // Get the dimensions and check they match
+  H5Sget_simple_extent_dims(fileDataSpace.id(), dims, NULL);
+  if (dims[1] != static_cast<hsize_t>(m_valuesPerBlock)) {
+    throw FileIntegrityException("Block length mismatch in "
+                                 "SparseDataReader");
+  }
+  if (dims[0] != static_cast<hsize_t>(m_occupiedBlocks)) 
+    throw FileIntegrityException("Block count mismatch in "
+                                 "SparseDataReader");
+
   hsize_t offset[2];
   hsize_t count[2];
   herr_t status;
@@ -166,7 +169,7 @@ void SparseDataReader<Data_T>::readBlock(int idx, Data_T &result)
   count[0] = 1;                // Number of columns to read. Always 1
   count[1] = m_valuesPerBlock; // Number of values in one column
 
-  status = H5Sselect_hyperslab(m_fileDataSpace.id(), H5S_SELECT_SET, 
+  status = H5Sselect_hyperslab(fileDataSpace.id(), H5S_SELECT_SET, 
                                offset, NULL, count, NULL);
     
   if (status < 0) {
@@ -174,15 +177,15 @@ void SparseDataReader<Data_T>::readBlock(int idx, Data_T &result)
                                  boost::lexical_cast<std::string>(idx));
   }
 
-  const size_t preRss = currentRSS();
+  const size_t preMem = currentRSS();
 
-  status = H5Dread(m_dataSet.id(), DataTypeTraits<Data_T>::h5type(), 
-                   m_memDataSpace.id(), m_fileDataSpace.id(), 
+  status = H5Dread(dataSet.id(), DataTypeTraits<Data_T>::h5type(), 
+                   memDataSpace.id(), fileDataSpace.id(), 
                    H5P_DEFAULT, &result);
 
-  const size_t postRss = currentRSS();
+  const size_t postMem = currentRSS();
 
-  g_hdf5LeakCounter += postRss - preRss;
+  g_h5readMemLeakCount += postMem - preMem;
 }
 
 //----------------------------------------------------------------------------//
@@ -196,6 +199,42 @@ void SparseDataReader<Data_T>::readBlockList
 
   GlobalLock lock(g_hdf5Mutex);
 
+  Hdf5Util::H5ScopedDopen dataSet;
+  Hdf5Util::H5ScopedDget_space fileDataSpace;
+  Hdf5Util::H5ScopedDget_type dataType;
+  Hdf5Util::H5ScopedScreate memDataSpace;
+
+  hsize_t dims[2];
+  hsize_t memDims[1];
+
+  // Open the data set
+  dataSet.open(m_location, k_dataStr, H5P_DEFAULT);
+  if (dataSet.id() < 0) 
+    throw OpenDataSetException("Couldn't open data set: " + k_dataStr);
+    
+  // Get the space and type
+  fileDataSpace.open(dataSet.id());
+  dataType.open(dataSet.id());
+  if (fileDataSpace.id() < 0) 
+    throw GetDataSpaceException("Couldn't get data space");
+  if (dataType.id() < 0)
+    throw GetDataTypeException("Couldn't get data type");
+
+  // Make the memory data space
+  memDims[0] = m_valuesPerBlock;
+  memDataSpace.create(H5S_SIMPLE);
+  H5Sset_extent_simple(memDataSpace.id(), 1, memDims, NULL);
+
+  // Get the dimensions and check they match
+  H5Sget_simple_extent_dims(fileDataSpace.id(), dims, NULL);
+  if (dims[1] != static_cast<hsize_t>(m_valuesPerBlock)) {
+    throw FileIntegrityException("Block length mismatch in "
+                                 "SparseDataReader");
+  }
+  if (dims[0] != static_cast<hsize_t>(m_occupiedBlocks)) 
+    throw FileIntegrityException("Block count mismatch in "
+                                 "SparseDataReader");
+
   hsize_t offset[2];
   hsize_t count[2];
   herr_t status;
@@ -205,7 +244,7 @@ void SparseDataReader<Data_T>::readBlockList
   count[0] = memoryList.size(); // Number of columns to read.
   count[1] = m_valuesPerBlock;  // Number of values in one column
   
-  status = H5Sselect_hyperslab(m_fileDataSpace.id(), H5S_SELECT_SET, 
+  status = H5Sselect_hyperslab(fileDataSpace.id(), H5S_SELECT_SET, 
                                offset, NULL, count, NULL);
   if (status < 0) {
     throw ReadHyperSlabException("Couldn't select slab in readBlockList():" + 
@@ -215,11 +254,11 @@ void SparseDataReader<Data_T>::readBlockList
   // Make the memory data space ---
  
   Hdf5Util::H5ScopedScreate localMemDataSpace;
-  hsize_t memDims[2];  
-  memDims[0] = memoryList.size();
-  memDims[1] = m_valuesPerBlock;
+  hsize_t fileDims[2];  
+  fileDims[0] = memoryList.size();
+  fileDims[1] = m_valuesPerBlock;
   localMemDataSpace.create(H5S_SIMPLE);
-  H5Sset_extent_simple(localMemDataSpace.id(), 2, memDims, NULL);
+  H5Sset_extent_simple(localMemDataSpace.id(), 2, fileDims, NULL);
 
   // Setup the temporary memory region ---
 
@@ -239,11 +278,17 @@ void SparseDataReader<Data_T>::readBlockList
   int dim = sizeof(Data_T) / bytesPerValue;
   std::vector<Data_T> bigblock(memoryList.size() * m_valuesPerBlock/dim);
 
-  status = H5Dread(m_dataSet.id(), 
+  const size_t preMem = currentRSS();
+
+  status = H5Dread(dataSet.id(), 
                    DataTypeTraits<Data_T>::h5type(), 
                    localMemDataSpace.id(),
-                   m_fileDataSpace.id(), 
+                   fileDataSpace.id(), 
                    H5P_DEFAULT, &bigblock[0]);
+
+  const size_t postMem = currentRSS();
+
+  g_h5readMemLeakCount += postMem - preMem;
 
   if (status < 0) {
     throw Hdf5DataReadException("Couldn't read slab " + 

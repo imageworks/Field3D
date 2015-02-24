@@ -54,6 +54,7 @@
 
 #include "Exception.h"
 #include "Hdf5Util.h"
+#include "OgawaFwd.h"
 #include "SparseDataReader.h"
 #include "Traits.h"
 
@@ -76,6 +77,9 @@ namespace Sparse {
 
 template <typename Data_T>
 class SparseField;
+
+template <typename Data_T>
+class OgSparseDataReader;
 
 //----------------------------------------------------------------------------//
 
@@ -113,6 +117,7 @@ public:
   std::string filename;
   std::string layerPath;
   int valuesPerBlock;
+  int numVoxels;
   int occupiedBlocks;
  
   //! Index in file for each block
@@ -216,8 +221,19 @@ private:
   //! openFile().
   SparseDataReader<Data_T> *m_reader;
 
+  //! Shared pointer to the ogawa reader. 
+  boost::shared_ptr<OgSparseDataReader<Data_T> > m_ogReaderPtr;
+  //! Pointer to the ogawa reader. NULL at construction time. Created in 
+  //! openFile().
+  OgSparseDataReader<Data_T> *m_ogReader;
+  //! Ogawa archive
+  IArchivePtr m_ogArchive;
+  //! Ogawa archive root
+  OgIGroupPtr m_ogRoot;
+  //! Ogawa layer group
+  OgIGroupPtr m_ogLayerGroup;
+
   //! Mutex to prevent two threads from modifying conflicting data
-  // boost::mutex m_mutex;
   Mutex m_mutex;
 
   //! Number of currently active blocks
@@ -520,8 +536,8 @@ template <class Data_T>
 Reference<Data_T>::Reference(const std::string a_filename, 
                              const std::string a_layerPath)
   : filename(a_filename), layerPath(a_layerPath),
-    valuesPerBlock(-1), occupiedBlocks(-1),
-    blockMutex(NULL), m_fileHandle(-1), m_reader(NULL),
+    valuesPerBlock(-1), numVoxels(-1), occupiedBlocks(-1),
+    blockMutex(NULL), m_fileHandle(-1), m_reader(NULL), m_ogReader(NULL), 
     m_numActiveBlocks(0)
 { 
   /* Empty */ 
@@ -534,8 +550,9 @@ Reference<Data_T>::~Reference()
 {
   closeFile();
 
-  if (m_reader)
+  if (m_reader) {
     delete m_reader;
+  }
 
   if (blockMutex)
     delete [] blockMutex;
@@ -546,6 +563,8 @@ Reference<Data_T>::~Reference()
 template <class Data_T>
 Reference<Data_T>::Reference(const Reference<Data_T> &o)
 {
+  m_ogReaderPtr.reset();
+  m_ogReader = NULL;
   m_reader = NULL;
   blockMutex = NULL;
   *this = o;
@@ -565,6 +584,7 @@ Reference<Data_T>::operator=(const Reference<Data_T> &o)
   filename = o.filename;
   layerPath = o.layerPath;
   valuesPerBlock = o.valuesPerBlock;
+  numVoxels = o.numVoxels;
   occupiedBlocks = o.occupiedBlocks;
   fileBlockIndices = o.fileBlockIndices;
   blockLoaded = o.blockLoaded;
@@ -593,6 +613,9 @@ Reference<Data_T>::operator=(const Reference<Data_T> &o)
   if (m_reader)
     delete m_reader;
   m_reader = NULL;
+
+  m_ogReaderPtr.reset();
+  m_ogReader = NULL;
 
   return *this;
 }
@@ -636,48 +659,6 @@ void Reference<Data_T>::setNumBlocks(int numBlocks)
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-void Reference<Data_T>::openFile()
-{
-  using namespace Exc;
-  using namespace Hdf5Util;
-
-  boost::mutex::scoped_lock lock_A(m_mutex);
-
-  // check that the file wasn't already opened before obtaining the lock
-  if (fileIsOpen()) {
-    return;
-  }
-
-  {
-    // Hold the global lock
-    GlobalLock lock(g_hdf5Mutex);
-    // Open the file
-    m_fileHandle = H5Fopen(filename.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
-    if (m_fileHandle < 0) {
-      printf("openFile(): No file handle. Dying.\n");
-      throw NoSuchFileException(filename);
-    }
-    // Open the layer group
-    m_layerGroup.open(m_fileHandle, layerPath.c_str());
-    if (m_layerGroup.id() < 0) {
-      Msg::print(Msg::SevWarning, "In SparseFile::Reference::openFile: "
-                 "Couldn't find layer group " + layerPath + 
-                 " in .f3d file ");
-      throw FileIntegrityException(filename);
-    }
-  }
-
-  // Re-allocate reader
-  if (m_reader) {
-    delete m_reader;
-  }
-  m_reader = new SparseDataReader<Data_T>(m_layerGroup.id(), valuesPerBlock, 
-                                          occupiedBlocks);
-}
-
-//----------------------------------------------------------------------------//
-
-template <class Data_T>
 void Reference<Data_T>::closeFile()
 {
   if (m_fileHandle >= 0) {
@@ -685,25 +666,6 @@ void Reference<Data_T>::closeFile()
       Msg::print("In ~Reference(): Error closing file " + filename);
     }
   }
-}
-
-//----------------------------------------------------------------------------//
-
-template <class Data_T>
-void Reference<Data_T>::loadBlock(int blockIdx)
-{
-  boost::mutex::scoped_lock lock(m_mutex);
-
-  // Allocate the block  
-  blocks[blockIdx]->resize(valuesPerBlock);
-  assert(blocks[blockIdx]->data != NULL);
-  // Read the data
-  assert(m_reader);
-  m_reader->readBlock(fileBlockIndices[blockIdx], *blocks[blockIdx]->data);
-  // Mark block as loaded
-  blockLoaded[blockIdx] = 1;
-  // Track count
-  m_numActiveBlocks++;
 }
 
 //----------------------------------------------------------------------------//
@@ -748,7 +710,7 @@ void Reference<Data_T>::decBlockRef(int blockIdx)
 template <class Data_T>
 int Reference<Data_T>::blockSize(int /* blockIdx */) const
 {
-  return valuesPerBlock * sizeof(Data_T);
+  return numVoxels * sizeof(Data_T);
 }
 
 //----------------------------------------------------------------------------//

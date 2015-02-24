@@ -45,6 +45,8 @@
 #ifndef _INCLUDED_Field3D_OgawaFwd_H_
 #define _INCLUDED_Field3D_OgawaFwd_H_
 
+#include <boost/shared_ptr.hpp>
+
 #include "ns.h"
 
 //----------------------------------------------------------------------------//
@@ -66,6 +68,8 @@ class OgIDataset;
 template <typename T>
 class OgODataset;
 
+typedef boost::shared_ptr<OgIGroup> OgIGroupPtr;
+
 FIELD3D_NAMESPACE_HEADER_CLOSE
 
 //----------------------------------------------------------------------------//
@@ -79,6 +83,8 @@ namespace Alembic {
     using namespace v7;
   }
 }
+
+typedef boost::shared_ptr<Alembic::Ogawa::IArchive> IArchivePtr;
 
 //----------------------------------------------------------------------------//
 

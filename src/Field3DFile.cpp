@@ -712,8 +712,6 @@ Field3DInputFile::~Field3DInputFile()
 
 bool Field3DInputFile::open(const string &filename)
 {
-  GlobalLock lock(g_hdf5Mutex);
-
   clear();
 
   bool success = true;
@@ -1249,8 +1247,6 @@ Field3DOutputFile::writeGroupMembership()
   using namespace std;
   using namespace Hdf5Util;
 
-  GlobalLock lock(g_hdf5Mutex);
-
   if (!m_groupMembership.size())
     return true;
 
@@ -1316,14 +1312,10 @@ void Field3DFileBase::printHierarchy() const
       cout << "  Mapping: " << (**i).mapping->className() << endl;
     else 
       cout << "  Mapping: NULL" << endl;
-    cout << "  Scalar layers: " << endl;
-    vector<string> sNames;
-    (**i).getScalarLayerNames(sNames);
-    for_each(sNames.begin(), sNames.end(), print<string>(4));
-    cout << "  Vector layers: " << endl;
-    vector<string> vNames;
-    (**i).getVectorLayerNames(vNames);
-    for_each(vNames.begin(), vNames.end(), print<string>(4));
+    cout << "  Layers: " << endl;
+    vector<string> names;
+    (**i).getLayerNames(names);
+    for_each(names.begin(), names.end(), print<string>(4));    
   }
 }
 

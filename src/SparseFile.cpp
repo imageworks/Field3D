@@ -46,6 +46,9 @@
 // files
 #include "SparseField.h"
 
+#include "OgIO.h"
+#include "OgSparseDataReader.h"
+
 //----------------------------------------------------------------------------//
 
 FIELD3D_NAMESPACE_OPEN
@@ -428,6 +431,128 @@ void SparseFileManager::resetCacheStatistics()
     m_fileData.ref<V3d>(i)->resetCacheStatistics();
   }
 }
+
+//----------------------------------------------------------------------------//
+// Template implementations
+//----------------------------------------------------------------------------//
+
+namespace SparseFile {
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+void Reference<Data_T>::loadBlock(int blockIdx)
+{
+  boost::mutex::scoped_lock lock(m_mutex);
+
+  // Allocate the block  
+  blocks[blockIdx]->resize(valuesPerBlock);
+  assert(blocks[blockIdx]->data != NULL);
+  // Read the data
+  assert(m_reader || m_ogReader);
+  if (m_reader) {
+    m_reader->readBlock(fileBlockIndices[blockIdx], *blocks[blockIdx]->data);
+  } else {
+    m_ogReader->readBlock(fileBlockIndices[blockIdx], blocks[blockIdx]->data);
+  }
+  // Mark block as loaded
+  blockLoaded[blockIdx] = 1;
+  // Track count
+  m_numActiveBlocks++;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+void Reference<Data_T>::openFile()
+{
+  using namespace Exc;
+  using namespace Hdf5Util;
+
+  boost::mutex::scoped_lock lock_A(m_mutex);
+
+  // check that the file wasn't already opened before obtaining the lock
+  if (fileIsOpen()) {
+    return;
+  }
+
+  // First try Ogawa ---
+
+  m_ogArchive.reset(new Alembic::Ogawa::IArchive(filename));
+  if (m_ogArchive->isValid()) {
+    m_ogRoot.reset(new OgIGroup(*m_ogArchive));
+    m_ogLayerGroup.reset(new OgIGroup(m_ogRoot->findGroup(layerPath)));
+    if (m_ogLayerGroup->isValid()) {
+      // Allocate the reader
+      m_ogReaderPtr.reset(new OgSparseDataReader<Data_T>(*m_ogLayerGroup,
+                                                         numVoxels,
+                                                         occupiedBlocks,
+                                                         true));
+      m_ogReader = m_ogReaderPtr.get();
+      // Done
+      return;
+    }
+  }
+
+  // Then, try HDF5 ---
+
+  {
+    // Hold the global lock
+    GlobalLock lock(g_hdf5Mutex);
+    // Open the file
+    m_fileHandle = H5Fopen(filename.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+    if (m_fileHandle >= 0) {
+      // Open the layer group
+      m_layerGroup.open(m_fileHandle, layerPath.c_str());
+      if (m_layerGroup.id() < 0) {
+        Msg::print(Msg::SevWarning, "In SparseFile::Reference::openFile: "
+                   "Couldn't find layer group " + layerPath + 
+                   " in .f3d file ");
+        throw FileIntegrityException(filename);
+      }
+    } else {
+      Msg::print(Msg::SevWarning, "In SparseFile::Reference::openFile: "
+                 "Couldn't open HDF5 file ");
+      throw NoSuchFileException(filename);
+    }
+  }
+
+  // Re-allocate reader
+  if (m_reader) {
+    delete m_reader;
+  }
+  m_reader = new SparseDataReader<Data_T>(m_layerGroup.id(), 
+                                          valuesPerBlock, 
+                                          occupiedBlocks);
+}
+
+//----------------------------------------------------------------------------//
+
+#define FIELD3D_INSTANTIATION_LOADBLOCK(type)                       \
+  template                                                          \
+  void Reference<type>::loadBlock(int blockIdx);                    \
+  
+FIELD3D_INSTANTIATION_LOADBLOCK(float16_t);
+FIELD3D_INSTANTIATION_LOADBLOCK(float32_t);
+FIELD3D_INSTANTIATION_LOADBLOCK(float64_t);
+FIELD3D_INSTANTIATION_LOADBLOCK(vec16_t);
+FIELD3D_INSTANTIATION_LOADBLOCK(vec32_t);
+FIELD3D_INSTANTIATION_LOADBLOCK(vec64_t);
+
+//----------------------------------------------------------------------------//
+
+#define FIELD3D_INSTANTIATION_OPENFILE(type)                        \
+  template                                                          \
+  void Reference<type>::openFile();                                 \
+  
+FIELD3D_INSTANTIATION_OPENFILE(float16_t);
+FIELD3D_INSTANTIATION_OPENFILE(float32_t);
+FIELD3D_INSTANTIATION_OPENFILE(float64_t);
+FIELD3D_INSTANTIATION_OPENFILE(vec16_t);
+FIELD3D_INSTANTIATION_OPENFILE(vec32_t);
+FIELD3D_INSTANTIATION_OPENFILE(vec64_t);
+
+} // namespace SparseFile
 
 //----------------------------------------------------------------------------//
 

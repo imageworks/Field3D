@@ -117,7 +117,7 @@ namespace detail {
 
   template <typename Data_T>
   bool checkInputEmpty(const SparseField<Data_T> &src, 
-                       const SparseField<Data_T> &tgt, 
+                       const SparseField<Data_T> &/*tgt*/, 
                        const Box3i &tgtBox, const float support,
                        const size_t dim)
   {
@@ -157,9 +157,9 @@ namespace detail {
 
   //! Fallback version always returns false
   template <typename Field_T>
-  bool checkInputEmpty(const Field_T &src, const Field_T &tgt, 
-                       const Box3i &tgtBox, const float support,
-                       const size_t dim)
+  bool checkInputEmpty(const Field_T &/*src*/, const Field_T &/*tgt*/, 
+                       const Box3i &/*tgtBox*/, const float /*support*/,
+                       const size_t /*dim*/)
   {
     return false;
   }
@@ -296,9 +296,6 @@ namespace detail {
                     const size_t numThreads)
   {
     using namespace std;
-
-    // To ensure we don't sample outside source data
-    Box3i srcDw = src.dataWindow();
 
     // Compute new res
     V3i res;

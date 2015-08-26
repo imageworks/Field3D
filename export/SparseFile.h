@@ -60,6 +60,10 @@
 
 //----------------------------------------------------------------------------//
 
+#define F3D_SHORT_MUTEX_ARRAY 1
+#define F3D_MUTEX_ARRAY_SIZE  1000
+#define F3D_NO_BLOCKS_ARRAY   1
+
 #include "ns.h"
 
 FIELD3D_NAMESPACE_OPEN
@@ -110,7 +114,12 @@ public:
 #else
   typedef Reference*                                Ptr;
 #endif
+
+#if F3D_NO_BLOCKS_ARRAY
+  typedef Sparse::SparseBlock<Data_T>*              BlockPtrs;
+#else
   typedef std::vector<Sparse::SparseBlock<Data_T>*> BlockPtrs;
+#endif
 
   // Public data members -------------------------------------------------------
 
@@ -118,6 +127,7 @@ public:
   std::string layerPath;
   int valuesPerBlock;
   int numVoxels;
+  int numBlocks;
   int occupiedBlocks;
  
   //! Index in file for each block
@@ -143,6 +153,10 @@ public:
   //! individually, for guaranteeing thread-safe updates of the ref
   //! counts
   boost::mutex *blockMutex;
+#if F3D_SHORT_MUTEX_ARRAY
+  //! Size of the mutex array. Used as modulus base.
+  int blockMutexSize;
+#endif
 
   // Ctors, dtor ---------------------------------------------------------------
 
@@ -236,7 +250,7 @@ private:
   OgIGroupPtr m_ogLayerGroup;
 
   //! Mutex to prevent two threads from modifying conflicting data
-  Mutex m_mutex;
+  mutable Mutex m_mutex;
 
   //! Number of currently active blocks
   size_t m_numActiveBlocks;
@@ -528,7 +542,7 @@ private:
 
   //! Mutex to prevent multiple threads from deallocating blocks at
   //! the same time
-  boost::mutex m_mutex;
+  mutable boost::mutex m_mutex;
 
 };
 
@@ -544,7 +558,7 @@ template <class Data_T>
 Reference<Data_T>::Reference(const std::string a_filename, 
                              const std::string a_layerPath)
   : filename(a_filename), layerPath(a_layerPath),
-    valuesPerBlock(-1), numVoxels(-1), occupiedBlocks(-1),
+    valuesPerBlock(-1), numVoxels(-1), numBlocks(-1), occupiedBlocks(-1),
     blockMutex(NULL), m_fileHandle(-1), m_reader(NULL), m_ogReader(NULL), 
     m_numActiveBlocks(0)
 { 
@@ -602,7 +616,17 @@ Reference<Data_T>::operator=(const Reference<Data_T> &o)
   refCounts = o.refCounts;
   if (blockMutex)
     delete[] blockMutex;
+#if F3D_SHORT_MUTEX_ARRAY
+#  if F3D_NO_BLOCKS_ARRAY
+  blockMutexSize = std::min(numBlocks, F3D_MUTEX_ARRAY_SIZE);
+#  else
+  blockMutexSize = std::min(static_cast<int>(blocks.size()), 
+                            F3D_MUTEX_ARRAY_SIZE);
+#  endif
+  blockMutex = new boost::mutex[blockMutexSize];
+#else
   blockMutex = new boost::mutex[blocks.size()];
+#endif
 
 #if 0
   // MW: Should this be copying the file handle? Never seems to happen,
@@ -649,19 +673,34 @@ bool Reference<Data_T>::fileIsOpen()
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-void Reference<Data_T>::setNumBlocks(int numBlocks)
+void Reference<Data_T>::setNumBlocks(int a_numBlocks)
 {
   boost::mutex::scoped_lock lock(m_mutex);
 
+  // Store number of blocks in member variable
+  numBlocks = a_numBlocks;
+
   fileBlockIndices.resize(numBlocks);
   blockLoaded.resize(numBlocks, 0);
+#if !F3D_NO_BLOCKS_ARRAY
   blocks.resize(numBlocks, 0);
+#endif
   blockUsed.resize(numBlocks, false);
   loadCounts.resize(numBlocks, 0);
   refCounts.resize(numBlocks, 0);
   if (blockMutex)
     delete[] blockMutex;
+#if F3D_SHORT_MUTEX_ARRAY
+#  if F3D_NO_BLOCKS_ARRAY
+  blockMutexSize = std::min(numBlocks, F3D_MUTEX_ARRAY_SIZE);
+#  else
+  blockMutexSize = std::min(blocks.size(), 
+                            static_cast<size_t>(F3D_MUTEX_ARRAY_SIZE));
+#  endif
+  blockMutex = new boost::mutex[blockMutexSize];
+#else
   blockMutex = new boost::mutex[numBlocks];
+#endif
 }
 
 //----------------------------------------------------------------------------//
@@ -682,7 +721,11 @@ template <class Data_T>
 void Reference<Data_T>::unloadBlock(int blockIdx)
 {
   // Deallocate the block
+#if F3D_NO_BLOCKS_ARRAY
+  blocks[blockIdx].clear();
+#else
   blocks[blockIdx]->clear();
+#endif
   // Mark block as unloaded
   blockLoaded[blockIdx] = 0;
   // Track count
@@ -700,7 +743,11 @@ void Reference<Data_T>::unloadBlock(int blockIdx)
 template <class Data_T>
 void Reference<Data_T>::incBlockRef(int blockIdx)
 {
+#if F3D_SHORT_MUTEX_ARRAY
+  boost::mutex::scoped_lock lock(blockMutex[blockIdx % blockMutexSize]);
+#else
   boost::mutex::scoped_lock lock(blockMutex[blockIdx]);
+#endif
   ++refCounts[blockIdx];
 }
 
@@ -709,7 +756,11 @@ void Reference<Data_T>::incBlockRef(int blockIdx)
 template <class Data_T>
 void Reference<Data_T>::decBlockRef(int blockIdx)
 {
+#if F3D_SHORT_MUTEX_ARRAY
+  boost::mutex::scoped_lock lock(blockMutex[blockIdx % blockMutexSize]);
+#else
   boost::mutex::scoped_lock lock(blockMutex[blockIdx]);
+#endif
   --refCounts[blockIdx];
 }
 
@@ -742,12 +793,12 @@ int Reference<Data_T>::numLoadedBlocks() const
 {
   std::vector<int>::const_iterator i = blockLoaded.begin();
   std::vector<int>::const_iterator end = blockLoaded.end();
-  int numBlocks = 0;
+  int numBlockCounter = 0;
   for (; i != end; ++i)
     if (*i)
-      numBlocks++;
+      numBlockCounter++;
 
-  return numBlocks;
+  return numBlockCounter;
 }
 
 //----------------------------------------------------------------------------//
@@ -758,21 +809,21 @@ int Reference<Data_T>::totalLoadedBlocks() const
   std::vector<int>::const_iterator i = loadCounts.begin();
   std::vector<int>::const_iterator li = blockLoaded.begin();
   std::vector<int>::const_iterator end = loadCounts.end();
-  int numBlocks = 0;
+  int numBlockCounter = 0;
 
   if (blockLoaded.size() == 0) {
     for (; i != end; ++i)
       if (*i)
-        numBlocks++;
+        numBlockCounter++;
   } else {
     assert(loadCounts.size() == blockLoaded.size());
 
     for (; i != end; ++i, ++li)
       if (*i || *li)
-        numBlocks++;
+        numBlockCounter++;
   }
   
-  return numBlocks;
+  return numBlockCounter;
 }
 
 //----------------------------------------------------------------------------//
@@ -782,15 +833,15 @@ float Reference<Data_T>::averageLoads() const
 {
   std::vector<int>::const_iterator i = loadCounts.begin();
   std::vector<int>::const_iterator end = loadCounts.end();
-  int numLoads = 0, numBlocks = 0;
+  int numLoads = 0, numBlockCounter = 0;
   for (; i != end; ++i) {
     if (*i) {
       numLoads += *i;
-      numBlocks++;
+      numBlockCounter++;
     }
   }
 
-  return (float)numLoads / std::max(1, numBlocks);
+  return (float)numLoads / std::max(1, numBlockCounter);
 }
 
 //----------------------------------------------------------------------------//
@@ -810,14 +861,22 @@ template <class Data_T>
 long long int
 Reference<Data_T>::memSize() const
 {
+  boost::mutex::scoped_lock lock(m_mutex);
+
   return sizeof(*this) + 
     fileBlockIndices.capacity() * sizeof(int) + 
     blockLoaded.capacity() * sizeof(int) + 
+#if !F3D_NO_BLOCKS_ARRAY
     blocks.capacity() * sizeof(Sparse::SparseBlock<Data_T>*) + 
+#endif
     blockUsed.capacity() * sizeof(bool) + 
     loadCounts.capacity() * sizeof(int) + 
     refCounts.capacity() * sizeof(int) + 
-    sizeof(boost::mutex) + 
+#if F3D_SHORT_MUTEX_ARRAY
+    blockMutexSize * sizeof(boost::mutex) + 
+#else
+    numBlocks * sizeof(boost::mutex) + 
+#endif
     sizeof(SparseDataReader<Data_T>);
 }
 
@@ -1166,9 +1225,13 @@ SparseFileManager::removeFieldFromCache(int refIdx)
   m_memUse -= bytesFreed;
 
   std::vector<int>().swap(reference->fileBlockIndices);
+#if F3D_NO_BLOCKS_ARRAY
+  reference->fileBlockIndices.resize(reference->numBlocks, -1);
+#else
   reference->fileBlockIndices.resize(reference->blocks.size(), -1);
   typedef typename SparseFile::Reference<Data_T>::BlockPtrs BlockPtrs;
   BlockPtrs().swap(reference->blocks);
+#endif
   std::vector<int>().swap(reference->blockLoaded);
   std::vector<bool>().swap(reference->blockUsed);
   std::vector<int>().swap(reference->loadCounts);
@@ -1208,7 +1271,12 @@ SparseFileManager::activateBlock(int fileId, int blockIdx)
       }
 
       boost::mutex::scoped_lock lock_A(m_mutex);
+#if F3D_SHORT_MUTEX_ARRAY
+      boost::mutex::scoped_lock 
+        lock_B(reference->blockMutex[blockIdx % reference->blockMutexSize]);
+#else
       boost::mutex::scoped_lock lock_B(reference->blockMutex[blockIdx]);
+#endif
       // check to see if it was loaded between when the function
       // started and we got the lock on the block
       if (!reference->blockLoaded[blockIdx]) {

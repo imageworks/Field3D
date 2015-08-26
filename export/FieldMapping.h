@@ -212,6 +212,13 @@ void worldToVoxel(const Field3D::FieldMapping* mapping,
                   const Box3d &wsBounds,
                   Box3d &vsBounds);
 
+//! Transforms a bounding box by a 4x4 matrix
+//! This is done by transforming each corner vertex from world to voxel 
+//! space and bounding the result.
+void transformBounds(const M44d &mtx, 
+                     const Box3d &fromBounds,
+                     Box3d &toBounds);
+
 //----------------------------------------------------------------------------//
 // NullFieldMapping
 //----------------------------------------------------------------------------//
@@ -373,6 +380,16 @@ public:
   //! \note This assumes the query to be at time=0.0
   const M44d& worldToVoxel() const
   { return m_wsToVs; }
+
+  //! Returns the world to voxel space transform at a given time. 
+  M44d worldToVoxel(float time) const
+  {
+    if (!m_isTimeVarying) {
+      return m_wsToVs;
+    } else {
+      return m_vsToWsCurve.linear(time).inverse();
+    }
+  }
 
   //! Returns a reference to the voxel to world space transform. 
   //! \note This assumes the query to be at time=0.0

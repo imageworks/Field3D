@@ -113,7 +113,12 @@ int64_t SparseFileManager::deallocateBlock(const SparseFile::CacheBlock &cb)
   // Note: this lock order is made consistent w/ allocate to prevent
   // deadlocks and crashes.
 
+#if F3D_SHORT_MUTEX_ARRAY
+  boost::mutex::scoped_lock 
+    lock_B(reference->blockMutex[cb.blockIdx % reference->blockMutexSize]);
+#else
   boost::mutex::scoped_lock lock_B(reference->blockMutex[cb.blockIdx]);
+#endif
   
   // check whether the block is still in use
   if (reference->refCounts[cb.blockIdx] > 0)
@@ -436,6 +441,8 @@ void SparseFileManager::resetCacheStatistics()
 
 long long int SparseFileManager::memSize() const
 {
+  boost::mutex::scoped_lock lock(m_mutex);
+
   return sizeof(*this) + m_fileData.memSize() + 
     m_blockCacheList.size() * sizeof(SparseFile::CacheBlock);
 }
@@ -444,6 +451,8 @@ long long int SparseFileManager::memSize() const
 
 long long int SparseFile::FileReferences::memSize() const 
 {
+  Mutex::scoped_lock lock(m_mutex);
+
   long long int size = 0;
 
   // Size of the std::deque's
@@ -490,8 +499,23 @@ void Reference<Data_T>::loadBlock(int blockIdx)
 {
   boost::mutex::scoped_lock lock(m_mutex);
 
-  // Allocate the block  
-  blocks[blockIdx]->resize(valuesPerBlock);
+  // Allocate the block
+#if F3D_NO_BLOCKS_ARRAY
+  blocks[blockIdx].resize(numVoxels);
+  assert(blocks[blockIdx].data != NULL);
+  // Read the data
+  assert(m_reader || m_ogReader);
+  if (m_reader) {
+    m_reader->readBlock(fileBlockIndices[blockIdx], *blocks[blockIdx].data);
+  } else {
+    m_ogReader->readBlock(fileBlockIndices[blockIdx], blocks[blockIdx].data);
+  }
+  // Mark block as loaded
+  blockLoaded[blockIdx] = 1;
+  // Track count
+  m_numActiveBlocks++;
+#else
+  blocks[blockIdx]->resize(numVoxels);
   assert(blocks[blockIdx]->data != NULL);
   // Read the data
   assert(m_reader || m_ogReader);
@@ -504,6 +528,7 @@ void Reference<Data_T>::loadBlock(int blockIdx)
   blockLoaded[blockIdx] = 1;
   // Track count
   m_numActiveBlocks++;
+#endif
 }
 
 //----------------------------------------------------------------------------//

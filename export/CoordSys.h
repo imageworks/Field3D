@@ -79,6 +79,15 @@ coordinateSystem(const FIELD3D_BOX_T<FIELD3D_VEC3_T<T> > &wsBounds);
 template <typename T>
 FIELD3D_MTX_T<T> 
 coordinateSystem(const FIELD3D_BOX_T<FIELD3D_VEC3_T<T> >  &wsBounds, 
+                 const FIELD3D_VEC3_T<T>                  &wsVoxelSize,
+                 Box3i                                    &extents);
+
+//! Constructs a coordinate system that has its lower left corner at an 
+//! even multiplier of the voxel-size, to ensure that voxel centers don't
+//! shift as the domain grows
+template <typename T>
+FIELD3D_MTX_T<T> 
+coordinateSystem(const FIELD3D_BOX_T<FIELD3D_VEC3_T<T> >  &wsBounds, 
                  const FIELD3D_VEC3_T<T>                  &wsVoxelSize);
 
 //----------------------------------------------------------------------------//
@@ -141,18 +150,35 @@ FIELD3D_MTX_T<T> coordinateSystem(const FIELD3D_VEC3_T<T> &e1,
 
 template <typename T>
 FIELD3D_MTX_T<T> 
-coordinateSystem
-(const FIELD3D_BOX_T<FIELD3D_VEC3_T<T> >  &wsBounds, 
- const FIELD3D_VEC3_T<T>                  &wsVoxelSize)
+coordinateSystem(const FIELD3D_BOX_T<FIELD3D_VEC3_T<T> >  &wsBounds, 
+                 const FIELD3D_VEC3_T<T>                  &wsVoxelSize,
+                 Box3i                                    &extents)
 {
   const FIELD3D_VEC3_T<T> voxelMin = 
     detail::floor<T>(wsBounds.min / wsVoxelSize) * wsVoxelSize;
   const FIELD3D_VEC3_T<T> voxelMax = 
     detail::ceil<T>(wsBounds.max / wsVoxelSize) * wsVoxelSize;
 
+  // Resolution
+  extents.min = V3i(detail::floor<T>(voxelMin / wsVoxelSize) + V3f(0.5));
+  extents.max = V3i(detail::floor<T>(voxelMax / wsVoxelSize) + V3f(0.5));
+
+  // Bounding box
   const FIELD3D_BOX_T<FIELD3D_VEC3_T<T> > box(voxelMin, voxelMax);
 
   return coordinateSystem(box);
+}
+
+//----------------------------------------------------------------------------//
+
+template <typename T>
+FIELD3D_MTX_T<T> 
+coordinateSystem
+(const FIELD3D_BOX_T<FIELD3D_VEC3_T<T> >  &wsBounds, 
+ const FIELD3D_VEC3_T<T>                  &wsVoxelSize)
+{
+  Box3i dummy;
+  return coordinateSystem(wsBounds, wsVoxelSize, dummy);
 }
 
 //----------------------------------------------------------------------------//

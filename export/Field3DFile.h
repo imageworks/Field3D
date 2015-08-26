@@ -61,9 +61,7 @@
 #include "Field3DFileHDF5.h"
 #include "FieldMetadata.h"
 #include "ClassFactory.h"
-#include "FieldCache.h"
 #include "OgawaFwd.h"
-#include "FieldCache.h"
 
 //----------------------------------------------------------------------------//
 
@@ -403,7 +401,7 @@ private:
 //----------------------------------------------------------------------------//
 
 /*! \class Field3DInputFile
-  \brief Provides reading of .f3d (internally, Ogawa) files.
+  \brief Provides reading of .f3d (internally, hdf5 or Ogawa) files.
   \ingroup file
 
   Refer to \ref using_files for examples of how to use this in your code.
@@ -431,6 +429,13 @@ public:
   //! Opens the given file
   //! \returns Whether successful
   bool open(const std::string &filename);
+
+  //! Returns an encoding descriptor of the given file 
+  const std::string &encoding() const
+  { 
+    const static std::string encodings[2] = { "Ogawa", "HDF5" };
+    return encodings[m_hdf5 ? 1 : 0];
+  }
 
   //! \name Reading layers from disk
   //! \{
@@ -620,7 +625,7 @@ bool fileExists(const std::string &filename);
 
 /*! \class Field3DOutputFile
   \ingroup file
-  \brief Provides writing of .f3d (internally, Ogawa) files.
+  \brief Provides writing of .f3d (internally, hdf5 or Ogawa) files.
 
   Refer to \ref using_files for examples of how to use this in your code.
 

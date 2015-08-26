@@ -47,6 +47,7 @@
 //----------------------------------------------------------------------------//
 
 #include <boost/thread/mutex.hpp>
+#include <boost/foreach.hpp>
 
 #include "Field.h"
 
@@ -102,6 +103,8 @@ public:
   //! Adds the given field to the cache. 
   void cacheField(FieldPtr field, const std::string &filename,
                   const std::string &layerPath);
+  //! Returns the memory use of all currently loaded fields
+  long long int memSize() const;
 
 private:
 
@@ -168,6 +171,29 @@ void FieldCache<Data_T>::cacheField(FieldPtr field, const std::string &filename,
   boost::mutex::scoped_lock lock(ms_accessMutex);
   m_cache[key(filename, layerPath)] = 
     std::make_pair(field->weakPtr(), field.get());
+}
+
+//----------------------------------------------------------------------------//
+
+template <typename Data_T>
+long long int FieldCache<Data_T>::memSize() const
+{
+  boost::mutex::scoped_lock lock(ms_accessMutex);
+
+  long long int memSize = 0;
+
+  BOOST_FOREACH (const typename Cache::value_type &i, m_cache) {
+    // Check if pointer is valid
+    WeakPtr weakPtr = i.second.first;
+    if (weakPtr.expired()) {
+      continue;
+    } else {
+      // If valid, accumulate memory
+      memSize += i.second.second->memSize();
+    }
+  }
+
+  return memSize;
 }
 
 //----------------------------------------------------------------------------//

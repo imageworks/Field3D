@@ -48,6 +48,7 @@
 //----------------------------------------------------------------------------//
 
 #include <vector>
+#include <limits>
 
 #ifdef FIELD3D_CUSTOM_MATH_LIB
 #  include FIELD3D_MATH_LIB_INCLUDE
@@ -84,6 +85,34 @@ struct Interval
 //----------------------------------------------------------------------------//
 
 typedef std::vector<Interval> IntervalVec;
+
+//----------------------------------------------------------------------------//
+// Utilities
+//----------------------------------------------------------------------------//
+
+template <typename From_T, typename To_T>
+To_T clampForType(const From_T v)
+{
+  // Different behavior for integer vs fp types
+  To_T lowestTo;
+  From_T lowest;
+  if (std::numeric_limits<To_T>::is_integer) {
+    lowestTo = std::numeric_limits<To_T>::min();
+    lowest   = static_cast<From_T>(lowestTo);
+  } else {
+    lowestTo  = -std::numeric_limits<To_T>::max();
+    lowest    = static_cast<From_T>(lowestTo);
+  }
+  const To_T   highestTo = std::numeric_limits<To_T>::max();
+  const From_T highest   = static_cast<From_T>(highestTo);
+  // Perform check
+  if (v < lowest) {
+    return lowest;
+  } else if (v > highest) {
+    return highest;
+  }
+  return v;
+}
 
 //----------------------------------------------------------------------------//
 

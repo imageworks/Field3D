@@ -65,6 +65,18 @@ FIELD3D_NAMESPACE_OPEN
 // Functions
 //----------------------------------------------------------------------------//
 
+//! Computes the origin/offset of a field. 
+V3i computeOffset(const FieldRes &f);
+
+//! Constructs a MIP representation of the given field, with optional 
+//! offset vector. The offset vector indicates the 'true' voxel space
+//! coordinate of the (0, 0, 0) voxel, such that a consistent voxel placement
+//! can be used for the MIP levels.
+template <typename MIPField_T, typename Filter_T>
+typename MIPField_T::Ptr
+makeMIP(const typename MIPField_T::NestedType &base, const int minSize,
+        const V3i &offset, const size_t numThreads);
+
 //! Constructs a MIP representation of the given field.
 template <typename MIPField_T, typename Filter_T>
 typename MIPField_T::Ptr
@@ -76,6 +88,10 @@ makeMIP(const typename MIPField_T::NestedType &base, const int minSize,
 //----------------------------------------------------------------------------//
 
 namespace detail {
+
+  //--------------------------------------------------------------------------//
+
+  extern const std::string k_mipOffsetStr;
 
   //--------------------------------------------------------------------------//
 
@@ -95,7 +111,7 @@ namespace detail {
 
   //--------------------------------------------------------------------------//
 
-  V3i mipResolution(const V3i &baseRes, const size_t level);
+  V3i mipResolution(const V3i &baseRes, const size_t level, const V3i &add);
 
   //--------------------------------------------------------------------------//
 
@@ -166,13 +182,14 @@ namespace detail {
 
   //--------------------------------------------------------------------------//
 
-  template <typename Field_T, typename FilterOp_T>
+  template <typename Field_T, typename FilterOp_T, bool IsAnalytic_T>
   struct MIPSeparableThreadOp
   {
     typedef typename Field_T::value_type T;
 
     MIPSeparableThreadOp(const Field_T &src, Field_T &tgt, 
-                         const size_t level, const FilterOp_T &filterOp, 
+                         const size_t level, const V3i &add,
+                         const FilterOp_T &filterOp, 
                          const size_t dim, 
                          const std::vector<Box3i> &blocks,
                          size_t &nextIdx, boost::mutex &mutex)
@@ -180,6 +197,7 @@ namespace detail {
         m_tgt(tgt),
         m_filterOp(filterOp), 
         m_level(level), 
+        m_add(add), 
         m_dim(dim),
         m_blocks(blocks),
         m_nextIdx(nextIdx),
@@ -204,7 +222,7 @@ namespace detail {
       const float tgtToSrcMult    = 2.0;
       const float filterCoordMult = 1.0f / (tgtToSrcMult);
     
-      // Filter info
+      // Filter info, support size in target space
       const float support = m_filterOp.support();
 
       // Get next index to process
@@ -224,46 +242,84 @@ namespace detail {
           for (int k = box.min.z; k <= box.max.z; ++k) {
             for (int j = box.min.y; j <= box.max.y; ++j) {
               for (int i = box.min.x; i <= box.max.x; ++i) {
-                Value_T accumValue   = static_cast<Value_T>(0.0);
-                float   accumWeight  = 0.0f;
-                // Transform from current point in target frame to source frame
-                const int   curTgt = V3i(i, j, k)[m_dim];
-                const float curSrc = discToCont(curTgt) * tgtToSrcMult;
-                // Find interval
-                int startSrc = 
-                  static_cast<int>(std::floor(curSrc - support * tgtToSrcMult));
-                int endSrc   = 
-                  static_cast<int>(std::ceil(curSrc + support * 
-                                             tgtToSrcMult)) - 1;
-                startSrc     = std::max(startSrc, srcDw.min[m_dim]);
-                endSrc       = std::min(endSrc, srcDw.max[m_dim]);
-                // Loop over source voxels
-                for (int s = startSrc; s <= endSrc; ++s) {
-                  // Source index
-                  const int xIdx = m_dim == 0 ? s : i;
-                  const int yIdx = m_dim == 1 ? s : j;
-                  const int zIdx = m_dim == 2 ? s : k;
-                  // Source voxel in continuous coords
-                  const float srcP   = discToCont(s);
-                  // Compute filter weight in source space (twice as wide)
-                  const float weight = m_filterOp.eval(std::abs(srcP - curSrc) *
-                                                       filterCoordMult);
-                  // Value
-                  const Value_T value = m_src.fastValue(xIdx, yIdx, zIdx);
-                  // Update
-                  accumWeight += weight;
-                  accumValue  += value * weight;
-                }
-                // Update final value
-                if (accumWeight > 0.0f && 
-                    accumValue != static_cast<Value_T>(0.0)) {
-                  m_tgt.fastLValue(i, j, k) = accumValue / accumWeight;
-                }
+                Value_T accumValue(m_filterOp.initialValue());
+                if (IsAnalytic_T) {
+                  // Transform from current point in target frame to source frame
+                  const int   curTgt = V3i(i, j, k)[m_dim];
+                  const float curSrc = discToCont(curTgt) * tgtToSrcMult - m_add[m_dim];
+                  // Find interval
+                  int startSrc = 
+                    static_cast<int>(std::floor(curSrc - support * tgtToSrcMult));
+                  int endSrc   = 
+                    static_cast<int>(std::ceil(curSrc + support * 
+                                               tgtToSrcMult)) - 1;
+                  // Clamp coordinates
+                  startSrc     = std::max(startSrc, srcDw.min[m_dim]);
+                  endSrc       = std::min(endSrc, srcDw.max[m_dim]);
+                  // Loop over source voxels
+                  for (int s = startSrc; s <= endSrc; ++s) {
+                    // Source index
+                    const int xIdx = m_dim == 0 ? s : i;
+                    const int yIdx = m_dim == 1 ? s : j;
+                    const int zIdx = m_dim == 2 ? s : k;
+                    // Source voxel in continuous coords
+                    const float srcP   = discToCont(s);
+                    // Compute filter weight in source space (twice as wide)
+                    const float weight = m_filterOp.eval(std::abs(srcP - curSrc) *
+                                                         filterCoordMult);
+                    // Value
+                    const Value_T value = m_src.fastValue(xIdx, yIdx, zIdx);
+                    // Update
+                    if (weight > 0.0f) {
+                      FilterOp_T::op(accumValue, value);
+                    }
+                  }
+                  // Update final value
+                  if (accumValue != 
+                      static_cast<Value_T>(m_filterOp.initialValue())) {
+                    m_tgt.fastLValue(i, j, k) = accumValue;
+                  }
+                } else {
+                  float accumWeight  = 0.0f;
+                  // Transform from current point in target frame to source frame
+                  const int   curTgt = V3i(i, j, k)[m_dim];
+                  const float curSrc = discToCont(curTgt) * tgtToSrcMult - m_add[m_dim];
+                  // Find interval
+                  int startSrc = 
+                    static_cast<int>(std::floor(curSrc - support * tgtToSrcMult));
+                  int endSrc   = 
+                    static_cast<int>(std::ceil(curSrc + support * 
+                                               tgtToSrcMult)) - 1;
+                  // Clamp coordinates
+                  startSrc     = std::max(startSrc, srcDw.min[m_dim]);
+                  endSrc       = std::min(endSrc, srcDw.max[m_dim]);
+                  // Loop over source voxels
+                  for (int s = startSrc; s <= endSrc; ++s) {
+                    // Source index
+                    const int xIdx = m_dim == 0 ? s : i;
+                    const int yIdx = m_dim == 1 ? s : j;
+                    const int zIdx = m_dim == 2 ? s : k;
+                    // Source voxel in continuous coords
+                    const float srcP   = discToCont(s);
+                    // Compute filter weight in source space (twice as wide)
+                    const float weight = m_filterOp.eval(std::abs(srcP - curSrc) *
+                                                         filterCoordMult);
+                    // Value
+                    const Value_T value = m_src.fastValue(xIdx, yIdx, zIdx);
+                    // Update
+                    accumWeight += weight;
+                    accumValue  += value * weight;
+                  }
+                  // Update final value
+                  if (accumWeight > 0.0f && 
+                      accumValue != static_cast<Value_T>(0.0)) {
+                    m_tgt.fastLValue(i, j, k) = accumValue / accumWeight;
+                  }
+                } // if (IsAnalytic_T)
               }
             }
           }
         } // Empty input
-
         // Get next index
         {
           boost::mutex::scoped_lock lock(m_mutex);
@@ -281,6 +337,7 @@ namespace detail {
     Field_T                  &m_tgt;
     const FilterOp_T         &m_filterOp;
     const size_t              m_level;
+    const V3i                &m_add;
     const size_t              m_dim;
     const std::vector<Box3i> &m_blocks;
     size_t                   &m_nextIdx;
@@ -295,8 +352,8 @@ namespace detail {
   template <typename Field_T, typename FilterOp_T>
   void mipSeparable(const Field_T &src, Field_T &tgt, 
                     const V3i &oldRes, const V3i &newRes, const size_t level, 
-                    const FilterOp_T &filterOp, const size_t dim, 
-                    const size_t numThreads)
+                    const V3i &add, const FilterOp_T &filterOp, 
+                    const size_t dim, const size_t numThreads)
   {
     using namespace std;
 
@@ -348,8 +405,9 @@ namespace detail {
 
     for (size_t i = 0; i < numThreads; ++i) {
       threads.create_thread(
-        MIPSeparableThreadOp<Field_T, FilterOp_T>(src, tgt, level, filterOp, 
-                                                  dim, blocks, nextIdx, mutex));
+        MIPSeparableThreadOp<Field_T, FilterOp_T, FilterOp_T::isAnalytic >
+        (src, tgt, level, add, filterOp, 
+         dim, blocks, nextIdx, mutex));
     }
 
     // Join
@@ -360,15 +418,21 @@ namespace detail {
 
   template <typename Field_T, typename FilterOp_T>
   void mipResample(const Field_T &base, const Field_T &src, Field_T &tgt, 
-                   const size_t level, const FilterOp_T &filterOp, 
+                   const size_t level, const V3i &offset, 
+                   const FilterOp_T &filterOp, 
                    const size_t numThreads)
   {
     using std::ceil;
 
+    // Odd-numbered offsets need a pad of one in the negative directions
+    const V3i add((offset.x % 2 == 0) ? 0 : 1,
+                  (offset.y % 2 == 0) ? 0 : 1,
+                  (offset.z % 2 == 0) ? 0 : 1);
+
     // Compute new res
     const Box3i baseDw  = base.dataWindow();
     const V3i   baseRes = baseDw.size() + V3i(1);
-    const V3i   newRes  = mipResolution(baseRes, level);
+    const V3i   newRes  = mipResolution(baseRes, level, add);
 
     // Source res
     const Box3i srcDw  = src.dataWindow();
@@ -378,11 +442,11 @@ namespace detail {
     Field_T tmp;
 
     // X axis (src into tgt)
-    mipSeparable(src, tgt, srcRes, newRes, level, filterOp, 0, numThreads);
+    mipSeparable(src, tgt, srcRes, newRes, level, add, filterOp, 0, numThreads);
     // Y axis (tgt into temp)
-    mipSeparable(tgt, tmp, srcRes, newRes, level, filterOp, 1, numThreads);
+    mipSeparable(tgt, tmp, srcRes, newRes, level, add, filterOp, 1, numThreads);
     // Z axis (temp into tgt)
-    mipSeparable(tmp, tgt, srcRes, newRes, level, filterOp, 2, numThreads);
+    mipSeparable(tmp, tgt, srcRes, newRes, level, add, filterOp, 2, numThreads);
 
     // Update final target with mapping and metadata
     tgt.name      = base.name;
@@ -393,7 +457,7 @@ namespace detail {
 
   //--------------------------------------------------------------------------//
 
-  FieldMapping::Ptr adjustedMIPFieldMapping(const FieldMapping::Ptr baseMapping,
+  FieldMapping::Ptr adjustedMIPFieldMapping(const FieldRes *base,
                                             const V3i &baseRes,
                                             const Box3i &extents, 
                                             const size_t level);
@@ -410,6 +474,19 @@ template <typename MIPField_T, typename Filter_T>
 typename MIPField_T::Ptr
 makeMIP(const typename MIPField_T::NestedType &base, const int minSize,
         const size_t numThreads)
+{
+  // By default, there is no offset
+  const V3i zero(0);
+  // Call out to perform actual work
+  return makeMIP<MIPField_T, Filter_T>(base, minSize, zero, numThreads);
+}
+
+//----------------------------------------------------------------------------//
+
+template <typename MIPField_T, typename Filter_T>
+typename MIPField_T::Ptr
+makeMIP(const typename MIPField_T::NestedType &base, const int minSize,
+        const V3i &baseOffset, const size_t numThreads)
 {
   using namespace Field3D::detail;
 
@@ -428,7 +505,8 @@ makeMIP(const typename MIPField_T::NestedType &base, const int minSize,
   result.push_back(field_dynamic_cast<Src_T>(base.clone()));
 
   // Iteration variables
-  V3i res = base.extents().size() + V3i(1);
+  V3i res    = base.extents().size() + V3i(1);
+  V3i offset = baseOffset;
   
   // Loop until minimum size is found
   size_t level = 1;
@@ -436,20 +514,29 @@ makeMIP(const typename MIPField_T::NestedType &base, const int minSize,
          (res.x > 1 && res.y > 1 && res.z > 1)) {
     // Perform filtering
     SrcPtr nextField(new Src_T);
-    mipResample(base, *result.back(), *nextField, level, 
+    mipResample(base, *result.back(), *nextField, level, offset, 
                 Filter_T(), numThreads);
     // Add to vector of filtered fields
     result.push_back(nextField);
     // Set up for next iteration
     res = nextField->dataWindow().size() + V3i(1);
+    // ... offset needs to be rounded towards negative inf, not towards zero
+    for (int i = 0; i < 3; ++i) {
+      if (offset[i] < 0) {
+        offset[i] = (offset[i] - 1) / 2;
+      } else {
+        offset[i] /= 2;
+      }
+    }
     level++;
   }
 
   MIPPtr mipField(new MIPField_T);
-  mipField->setup(result);
   mipField->name = base.name;
   mipField->attribute = base.attribute;
   mipField->copyMetadata(base);
+  mipField->setMIPOffset(baseOffset);
+  mipField->setup(result);
 
   return mipField;
 }

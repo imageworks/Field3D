@@ -675,11 +675,24 @@ typedef SparseField<V3d>    SparseField3d;
 template <typename Data_T>
 Box3i blockCoords(const Box3i &dvsBounds, const SparseField<Data_T> *f)
 {
+  // Check empty bbox input
+  if (!continuousBounds(dvsBounds).hasVolume()) {
+    return Box3i();
+  }
+  // Discrete offset voxel space
+  Box3i dovsBounds = dvsBounds;
+  f->applyDataWindowOffset(dovsBounds.min.x, 
+                           dovsBounds.min.y, 
+                           dovsBounds.min.z);
+  f->applyDataWindowOffset(dovsBounds.max.x, 
+                           dovsBounds.max.y, 
+                           dovsBounds.max.z);
+  // Discrete block space bounds
   Box3i dbsBounds;
   if (f) {
-    f->getBlockCoord(dvsBounds.min.x, dvsBounds.min.y, dvsBounds.min.z,
+    f->getBlockCoord(dovsBounds.min.x, dovsBounds.min.y, dovsBounds.min.z,
                      dbsBounds.min.x, dbsBounds.min.y, dbsBounds.min.z);
-    f->getBlockCoord(dvsBounds.max.x, dvsBounds.max.y, dvsBounds.max.z,
+    f->getBlockCoord(dovsBounds.max.x, dovsBounds.max.y, dovsBounds.max.z,
                      dbsBounds.max.x, dbsBounds.max.y, dbsBounds.max.z);
   } 
   return dbsBounds;
@@ -1404,6 +1417,19 @@ void SparseField<Data_T>::setupReferenceBlocks()
   SparseFile::Reference<Data_T> *reference =
     m_fileManager->reference<Data_T>(m_fileId);
 
+#if F3D_NO_BLOCKS_ARRAY
+  std::vector<int>::iterator fb = reference->fileBlockIndices.begin();
+  reference->blocks = m_blocks;
+  int nextBlockIdx = 0;
+  for (size_t i = 0; i < m_numBlocks; ++i, ++fb) {
+    if (m_blocks[i].isAllocated) {
+      *fb = nextBlockIdx;
+      nextBlockIdx++;
+    } else {
+      *fb = -1;
+    }
+  }
+#else
   std::vector<int>::iterator fb = reference->fileBlockIndices.begin();
   typename SparseFile::Reference<Data_T>::BlockPtrs::iterator bp =
     reference->blocks.begin();
@@ -1417,6 +1443,7 @@ void SparseField<Data_T>::setupReferenceBlocks()
       *fb = -1;
     }
   }
+#endif
 }
 
 //----------------------------------------------------------------------------//

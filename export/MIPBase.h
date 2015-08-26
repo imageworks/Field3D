@@ -46,6 +46,7 @@
 #define _INCLUDED_Field3D_MIPBase_H_
 
 #include "Field.h"
+#include "MIPUtil.h"
 #include "RefCount.h"
 #include "Types.h"
 
@@ -172,6 +173,12 @@ public:
   //! Number of MIP levels
   size_t numLevels() const
   { return m_numLevels; }
+  //! Sets the base MIP offset. This is used to indicate where
+  //! voxel space coordinate (0, 0, 0) _really_ maps to.
+  void setMIPOffset(const V3i &offset);
+  //! Returns the base MIP offset
+  const V3i& mipOffset() const
+  { return m_mipOffset; }
 
 protected:
 
@@ -190,6 +197,11 @@ protected:
   //! The lowest MIP level to use. Defaults to 0, but can be set higher to
   //! prevent high resolution levels from being accessed.
   size_t m_lowestLevel;
+  //! Base coordinate offset. This is used to indicate where
+  //! voxel space coordinate (0, 0, 0) _really_ maps to.
+  //! \note This is stored on disk in metadata, and is updated by
+  //! the standard I/O routines.
+  V3i m_mipOffset;
 
 };
 
@@ -199,7 +211,7 @@ protected:
 
 template <typename Data_T>
 MIPBase<Data_T>::MIPBase()
-  : m_numLevels(1), m_lowestLevel(0)
+  : m_numLevels(1), m_lowestLevel(0), m_mipOffset(0)
 {
   
 }
@@ -210,6 +222,15 @@ template <typename Data_T>
 void MIPBase<Data_T>::setLowestLevel(size_t level)
 {
   m_lowestLevel = level;
+}
+
+//----------------------------------------------------------------------------//
+
+template <typename Data_T>
+void MIPBase<Data_T>::setMIPOffset(const V3i &offset)
+{ 
+  this->metadata().setVecIntMetadata(detail::k_mipOffsetStr, offset);
+  m_mipOffset = offset; 
 }
 
 //----------------------------------------------------------------------------//

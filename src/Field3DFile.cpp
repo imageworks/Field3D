@@ -54,6 +54,7 @@
 #include <boost/utility.hpp>
 
 #include "Field.h"
+#include "FieldCache.h"
 #include "Field3DFileHDF5.h"
 #include "ClassFactory.h"
 #include "OArchive.h"
@@ -596,7 +597,7 @@ void
 Field3DFileBase::getIntVectorLayerNames(vector<string> &names, 
                                         const string &intPartitionName) const
 {
-  //! \todo Make this really only return scalar layers
+  //! \todo Make this really only return vector layers
 
   names.clear();
 
@@ -1502,8 +1503,10 @@ typename Field<Data_T>::Ptr
 Field3DInputFile::readLayer(const std::string &intPartitionName,
                             const std::string &layerName) const
 {
+  typedef typename Field<Data_T>::Ptr FieldPtr;
+
   // Instantiate a null pointer for easier code reading
-  typename Field<Data_T>::Ptr nullPtr;
+  FieldPtr nullPtr;
 
   // Find the partition
   File::Partition::Ptr part = partition(intPartitionName);
@@ -1547,6 +1550,15 @@ Field3DInputFile::readLayer(const std::string &intPartitionName,
     return nullPtr;
   }
   
+  // Check the cache
+
+  FieldCache<Data_T> &cache       = FieldCache<Data_T>::singleton();
+  FieldPtr            cachedField = cache.getCachedField(m_filename, layerPath);
+
+  if (cachedField) {
+    return cachedField;
+  } 
+
   // Construct the field and load the data
 
   typename Field<Data_T>::Ptr field;
@@ -1564,9 +1576,14 @@ Field3DInputFile::readLayer(const std::string &intPartitionName,
   }
   
   // Set the name of the field appropriately
-  field->name = removeUniqueId(intPartitionName);
+  field->name      = removeUniqueId(intPartitionName);
   field->attribute = layerName;
   field->setMapping(part->mapping);
+
+  // Cache the field for future use
+  if (field) {
+    cache.cacheField(field, m_filename, layerPath);
+  }
 
   return field;
 }
@@ -1822,6 +1839,76 @@ Field3DInputFile::readProxyLayer(const std::string &partitionName,
 }
 
 //----------------------------------------------------------------------------//
+
+template <class Data_T>
+typename EmptyField<Data_T>::Vec
+Field3DInputFile::readProxyScalarLayers(const std::string &name) const
+{
+  using namespace std;
+
+  typedef typename EmptyField<Data_T>::Ptr FieldPtr;
+  typedef std::vector<FieldPtr> FieldList;
+  
+  FieldList ret;
+  
+  std::vector<std::string> parts;
+  getPartitionNames(parts);
+  
+  for (vector<string>::iterator p = parts.begin(); p != parts.end(); ++p) {
+  std::vector<std::string> layers;
+    getScalarLayerNames(layers, *p);
+    for (vector<string>::iterator l = layers.begin(); l != layers.end(); ++l) {
+      // Only read if it matches the name
+      if ((name.length() == 0) || (*l == name)) {
+        FieldList f = readProxyLayer<Data_T>(*p, *l, false);
+        for (typename FieldList::iterator i = f.begin(); i != f.end(); ++i) {
+          if (*i) {
+            ret.push_back(*i);
+          }
+        }
+      }
+    }
+  }
+  
+  return ret;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+typename EmptyField<Data_T>::Vec
+Field3DInputFile::readProxyVectorLayers(const std::string &name) const
+{
+  using namespace std;
+  
+  typedef typename EmptyField<Data_T>::Ptr FieldPtr;
+  typedef std::vector<FieldPtr> FieldList;
+  
+  FieldList ret;
+  
+  std::vector<std::string> parts;
+  getPartitionNames(parts);
+  
+  for (vector<string>::iterator p = parts.begin(); p != parts.end(); ++p) {
+  std::vector<std::string> layers;
+    getVectorLayerNames(layers, *p);
+    for (vector<string>::iterator l = layers.begin(); l != layers.end(); ++l) {
+      // Only read if it matches the name
+      if ((name.length() == 0) || (*l == name)) {
+        FieldList f = readProxyLayer<Data_T>(*p, *l, true);
+        for (typename FieldList::iterator i = f.begin(); i != f.end(); ++i) {
+          if (*i) {
+            ret.push_back(*i);
+          }
+        }
+      }
+    }
+  }
+  
+  return ret;  
+}
+
+//----------------------------------------------------------------------------//
 // Template instantiations
 //----------------------------------------------------------------------------//
 
@@ -1900,6 +1987,36 @@ FIELD3D_INSTANTIATION_READPROXYLAYER(float64_t);
 FIELD3D_INSTANTIATION_READPROXYLAYER(vec16_t);
 FIELD3D_INSTANTIATION_READPROXYLAYER(vec32_t);
 FIELD3D_INSTANTIATION_READPROXYLAYER(vec64_t);
+
+//----------------------------------------------------------------------------//
+
+#define FIELD3D_INSTANTIATION_READPROXYSCALARLAYER(type)                \
+  template                                                              \
+  EmptyField<type>::Vec                                                 \
+  Field3DInputFile::readProxyScalarLayers<type>                         \
+  (const std::string &name) const                                       \
+  
+FIELD3D_INSTANTIATION_READPROXYSCALARLAYER(float16_t);
+FIELD3D_INSTANTIATION_READPROXYSCALARLAYER(float32_t);
+FIELD3D_INSTANTIATION_READPROXYSCALARLAYER(float64_t);
+FIELD3D_INSTANTIATION_READPROXYSCALARLAYER(vec16_t);
+FIELD3D_INSTANTIATION_READPROXYSCALARLAYER(vec32_t);
+FIELD3D_INSTANTIATION_READPROXYSCALARLAYER(vec64_t);
+
+//----------------------------------------------------------------------------//
+
+#define FIELD3D_INSTANTIATION_READPROXYVECTORLAYER(type)                \
+  template                                                              \
+  EmptyField<type>::Vec                                                 \
+  Field3DInputFile::readProxyVectorLayers<type>                         \
+  (const std::string &name) const                                       \
+  
+FIELD3D_INSTANTIATION_READPROXYVECTORLAYER(float16_t);
+FIELD3D_INSTANTIATION_READPROXYVECTORLAYER(float32_t);
+FIELD3D_INSTANTIATION_READPROXYVECTORLAYER(float64_t);
+FIELD3D_INSTANTIATION_READPROXYVECTORLAYER(vec16_t);
+FIELD3D_INSTANTIATION_READPROXYVECTORLAYER(vec32_t);
+FIELD3D_INSTANTIATION_READPROXYVECTORLAYER(vec64_t);
 
 //----------------------------------------------------------------------------//
 

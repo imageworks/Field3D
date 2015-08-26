@@ -174,7 +174,88 @@ class FieldTraits
 {
 public:
   //! Dimensions of the given data type. i.e. 3 for V3f, 1 for float
-  static int dataDims();
+  static const int k_dataDims = 3;
+  static int dataDims() { return k_dataDims; }
+};
+
+template <>
+struct FieldTraits<half>
+{
+public:
+  static const int k_dataDims = 1;
+  static int dataDims() { return k_dataDims; }
+};
+
+template <>
+struct FieldTraits<float>
+{
+public:
+  static const int k_dataDims = 1;
+  static int dataDims() { return k_dataDims; }
+};
+
+template <>
+struct FieldTraits<double>
+{
+public:
+  static const int k_dataDims = 1;
+  static int dataDims() { return k_dataDims; }
+};
+
+template <>
+struct FieldTraits<int>
+{
+public:
+  static const int k_dataDims = 1;
+  static int dataDims() { return k_dataDims; }
+};
+
+template <>
+struct FieldTraits<char>
+{
+public:
+  static const int k_dataDims = 1;
+  static int dataDims() { return k_dataDims; }
+};
+
+template <>
+struct FieldTraits<unsigned char>
+{
+public:
+  static const int k_dataDims = 1;
+  static int dataDims() { return k_dataDims; }
+};
+
+template <>
+struct FieldTraits<V3h>
+{
+public:
+  static const int k_dataDims = 3;
+  static int dataDims() { return k_dataDims; }
+};
+
+template <>
+struct FieldTraits<V3f>
+{
+public:
+  static const int k_dataDims = 3;
+  static int dataDims() { return k_dataDims; }
+};
+
+template <>
+struct FieldTraits<V3d>
+{
+public:
+  static const int k_dataDims = 3;
+  static int dataDims() { return k_dataDims; }
+};
+
+template <>
+struct FieldTraits<C3f>
+{
+public:
+  static const int k_dataDims = 3;
+  static int dataDims() { return k_dataDims; }
 };
 
 //----------------------------------------------------------------------------//

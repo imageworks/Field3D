@@ -1122,15 +1122,21 @@ inline Box3d continuousBounds(const Box3i &bbox)
 
 //----------------------------------------------------------------------------//
 
+//! Converts a floating point bounding box to an integer bounding box.
+//! \note If the float-to-int conversion overflows, the result is
+//! set to be std::numeric_limits<int>::max()
 inline Box3i discreteBounds(const Box3d &bbox)
 {
+  using std::floor;
+  using std::ceil;
+
   Box3i result;
-  result.min.x = static_cast<int>(std::floor(bbox.min.x));
-  result.min.y = static_cast<int>(std::floor(bbox.min.y));
-  result.min.z = static_cast<int>(std::floor(bbox.min.z));
-  result.max.x = static_cast<int>(std::ceil(bbox.max.x));
-  result.max.y = static_cast<int>(std::ceil(bbox.max.y));
-  result.max.z = static_cast<int>(std::ceil(bbox.max.z));
+  result.min.x = static_cast<int>(floor(clampForType<double, int>(bbox.min.x)));
+  result.min.y = static_cast<int>(floor(clampForType<double, int>(bbox.min.y)));
+  result.min.z = static_cast<int>(floor(clampForType<double, int>(bbox.min.z)));
+  result.max.x = static_cast<int>(ceil(clampForType<double, int>(bbox.max.x)));
+  result.max.y = static_cast<int>(ceil(clampForType<double, int>(bbox.max.y)));
+  result.max.z = static_cast<int>(ceil(clampForType<double, int>(bbox.max.z)));
   return result;
 }
 

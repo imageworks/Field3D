@@ -177,15 +177,9 @@ void SparseDataReader<Data_T>::readBlock(int idx, Data_T &result)
                                  boost::lexical_cast<std::string>(idx));
   }
 
-  const size_t preMem = currentRSS();
-
   status = H5Dread(dataSet.id(), DataTypeTraits<Data_T>::h5type(), 
                    memDataSpace.id(), fileDataSpace.id(), 
                    H5P_DEFAULT, &result);
-
-  const size_t postMem = currentRSS();
-
-  g_h5readMemLeakCount += postMem - preMem;
 }
 
 //----------------------------------------------------------------------------//
@@ -278,17 +272,11 @@ void SparseDataReader<Data_T>::readBlockList
   int dim = sizeof(Data_T) / bytesPerValue;
   std::vector<Data_T> bigblock(memoryList.size() * m_valuesPerBlock/dim);
 
-  const size_t preMem = currentRSS();
-
   status = H5Dread(dataSet.id(), 
                    DataTypeTraits<Data_T>::h5type(), 
                    localMemDataSpace.id(),
                    fileDataSpace.id(), 
                    H5P_DEFAULT, &bigblock[0]);
-
-  const size_t postMem = currentRSS();
-
-  g_h5readMemLeakCount += postMem - preMem;
 
   if (status < 0) {
     throw Hdf5DataReadException("Couldn't read slab " + 

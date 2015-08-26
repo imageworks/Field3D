@@ -282,6 +282,15 @@ public:
     if (!field) {
       throw Exc::MIPFieldIOException("Failed to read MIP level from disk.");
     }
+    {
+      // Hold lock again
+      GlobalLock lock(g_hdf5Mutex);
+      // Close the file
+      if (H5Fclose(file) < 0) {
+        Msg::print("Error closing file: " + m_filename);
+      } 
+    }
+    // Done
     return field_dynamic_cast<Field_T>(field);
   }
 

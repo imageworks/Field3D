@@ -44,11 +44,9 @@
 #include <boost/program_options.hpp>
 #include <boost/foreach.hpp>
 
-#include <Field3D/DenseField.h>
-#include <Field3D/MACField.h>
-#include <Field3D/SparseField.h>
-#include <Field3D/InitIO.h>
 #include <Field3D/Field3DFile.h>
+#include <Field3D/InitIO.h>
+#include <Field3D/PatternMatch.h>
 
 //----------------------------------------------------------------------------//
 
@@ -60,9 +58,15 @@ using namespace Field3D;
 //----------------------------------------------------------------------------//
 
 struct Options {
+  Options() 
+    : numThreads(1), doOgawa(true)
+  { }
   vector<string> inputFiles;
+  string         outputFile;
   vector<string> names;
   vector<string> attributes;
+  size_t         numThreads;
+  bool           doOgawa;
 };
 
 //----------------------------------------------------------------------------//
@@ -73,21 +77,8 @@ struct Options {
 Options parseOptions(int argc, char **argv);
 
 //! Prints information about all fields in file.
-void printFileInfo(const std::string &filename, const Options &options);
-
-//! Prints the information about a single field
-template <typename Data_T>
-void printFieldInfo(typename Field<Data_T>::Ptr field, const Options &options);
-
-//! Prints a std::map. Used for metadata. Called from printFieldInfo.
-template <typename T>
-void printMap(const map<string, T> m, const string &indent);
-
-//! Prints information about a mapping. Called from printFieldInfo.
-void printMapping(FieldMapping::Ptr mapping);
-
-//! Pattern matching used for field names and attributes
-bool matchString(const std::string &str, const vector<string> &patterns);
+void writeOutput(const std::string &filename, const Options &options,
+                 Field3DOutputFile &out);
 
 //----------------------------------------------------------------------------//
 // Function implementations
@@ -99,8 +90,33 @@ int main(int argc, char **argv)
 
   Options options = parseOptions(argc, argv);
 
+  // Set num threads ---
+
+  Field3D::setNumIOThreads(options.numThreads);
+  
+  // Set HDF5/Ogawa ---
+
+  Field3DOutputFile::useOgawa(options.doOgawa);
+
+  if (options.doOgawa) {
+    cout << "Converting to Ogawa." << endl;
+  } else {
+    cout << "Converting to HDF5." << endl;
+  }
+
+  // Open output file ---
+
+  Field3DOutputFile out;
+  if (!out.create(options.outputFile)) {
+    cout << "ERROR: Couldn't create output file: " 
+         << options.outputFile << endl;
+    return 1;
+  }
+
+  // Write inputs to output ---
+
   BOOST_FOREACH (const string &file, options.inputFiles) {
-    printFileInfo(file, options);
+    writeOutput(file, options, out);
   }
 }
 
@@ -116,9 +132,12 @@ Options parseOptions(int argc, char **argv)
 
   desc.add_options()
     ("help,h", "Display help")
-    ("input-file", po::value<vector<string> >(), "Input files")
+    ("input-file,i", po::value<vector<string> >(), "Input files")
     ("name,n", po::value<vector<string> >(), "Load field(s) by name")
     ("attribute,a", po::value<vector<string> >(), "Load field(s) by attribute")
+    ("ogawa,m", po::value<bool>(), "Whether to output an Ogawa file.")
+    ("num-threads,t", po::value<size_t>(), "Number of threads to use")
+    ("output-file,o", po::value<string>(), "Output file")
     ;
   
   po::variables_map vm;
@@ -149,17 +168,23 @@ Options parseOptions(int argc, char **argv)
     exit(0);
   }
 
-  if (vm.count("input-file"))
-  {
+  if (vm.count("input-file")) {
     options.inputFiles = vm["input-file"].as<std::vector<std::string> >();
   }
-  if (vm.count("name"))
-  {
+  if (vm.count("ogawa")) {
+    options.doOgawa = vm["ogawa"].as<bool>();
+  }
+  if (vm.count("num-threads")) {
+    options.numThreads = vm["num-threads"].as<size_t>();
+  }
+  if (vm.count("name")) {
     options.names = vm["name"].as<std::vector<std::string> >();
   }
-  if (vm.count("attribute"))
-  {
+  if (vm.count("attribute")) {
     options.attributes = vm["attribute"].as<std::vector<std::string> >();
+  }
+  if (vm.count("output-file")) {
+    options.outputFile = vm["output-file"].as<std::string>();
   }
 
   return options;
@@ -168,97 +193,24 @@ Options parseOptions(int argc, char **argv)
 //----------------------------------------------------------------------------//
 
 template <typename T>
-void printMap(const map<string, T> m, const string &indent)
+void writeField(const typename Field<Imath::Vec3<T> >::Ptr f, 
+                Field3DOutputFile &out)
 {
-  typedef pair<string, T> KeyValuePair;
-
-  if (m.size() == 0) {
-    cout << indent << "None" <<  endl;
-  }
-
-  BOOST_FOREACH(const KeyValuePair &i, m) {
-    cout << indent << i.first << " : " << i.second << endl;
-  }
-}
-
-//----------------------------------------------------------------------------//
-
-void printMapping(FieldMapping::Ptr mapping)
-{
-  cout << "    Mapping:" << endl;
-  cout << "      Type: " << mapping->className() << endl;
-
-  // In the case of a MatrixFieldMapping, we print the local to world matrix.
-
-  MatrixFieldMapping::Ptr matrixMapping = 
-    boost::dynamic_pointer_cast<MatrixFieldMapping>(mapping);
-
-  if (matrixMapping) {
-    M44d m = matrixMapping->localToWorld();
-    cout << "      Local to world transform:" << endl;
-    for (int j = 0; j < 4; ++j) {
-      cout << "        ";
-      for (int i = 0; i < 4; ++i) {
-        cout << m[i][j] << " ";
-      }
-      cout << endl;
-    }
-  }
+  out.writeVectorLayer<T>(f);
 }
 
 //----------------------------------------------------------------------------//
 
 template <typename Data_T>
-void printFieldInfo(typename Field<Data_T>::Ptr field, const Options &options)
+void writeField(const typename Field<Data_T>::Ptr &f, Field3DOutputFile &out)
 {
-  Box3i dataWindow = field->dataWindow();
-  Box3i extents = field->extents();
-
-  cout << "  Field: " << endl
-       << "    Name:        " << field->name << endl
-       << "    Attribute:   " << field->attribute << endl
-       << "    Field type:  " << field->className() << endl
-       << "    Data type:   " << field->dataTypeString() << endl
-       << "    Extents:     " << extents.min << " " << extents.max << endl
-       << "    Data window: " << dataWindow.min << " " << dataWindow.max << endl;
-
-  printMapping(field->mapping());
-
-  cout << "    Int metadata:" << endl;
-  printMap(field->metadata().intMetadata(), "      ");
-  cout << "    Float metadata:" << endl;
-  printMap(field->metadata().floatMetadata(), "      ");
-  cout << "    V3i metadata:" << endl;
-  printMap(field->metadata().vecIntMetadata(), "      ");
-  cout << "    V3f metadata:" << endl;
-  printMap(field->metadata().vecFloatMetadata(), "      ");
-  cout << "    String metadata:" << endl;
-  printMap(field->metadata().strMetadata(), "      ");
+  out.writeScalarLayer<Data_T>(f);
 }
 
 //----------------------------------------------------------------------------//
 
-bool matchString(const std::string &str, const vector<string> &patterns)
-{
-  // If patterns is empty all strings match
-  if (patterns.size() == 0) {
-    return true;
-  }
-  // Check all patterns
-  BOOST_FOREACH (const string &pattern, patterns) {
-    boost::regex  re(pattern, boost::regex::normal | boost::regex::no_except);
-
-    if (boost::regex_match(str, re)) {
-      return true;
-    }
-  }
-  // If no pattern matched return false
-  return false;
-}
-
-//----------------------------------------------------------------------------//
-
-void printFileInfo(const std::string &filename, const Options &options)
+void writeOutput(const std::string &filename, const Options &options,
+                 Field3DOutputFile &out)
 {
   typedef Field3D::half half;
 
@@ -269,16 +221,14 @@ void printFileInfo(const std::string &filename, const Options &options)
     exit(1);
   }
 
-  cout << "Field3D file: " << filename << endl
-       << "  Encoding: " << endl
-       << "    " << in.encoding() << endl;
+  cout << "Opening file: " << endl << "  " << filename << endl;
 
   vector<string> partitions;
   in.getPartitionNames(partitions);
 
   BOOST_FOREACH (const string &partition, partitions) {
 
-    if (!matchString(partition, options.names)) {
+    if (!match(partition, options.names)) {
       continue;
     }
 
@@ -288,69 +238,56 @@ void printFileInfo(const std::string &filename, const Options &options)
 
     BOOST_FOREACH (const string &scalarLayer, scalarLayers) {
 
-      if (!matchString(scalarLayer, options.attributes)) {
+      if (!match(scalarLayer, options.attributes)) {
         continue;
       }  
 
       Field<half>::Vec hScalarFields = 
         in.readScalarLayers<half>(partition, scalarLayer);
       BOOST_FOREACH (Field<half>::Ptr field, hScalarFields) {
-        printFieldInfo<half>(field, options);
+        writeField<half>(field, out);
       }
 
       Field<float>::Vec fScalarFields = 
         in.readScalarLayers<float>(partition, scalarLayer);
       BOOST_FOREACH (Field<float>::Ptr field, fScalarFields) {
-        printFieldInfo<float>(field, options);
+        writeField<float>(field, out);
       }
 
       Field<double>::Vec dScalarFields = 
         in.readScalarLayers<double>(partition, scalarLayer);
       BOOST_FOREACH (Field<double>::Ptr field, dScalarFields) {
-        printFieldInfo<double>(field, options);
+        writeField<double>(field, out);
       }
 
     }
 
     BOOST_FOREACH (const string &vectorLayer, vectorLayers) {
       
-      if (!matchString(vectorLayer, options.attributes)) {
+      if (!match(vectorLayer, options.attributes)) {
         continue;
       }  
 
       Field<V3h>::Vec hVectorFields = 
         in.readVectorLayers<half>(partition, vectorLayer);
       BOOST_FOREACH (Field<V3h>::Ptr field, hVectorFields) {
-        printFieldInfo<V3h>(field, options);
+        writeField<V3h>(field, out);
       }
 
       Field<V3f>::Vec fVectorFields = 
         in.readVectorLayers<float>(partition, vectorLayer);
       BOOST_FOREACH (Field<V3f>::Ptr field, fVectorFields) {
-        printFieldInfo<V3f>(field, options);
+        writeField<V3f>(field, out);
       }
 
       Field<V3d>::Vec dVectorFields = 
         in.readVectorLayers<double>(partition, vectorLayer);
       BOOST_FOREACH (Field<V3d>::Ptr field, dVectorFields) {
-        printFieldInfo<V3d>(field, options);
+        writeField<V3d>(field, out);
       }
 
     }
   }
-  
-  cout << "  Global metadata" << endl;
-
-  cout << "    Int metadata:" << endl;
-  printMap(in.metadata().intMetadata(), "      ");
-  cout << "    Float metadata:" << endl;
-  printMap(in.metadata().floatMetadata(), "      ");
-  cout << "    V3i metadata:" << endl;
-  printMap(in.metadata().vecIntMetadata(), "      ");
-  cout << "    V3f metadata:" << endl;
-  printMap(in.metadata().vecFloatMetadata(), "      ");
-  cout << "    String metadata:" << endl;
-  printMap(in.metadata().strMetadata(), "      ");
 
 }
 

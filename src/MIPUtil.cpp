@@ -63,27 +63,45 @@ namespace detail {
 
   //--------------------------------------------------------------------------//
 
-  V3i mipResolution(const V3i &baseRes, const size_t level)
+  const std::string k_mipOffsetStr = "mipoffset";
+
+  //--------------------------------------------------------------------------//
+
+  V3i mipResolution(const V3i &baseRes, const size_t level, const V3i &add)
   {
     const float factor = 1.0 / (1 << level);
     const V3f   floatRes(baseRes);
-    return V3i(static_cast<int>(std::ceil(floatRes.x * factor)),
-               static_cast<int>(std::ceil(floatRes.y * factor)),
-               static_cast<int>(std::ceil(floatRes.z * factor)));
+    return V3i(static_cast<int>(std::ceil(floatRes.x * factor)) + add.x,
+               static_cast<int>(std::ceil(floatRes.y * factor)) + add.y,
+               static_cast<int>(std::ceil(floatRes.z * factor)) + add.z);
   }
 
   //--------------------------------------------------------------------------//
 
-  FieldMapping::Ptr adjustedMIPFieldMapping(const FieldMapping::Ptr mapping, 
+  //! \todo Update to use MIPField's mipOffset() instead of metadata
+  FieldMapping::Ptr adjustedMIPFieldMapping(const FieldRes *base, 
                                             const V3i &/*baseRes*/,
                                             const Box3i &extents, 
                                             const size_t level)
   {
     typedef MatrixFieldMapping::MatrixCurve MatrixCurve;
 
-    const float mult = 1 << level;
-    const V3i   res  = extents.size() + V3i(1);
+    FieldMapping::Ptr mapping = base->mapping();
+
+    const V3i   zero   = V3i(0);
+    const V3i   mipOff = base->metadata().vecIntMetadata(k_mipOffsetStr, zero);
+    const float mult   = 1 << level;
+    const V3i   res    = extents.size() + V3i(1);
       
+    // Compute offset of current level 
+    const V3i offset((mipOff.x >> level) << level, 
+                     (mipOff.y >> level) << level, 
+                     (mipOff.z >> level) << level);
+
+    // Difference between current offset and base offset is num voxels
+    // to offset current level by 
+    const V3d diff = offset - mipOff;
+
     if (MatrixFieldMapping::Ptr mfm = 
         field_dynamic_cast<MatrixFieldMapping>(mapping)) {
       // Local space positions
@@ -109,6 +127,10 @@ namespace detail {
         wsX = (wsX - wsOrigin).normalized();
         wsY = (wsY - wsOrigin).normalized();
         wsZ = (wsZ - wsOrigin).normalized();
+        // Origin shift due to mip offset
+        wsOrigin += wsX * wsBaseVoxelSize.x * diff.x;
+        wsOrigin += wsY * wsBaseVoxelSize.y * diff.y;
+        wsOrigin += wsZ * wsBaseVoxelSize.z * diff.z;
         // Mult by voxel size
         wsX *= wsVoxelSize.x * res.x;
         wsY *= wsVoxelSize.y * res.y;
@@ -129,6 +151,21 @@ namespace detail {
   //--------------------------------------------------------------------------//
 
 } // namespace detail
+
+//----------------------------------------------------------------------------//
+
+V3i computeOffset(const FieldRes &f)
+{
+  V3d wsOrigin(0.0), vsOrigin;
+
+  f.mapping()->worldToVoxel(wsOrigin, vsOrigin);
+
+  V3i offset(-static_cast<int>(std::floor(vsOrigin.x + 0.5)),
+             -static_cast<int>(std::floor(vsOrigin.y + 0.5)),
+             -static_cast<int>(std::floor(vsOrigin.z + 0.5)));
+
+  return offset;
+}
 
 //----------------------------------------------------------------------------//
 

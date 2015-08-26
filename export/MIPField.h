@@ -295,7 +295,11 @@ protected:
 template <typename Data_T>
 class MIPSparseField : public MIPField<SparseField<Data_T> >
 {
-  
+public:
+    virtual FieldBase::Ptr clone() const
+  { 
+    return FieldBase::Ptr(new MIPSparseField(*this));
+  }
 };
 
 //----------------------------------------------------------------------------//
@@ -303,7 +307,11 @@ class MIPSparseField : public MIPField<SparseField<Data_T> >
 template <typename Data_T>
 class MIPDenseField : public MIPField<DenseField<Data_T> >
 {
-  
+  public:
+    virtual FieldBase::Ptr clone() const
+  { 
+    return FieldBase::Ptr(new MIPDenseField(*this));
+  }
 };
 
 //----------------------------------------------------------------------------//
@@ -535,6 +543,11 @@ long long int MIPField<Field_T>::memSize() const
 template <class Field_T>
 void MIPField<Field_T>::mappingChanged() 
 { 
+  // Update MIP offset
+  const V3i offset = 
+    base::metadata().vecIntMetadata(detail::k_mipOffsetStr, V3i(0));
+  base::setMIPOffset(offset);
+
   V3i baseRes = base::dataWindow().size() + V3i(1);
   if (m_fields[0]) {
     m_fields[0]->setMapping(base::mapping());
@@ -542,7 +555,7 @@ void MIPField<Field_T>::mappingChanged()
   for (size_t i = 1; i < m_fields.size(); i++) {
     if (m_fields[i]) {
       FieldMapping::Ptr mapping = 
-        detail::adjustedMIPFieldMapping(base::mapping(), baseRes, 
+        detail::adjustedMIPFieldMapping(this, baseRes,
                                         m_fields[i]->extents(), i);
       m_fields[i]->setMapping(mapping);
     }
@@ -582,7 +595,19 @@ template <typename Field_T>
 void MIPField<Field_T>::getVsMIPCoord(const V3f &vsP, const size_t level, 
                                       V3f &outVsP) const
 {
-  outVsP = vsP * m_relativeResolution[level];
+  const V3i &mipOff = base::mipOffset();
+
+  // Compute offset of current level 
+  const V3i offset((mipOff.x >> level) << level, 
+                   (mipOff.y >> level) << level, 
+                   (mipOff.z >> level) << level);
+
+  // Difference between current offset and base offset is num voxels
+  // to offset current level by 
+  const V3f diff = offset - mipOff;
+
+  // Incorporate shift due to mip offset
+  outVsP = (vsP - diff) * pow(2.0, -static_cast<float>(level));
 }
 
 //----------------------------------------------------------------------------//
@@ -658,7 +683,7 @@ void MIPField<Field_T>::loadLevelFromDisk(size_t level) const
       // Update the mapping of the loaded field
       V3i baseRes = base::dataWindow().size() + V3i(1);
       FieldMapping::Ptr mapping = 
-        detail::adjustedMIPFieldMapping(base::mapping(), baseRes, 
+        detail::adjustedMIPFieldMapping(this, baseRes, 
                                         m_fields[level]->extents(), level);
       m_fields[level]->setMapping(mapping);
     }

@@ -196,6 +196,30 @@ void worldToVoxel(const Field3D::FieldMapping* mapping,
 }
 
 //----------------------------------------------------------------------------//
+
+void transformBounds(const M44d &mtx, 
+                     const Box3d &fromBounds,
+                     Box3d &toBounds)
+{
+  V3d verts[] = {
+    V3d(fromBounds.min.x, fromBounds.min.y, fromBounds.min.z),
+    V3d(fromBounds.max.x, fromBounds.min.y, fromBounds.min.z),
+    V3d(fromBounds.min.x, fromBounds.max.y, fromBounds.min.z),
+    V3d(fromBounds.max.x, fromBounds.max.y, fromBounds.min.z),
+    V3d(fromBounds.min.x, fromBounds.min.y, fromBounds.max.z),
+    V3d(fromBounds.max.x, fromBounds.min.y, fromBounds.max.z),
+    V3d(fromBounds.min.x, fromBounds.max.y, fromBounds.max.z),
+    V3d(fromBounds.max.x, fromBounds.max.y, fromBounds.max.z)
+  };
+  toBounds.makeEmpty();
+  V3d toP;
+  for (int i = 0; i < 8; i++) {
+    mtx.multVecMatrix(verts[i], toP);
+    toBounds.extendBy(toP);
+  }
+}
+
+//----------------------------------------------------------------------------//
 // NullFieldMapping
 //----------------------------------------------------------------------------//
 
@@ -461,7 +485,7 @@ void FrustumFieldMapping::setTransforms(float t,
   double far = -csFarP.z;
 
   // Catch NaN here
-  if (isnan(near) || isnan(far)) {
+  if (std::isnan(near) || std::isnan(far)) {
     throw BadPerspectiveMatrix("FrustumFieldMapping::setTransforms "
                                "received bad screen-to-world matrix");
   }

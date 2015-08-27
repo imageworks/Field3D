@@ -20,14 +20,14 @@
 #include <boost/fusion/include/as_vector.hpp>
 
 // Field3D includes
-#include <lava/field3d15/DenseField.h>
-#include <lava/field3d15/Field3DFile.h>
-#include <lava/field3d15/FieldInterp.h>
-#include <lava/field3d15/InitIO.h>
-#include <lava/field3d15/MIPField.h>
-#include <lava/field3d15/MIPUtil.h>
-#include <lava/field3d15/SparseField.h>
-#include <lava/field3d15/MinMaxUtil.h>
+#include "DenseField.h"
+#include "Field3DFile.h"
+#include "FieldInterp.h"
+#include "InitIO.h"
+#include "MIPField.h"
+#include "MIPUtil.h"
+#include "SparseField.h"
+#include "MinMaxUtil.h"
 
 // Project includes
 #include "FieldWrapper.h"

@@ -513,7 +513,7 @@ makeMIP(const typename MIPField_T::NestedType &base, const int minSize,
   // Loop until minimum size is found
   size_t level = 1;
   while ((res.x > minSize || res.y > minSize || res.z > minSize) &&
-         (res.x > 1 && res.y > 1 && res.z > 1)) {
+         (res.x > 2 && res.y > 2 && res.z > 2)) {
     // Perform filtering
     SrcPtr nextField(new Src_T);
     mipResample(base, *result.back(), *nextField, level, offset, 

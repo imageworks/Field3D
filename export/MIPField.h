@@ -280,6 +280,8 @@ protected:
   void updateMapping(FieldRes::Ptr field);
   //! Updates the dependent data members based on m_field
   void updateAuxMembers() const;
+  //! Updates the name, attribute and metadata for a given level
+  void syncLevelInfo(const size_t level) const;
   //! Loads the given level from disk
   void loadLevelFromDisk(size_t level) const;
   //! Sanity checks to ensure that the provided Fields are a MIP representation
@@ -483,6 +485,7 @@ MIPField<Field_T>::rawMipLevel(size_t level) const
   if (!m_rawFields[level]) {
     loadLevelFromDisk(level);
   } 
+  // Return 
   return m_rawFields[level];
 }
 
@@ -497,6 +500,7 @@ MIPField<Field_T>::concreteMipLevel(size_t level) const
   if (!m_rawFields[level]) {
     loadLevelFromDisk(level);
   } 
+  // Return 
   return m_fields[level];
 }
 
@@ -621,6 +625,7 @@ MIPField<Field_T>::mipLevel(const size_t level) const
   if (!m_rawFields[level]) {
     loadLevelFromDisk(level);
   } 
+  // Return 
   return m_fields[level];
 }
 
@@ -653,6 +658,20 @@ void MIPField<Field_T>::updateAuxMembers() const
 //----------------------------------------------------------------------------//
 
 template <class Field_T>
+void MIPField<Field_T>::syncLevelInfo(const size_t level) const
+{
+  // At this point, m_fields[level] is guaranteed in memory
+  
+  // First sync name, attribute
+  m_fields[level]->name      = base::name;
+  m_fields[level]->attribute = base::attribute;
+  // Copy metadata
+  m_fields[level]->copyMetadata(*this);
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Field_T>
 void MIPField<Field_T>::updateMapping(FieldRes::Ptr field)
 {
   base::m_extents = field->extents();
@@ -680,6 +699,8 @@ void MIPField<Field_T>::loadLevelFromDisk(size_t level) const
       m_loadActions[level].reset();
       // Update aux data
       updateAuxMembers();
+      // Ensure metadata is up to date
+      syncLevelInfo(level);
       // Update the mapping of the loaded field
       V3i baseRes = base::dataWindow().size() + V3i(1);
       FieldMapping::Ptr mapping = 

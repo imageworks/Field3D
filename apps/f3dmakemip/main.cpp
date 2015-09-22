@@ -49,6 +49,7 @@
 #include <Field3D/InitIO.h>
 #include <Field3D/MIPField.h>
 #include <Field3D/MIPUtil.h>
+#include <Field3D/MinMaxUtil.h>
 #include <Field3D/PatternMatch.h>
 #include <Field3D/SparseField.h>
 
@@ -63,7 +64,8 @@ using namespace Field3D;
 
 struct Options {
   Options() 
-    : minRes(32), numThreads(8)
+    : minRes(4), numThreads(8), doMinMax(false), minMaxResMult(0.5), 
+      doOgawa(true)
   { }
   vector<string> inputFiles;
   string         outputFile;
@@ -71,6 +73,9 @@ struct Options {
   vector<string> attributes;
   int            minRes;
   size_t         numThreads;
+  bool           doMinMax;
+  float          minMaxResMult;
+  bool           doOgawa;
 };
 
 //----------------------------------------------------------------------------//
@@ -93,6 +98,22 @@ int main(int argc, char **argv)
   Field3D::initIO();
 
   Options options = parseOptions(argc, argv);
+
+  // Set num threads ---
+
+  Field3D::setNumIOThreads(options.numThreads);
+  
+  // Set HDF5/Ogawa ---
+
+  Field3DOutputFile::useOgawa(options.doOgawa);
+
+  if (options.doOgawa) {
+    cout << "Writing Ogawa." << endl;
+  } else {
+    cout << "Writing HDF5." << endl;
+  }
+
+  // Open output file ---
 
   Field3DOutputFile out;
   if (!out.create(options.outputFile)) {
@@ -117,13 +138,26 @@ Options parseOptions(int argc, char **argv)
   po::options_description desc("Available options");
 
   desc.add_options()
-    ("help,h", "Display help")
-    ("input-file,i", po::value<vector<string> >(), "Input files")
-    ("name,n", po::value<vector<string> >(), "Load field(s) by name")
-    ("attribute,a", po::value<vector<string> >(), "Load field(s) by attribute")
-    ("min-res,m", po::value<int>(), "Smallest MIP level to produce.")
-    ("num-threads,t", po::value<size_t>(), "Number of threads to use")
-    ("output-file,o", po::value<string>(), "Output file")
+    ("help,h", 
+     "Display help")
+    ("input-file,i", po::value<vector<string> >(), 
+     "Input files")
+    ("name,n", po::value<vector<string> >(), 
+     "Load field(s) by name")
+    ("attribute,a", po::value<vector<string> >(), 
+     "Load field(s) by attribute")
+    ("min-res,m", po::value<int>(), 
+     "Smallest MIP level to produce.")
+    ("min-max,x", po::value<bool>(), 
+     "Whether to generate min/max attributes.")
+    ("min-max-res,r", po::value<float>(), 
+     "Resolution multiplier on min/max attributes.")
+    ("num-threads,t", po::value<size_t>(), 
+     "Number of threads to use")
+    ("output-file,o", po::value<string>(), 
+     "Output file")
+    ("ogawa,g", po::value<bool>(), 
+     "Whether to output an Ogawa file.")
     ;
   
   po::variables_map vm;
@@ -172,6 +206,15 @@ Options parseOptions(int argc, char **argv)
   if (vm.count("output-file")) {
     options.outputFile = vm["output-file"].as<std::string>();
   }
+  if (vm.count("min-max")) {
+    options.doMinMax = vm["min-max"].as<bool>();
+  }
+  if (vm.count("min-max-res")) {
+    options.minMaxResMult = vm["min-max-res"].as<float>();
+  }
+  if (vm.count("ogawa")) {
+    options.doOgawa = vm["ogawa"].as<bool>();
+  }
 
   return options;
 }
@@ -182,7 +225,7 @@ template <typename T>
 void writeField(const typename Field<Imath::Vec3<T> >::Ptr f, 
                 Field3DOutputFile &out)
 {
-  cout << "  Writing MIP to disk." << endl;
+  cout << "  Writing \"" << f->attribute << "\"" << endl;
   out.writeVectorLayer<T>(f);
 }
 
@@ -191,7 +234,7 @@ void writeField(const typename Field<Imath::Vec3<T> >::Ptr f,
 template <typename Data_T>
 void writeField(const typename Field<Data_T>::Ptr &f, Field3DOutputFile &out)
 {
-  cout << "  Writing MIP to disk." << endl;
+  cout << "  Writing \"" << f->attribute << "\"" << endl;
   out.writeScalarLayer<Data_T>(f);
 }
 
@@ -201,29 +244,97 @@ template <typename Data_T>
 void makeMIP(typename Field<Data_T>::Ptr field, const Options &options,
              Field3DOutputFile &out)
 {
-  typedef DenseField<Data_T>  DenseType;
-  typedef SparseField<Data_T> SparseType;
+  typedef DenseField<Data_T>     DenseType;
+  typedef SparseField<Data_T>    SparseType;
+  typedef MIPDenseField<Data_T>  MIPDenseType;
+  typedef MIPSparseField<Data_T> MIPSparseType;
 
-  cout << "  Filtering " << field->name << ":" << field->attribute 
-       << " (" << field->classType() << ")" << endl;
+  cout << "  Filtering \"" << field->name << ":" << field->attribute 
+       << "\" (" << field->classType() << ")" << endl;
 
   // Handle dense fields
   if (DenseType *dense = dynamic_cast<DenseType*>(field.get())) {
-    typename MIPDenseField<Data_T>::Ptr mip = 
-      makeMIP<MIPDenseField<Data_T> >(*dense, options.minRes, 
-                                      options.numThreads);
+    // MIP
+    typename MIPDenseType::Ptr mip = 
+      makeMIP<MIPDenseType, TriangleFilter>
+      (*dense, options.minRes, options.numThreads);
     writeField<Data_T>(mip, out);
+    // Min/Max
+    if (options.doMinMax) {
+      std::pair<typename MIPDenseType::Ptr, typename MIPDenseType::Ptr> p =
+        makeMinMax<MIPDenseType>(*dense, 
+                                  options.minMaxResMult, 
+                                  options.numThreads);
+      p.first->attribute += k_minSuffix;
+      p.second->attribute += k_maxSuffix;
+      writeField<Data_T>(p.first, out);
+      writeField<Data_T>(p.second, out);
+    }
     return;
   }
 
   // Handle sparse fields
   if (SparseType *sparse = dynamic_cast<SparseType*>(field.get())) {
-    typename MIPSparseField<Data_T>::Ptr mip = 
-      makeMIP<MIPSparseField<Data_T> >(*sparse, options.minRes, 
-                                       options.numThreads);
+    // MIP
+    typename MIPSparseType::Ptr mip = 
+      makeMIP<MIPSparseType, TriangleFilter>
+      (*sparse, options.minRes, options.numThreads);
     writeField<Data_T>(mip, out);
+    // Min/Max
+    if (options.doMinMax) {
+      std::pair<typename MIPSparseType::Ptr, typename MIPSparseType::Ptr> p =
+        makeMinMax<MIPSparseType>(*sparse, 
+                                  options.minMaxResMult, 
+                                  options.numThreads);
+      p.first->attribute += k_minSuffix;
+      p.second->attribute += k_maxSuffix;
+      writeField<Data_T>(p.first, out);
+      writeField<Data_T>(p.second, out);
+    }
     return;
   }
+
+  // Handle MIP dense fields
+  if (MIPDenseType *dense = dynamic_cast<MIPDenseType*>(field.get())) {
+    // MIP
+    typename MIPDenseType::Ptr mip = 
+      makeMIP<MIPDenseType, TriangleFilter>
+      (*dense->concreteMipLevel(0), options.minRes, options.numThreads);
+    writeField<Data_T>(mip, out);
+    // Min/Max
+    if (options.doMinMax) {
+      std::pair<typename MIPDenseType::Ptr, typename MIPDenseType::Ptr> p =
+        makeMinMax<MIPDenseType>(*dense->concreteMipLevel(0), 
+                                  options.minMaxResMult, 
+                                  options.numThreads);
+      p.first->attribute += k_minSuffix;
+      p.second->attribute += k_maxSuffix;
+      writeField<Data_T>(p.first, out);
+      writeField<Data_T>(p.second, out);
+    }
+    return;
+  }
+
+  // Handle MIP sparse fields
+  if (MIPSparseType *sparse = dynamic_cast<MIPSparseType*>(field.get())) {
+    // MIP
+    typename MIPSparseType::Ptr mip = makeMIP<MIPSparseType, TriangleFilter>
+      (*sparse->concreteMipLevel(0), options.minRes, options.numThreads);
+    writeField<Data_T>(mip, out);
+    // Min/Max
+    if (options.doMinMax) {
+      std::pair<typename MIPSparseType::Ptr, typename MIPSparseType::Ptr> p =
+        makeMinMax<MIPSparseType>(*sparse->concreteMipLevel(0), 
+                                  options.minMaxResMult, 
+                                  options.numThreads);
+      p.first->attribute += k_minSuffix;
+      p.second->attribute += k_maxSuffix;
+      writeField<Data_T>(p.first, out);
+      writeField<Data_T>(p.second, out);
+    }
+    return;
+  }
+
 }
 
 //----------------------------------------------------------------------------//
@@ -260,6 +371,12 @@ void makeMIP(const std::string &filename, const Options &options,
       if (!match(scalarLayer, options.attributes)) {
         continue;
       }  
+
+      // Skip _min and _max fields
+      if (scalarLayer.find(k_minSuffix) != std::string::npos ||
+          scalarLayer.find(k_maxSuffix) != std::string::npos) {
+        cout << "  ... skipping " << scalarLayer << endl;
+      }
 
       Field<half>::Vec hScalarFields = 
         in.readScalarLayers<half>(partition, scalarLayer);

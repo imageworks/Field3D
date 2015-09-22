@@ -135,7 +135,7 @@ Options parseOptions(int argc, char **argv)
     ("input-file,i", po::value<vector<string> >(), "Input files")
     ("name,n", po::value<vector<string> >(), "Load field(s) by name")
     ("attribute,a", po::value<vector<string> >(), "Load field(s) by attribute")
-    ("ogawa,m", po::value<bool>(), "Whether to output an Ogawa file.")
+    ("ogawa,g", po::value<bool>(), "Whether to output an Ogawa file.")
     ("num-threads,t", po::value<size_t>(), "Number of threads to use")
     ("output-file,o", po::value<string>(), "Output file")
     ;

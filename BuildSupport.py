@@ -227,6 +227,7 @@ def setupEnv(env, pathToRoot = "."):
         env.Append(CCFLAGS = ["-g", "-O3"])
     env.Append(CCFLAGS = ["-Wall"])
     env.Append(CCFLAGS = ["-Wextra"])
+    env.Append(CCFLAGS = ["-Wno-unused-local-typedef"])
     # Set number of jobs to use
     env.SetOption('num_jobs', numCPUs())
     # 64 bit setup

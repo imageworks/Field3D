@@ -252,12 +252,14 @@ void makeMIP(typename Field<Data_T>::Ptr field, const Options &options,
   cout << "  Filtering \"" << field->name << ":" << field->attribute 
        << "\" (" << field->classType() << ")" << endl;
 
+  const V3i offset = computeOffset(*field);
+  
   // Handle dense fields
   if (DenseType *dense = dynamic_cast<DenseType*>(field.get())) {
     // MIP
     typename MIPDenseType::Ptr mip = 
       makeMIP<MIPDenseType, TriangleFilter>
-      (*dense, options.minRes, options.numThreads);
+      (*dense, options.minRes, offset, options.numThreads);
     writeField<Data_T>(mip, out);
     // Min/Max
     if (options.doMinMax) {
@@ -278,7 +280,7 @@ void makeMIP(typename Field<Data_T>::Ptr field, const Options &options,
     // MIP
     typename MIPSparseType::Ptr mip = 
       makeMIP<MIPSparseType, TriangleFilter>
-      (*sparse, options.minRes, options.numThreads);
+      (*sparse, options.minRes, offset, options.numThreads);
     writeField<Data_T>(mip, out);
     // Min/Max
     if (options.doMinMax) {
@@ -299,7 +301,7 @@ void makeMIP(typename Field<Data_T>::Ptr field, const Options &options,
     // MIP
     typename MIPDenseType::Ptr mip = 
       makeMIP<MIPDenseType, TriangleFilter>
-      (*dense->concreteMipLevel(0), options.minRes, options.numThreads);
+      (*dense->concreteMipLevel(0), options.minRes, offset, options.numThreads);
     writeField<Data_T>(mip, out);
     // Min/Max
     if (options.doMinMax) {
@@ -319,7 +321,7 @@ void makeMIP(typename Field<Data_T>::Ptr field, const Options &options,
   if (MIPSparseType *sparse = dynamic_cast<MIPSparseType*>(field.get())) {
     // MIP
     typename MIPSparseType::Ptr mip = makeMIP<MIPSparseType, TriangleFilter>
-      (*sparse->concreteMipLevel(0), options.minRes, options.numThreads);
+      (*sparse->concreteMipLevel(0), options.minRes, offset, options.numThreads);
     writeField<Data_T>(mip, out);
     // Min/Max
     if (options.doMinMax) {

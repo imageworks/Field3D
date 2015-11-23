@@ -292,7 +292,7 @@ struct TriangleFilter : public Filter
     return 1.0f * m_width;
   }
   template <typename Value_T>
-  static void op(Value_T &accumValue, const Value_T value)
+  static void op(Value_T &/*accumValue*/, const Value_T /*value*/)
   { /* No-op */ }
 private:
   const float m_width;

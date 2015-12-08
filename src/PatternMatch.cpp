@@ -45,7 +45,13 @@
 #include "PatternMatch.h"
 
 // System includes
+#ifdef WIN32
+#include "Shlwapi.h"
+#define FNM_NOMATCH  1
+#define FNM_NOESCAPE 0
+#else
 #include <fnmatch.h>
+#endif
 
 //----------------------------------------------------------------------------//
 
@@ -53,6 +59,16 @@ FIELD3D_NAMESPACE_OPEN
 
 //----------------------------------------------------------------------------//
 // Function implementations
+//----------------------------------------------------------------------------//
+
+#ifdef WIN32
+static int 
+fnmatch(const char *pattern, const char *string, int /*flags*/)
+{
+  return PathMatchSpec(string, pattern) ? 0 : FNM_NOMATCH;
+}
+#endif
+
 //----------------------------------------------------------------------------//
 
 std::vector<std::string> 

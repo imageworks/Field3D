@@ -129,7 +129,7 @@ IF ( CMAKE_HOST_WIN32 )
       optimized ${lib}
       debug ${lib}_d )
   ENDFOREACH()
-  SET ( Field3D_DSO_Libraries ${Field3D_Libraries_Shared} )
+  SET ( Field3D_DSO_Libraries ${Field3D_Libraries_Shared} Shlwapi.lib)
   SET ( Field3D_BIN_Libraries Field3D ${Boost_LIBRARIES} )
 ENDIF ()
 

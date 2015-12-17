@@ -95,7 +95,7 @@ namespace detail {
 
   //--------------------------------------------------------------------------//
 
-  V3i mipResolution(const V3i &baseRes, const size_t level);
+  FIELD3D_API V3i mipResolution(const V3i &baseRes, const size_t level);
 
   //--------------------------------------------------------------------------//
 
@@ -387,6 +387,7 @@ namespace detail {
 
   //--------------------------------------------------------------------------//
 
+  FIELD3D_API
   FieldMapping::Ptr adjustedMIPFieldMapping(const FieldMapping::Ptr baseMapping,
                                             const V3i &baseRes,
                                             const Box3i &extents, 

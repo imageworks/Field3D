@@ -73,7 +73,7 @@ FIELD3D_NAMESPACE_OPEN
 // Global HDF5 Mutex
 //----------------------------------------------------------------------------//
 
-extern boost::recursive_mutex g_hdf5Mutex;
+FIELD3D_API extern boost::recursive_mutex g_hdf5Mutex;
 
 typedef boost::recursive_mutex::scoped_lock GlobalLock;
 

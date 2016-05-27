@@ -57,12 +57,14 @@
 
 #include <boost/intrusive_ptr.hpp>
 
+#include "ClassFactory.h"
 #include "EmptyField.h"
 #include "Field.h"
 #include "FieldCache.h"
 #include "FieldMetadata.h"
-#include "ClassFactory.h"
+#include "FilenameSpec.h"
 #include "Hdf5Util.h"
+#include "PatternMatch.h"
 
 //----------------------------------------------------------------------------//
 
@@ -269,6 +271,9 @@ public:
 
   // Main methods --------------------------------------------------------------
 
+  //! Whether the file is empty
+  bool empty() const;
+
   //! Clear the data structures and close the file.
   void clear();
 
@@ -280,14 +285,22 @@ public:
   //! \name Retreiving partition and layer names
   //! \{
 
+  //! Number of partitions with given name
+  size_t numPartitions(const std::string &name) const;
   //! Gets the names of all the partitions in the file
   void getPartitionNames(std::vector<std::string> &names) const;
   //! Gets the names of all the scalar layers in a given partition
   void getScalarLayerNames(std::vector<std::string> &names, 
                            const std::string &partitionName) const;
+  void getScalarLayerNames(std::vector<std::string> &names, 
+                           const std::string &partitionName,
+                           const size_t index) const;
   //! Gets the names of all the vector layers in a given partition
   void getVectorLayerNames(std::vector<std::string> &names, 
                            const std::string &partitionName) const;
+  void getVectorLayerNames(std::vector<std::string> &names, 
+                           const std::string &partitionName,
+                           const size_t index) const;
 
   //! Returns a pointer to the given partition
   //! \returns NULL if no partition was found of that name
@@ -299,6 +312,17 @@ public:
   //! \name Convenience methods for partitionName
   //! \{
 
+  //! Gets the names of all the -internal- partitions in the file
+  void getIntPartitionNames(std::vector<std::string> &names) const;
+  //! Gets the names of all the scalar layers in a given partition, but
+  //! assumes that partition name is the -internal- partition name
+  void getIntScalarLayerNames(std::vector<std::string> &names, 
+                              const std::string &intPartitionName) const;
+  //! Gets the names of all the vector layers in a given partition, but
+  //! assumes that partition name is the -internal- partition name
+  void getIntVectorLayerNames(std::vector<std::string> &names, 
+                              const std::string &intPartitionName) const;
+  
   //! Returns a unique partition name given the requested name. This ensures
   //! that partitions with matching mappings get the same name but each
   //! subsequent differing mapping gets a new, separate name
@@ -359,17 +383,6 @@ protected:
   //! Returns a pointer to the given partition
   //! \returns NULL if no partition was found of that name
   FileHDF5::Partition::Ptr partition(const std::string &partitionName) const;
-  
-  //! Gets the names of all the -internal- partitions in the file
-  void getIntPartitionNames(std::vector<std::string> &names) const;
-  //! Gets the names of all the scalar layers in a given partition, but
-  //! assumes that partition name is the -internal- partition name
-  void getIntScalarLayerNames(std::vector<std::string> &names, 
-                              const std::string &intPartitionName) const;
-  //! Gets the names of all the vector layers in a given partition, but
-  //! assumes that partition name is the -internal- partition name
-  void getIntVectorLayerNames(std::vector<std::string> &names, 
-                              const std::string &intPartitionName) const;
   
   //! Returns the number of internal partitions for a given partition name
   int numIntPartitions(const std::string &partitionName) const;
@@ -470,6 +483,13 @@ public:
   readScalarLayers(const std::string &partitionName, 
                    const std::string &layerName) const;
 
+  //! This one allows the allows the partitionName and index to be passed in
+  template <class Data_T>
+  typename Field<Data_T>::Ptr
+  readScalarLayer(const std::string &partitionName, 
+                  const size_t idx, 
+                  const std::string &layerName) const;
+
   //! Retrieves all the layers of vector type and maintains their on-disk
   //! data types
   //! \param layerName If a string is passed in, only layers of that name will
@@ -483,6 +503,13 @@ public:
   typename Field<FIELD3D_VEC3_T<Data_T> >::Vec
   readVectorLayers(const std::string &partitionName, 
                    const std::string &layerName) const;
+
+  //! This version allows you to pass in the partition name and index
+  template <class Data_T>
+  typename Field<FIELD3D_VEC3_T<Data_T> >::Ptr
+  readVectorLayer(const std::string &partitionName, 
+                  const size_t idx, 
+                  const std::string &layerName) const;
 
   //! Retrieves all layers for all partitions.
   //! Converts it to the given template type if needed
@@ -636,7 +663,15 @@ public:
   //! be read from disk.
   template <class Data_T>
   typename EmptyField<Data_T>::Vec
+  readProxyLayers(const std::string &partitionName, 
+                  const std::string &layerName, 
+                  bool isVectorLayer) const;
+
+  //! Single-field version
+  template <class Data_T>
+  typename EmptyField<Data_T>::Ptr
   readProxyLayer(const std::string &partitionName, 
+                 const size_t idx, 
                  const std::string &layerName, 
                  bool isVectorLayer) const;
 
@@ -650,6 +685,11 @@ public:
                  const std::string &attribute, 
                  FieldMapping::Ptr mapping) const;
   
+  //! Same as above, with FilenameSpec
+  template <class Data_T>
+  typename EmptyField<Data_T>::Vec
+  readProxyLayers(const FilenameSpec &spec, bool isVectorLayer) const;
+
   //! Retrieves a proxy version (EmptyField) of each scalar layer 
   //! \note Although the call is templated, all fields are read, regardless
   //! of bit depth.
@@ -977,6 +1017,42 @@ Field3DInputFileHDF5::readScalarLayers(const std::string &partitionName,
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
+typename Field<Data_T>::Ptr
+Field3DInputFileHDF5::readScalarLayer(const std::string &partitionName, 
+                                      const size_t index, 
+                                      const std::string &layerName) const
+{
+  using namespace std;
+  
+  typedef typename Field<Data_T>::Ptr FieldPtr;
+
+  if ((layerName.length() == 0) || (partitionName.length() == 0)) {
+    return FieldPtr();
+  }
+
+  const std::string p = makeIntPartitionName(partitionName, index);
+
+  std::vector<std::string> layers;
+  getIntScalarLayerNames(layers, p);
+  if (removeUniqueId(p) == partitionName) {
+    for (vector<string>::iterator l = layers.begin(); 
+         l != layers.end(); ++l) {
+      // Only read if it matches the name
+      if (*l == layerName) {
+        FieldPtr mf = readScalarLayer<Data_T>(p, *l);
+        if (mf) {
+          return mf;
+        }
+      }
+    }
+  }
+  
+  return FieldPtr();
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
 typename Field<FIELD3D_VEC3_T<Data_T> >::Vec
 Field3DInputFileHDF5::readVectorLayers(const std::string &name) const
 {
@@ -1048,6 +1124,42 @@ Field3DInputFileHDF5::readVectorLayers(const std::string &partitionName,
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
+typename Field<FIELD3D_VEC3_T<Data_T> >::Ptr
+Field3DInputFileHDF5::readVectorLayer(const std::string &partitionName, 
+                                      const size_t index, 
+                                      const std::string &layerName) const
+{
+  using namespace std;
+  
+  typedef typename Field<FIELD3D_VEC3_T<Data_T> >::Ptr FieldPtr;
+  
+  if ((layerName.length() == 0) || (partitionName.length() == 0)) {
+    return FieldPtr();
+  }
+  
+  const std::string p = makeIntPartitionName(partitionName, index);
+
+  std::vector<std::string> layers;
+  getIntVectorLayerNames(layers, p);
+  if (removeUniqueId(p) == partitionName) {
+    for (vector<string>::iterator l = layers.begin(); 
+         l != layers.end(); ++l) {
+      // Only read if it matches the name
+      if (*l == layerName) {
+        FieldPtr mf = readVectorLayer<Data_T>(p, *l);
+        if (mf) {
+          return mf;
+        }
+      }
+    }
+  }
+  
+  return FieldPtr();
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
 typename Field<Data_T>::Ptr
 Field3DInputFileHDF5::readLayer(const std::string &intPartitionName,
                                 const std::string &layerName,
@@ -1078,7 +1190,11 @@ Field3DInputFileHDF5::readLayer(const std::string &intPartitionName,
   else
     l = part->scalarLayer(layerName);
   if (!l) {
-    Msg::print(Msg::SevWarning, "Couldn't find layer: " + layerName );
+#if 0
+    // Disabling this printout -- the new Ogawa code doesn't distinguish
+    // between vector and scalar layers the same way...
+    Msg::print(Msg::SevWarning, "11Couldn't find layer: " + layerName );
+#endif
     return nullPtr;
   }
 
@@ -1154,9 +1270,9 @@ Field3DInputFileHDF5::readLayer(const std::string &intPartitionName,
 
 template <class Data_T>
 typename EmptyField<Data_T>::Vec
-Field3DInputFileHDF5::readProxyLayer(const std::string &partitionName, 
-                                     const std::string &layerName,
-                                     bool isVectorLayer) const
+Field3DInputFileHDF5::readProxyLayers(const std::string &partitionName, 
+                                      const std::string &layerName,
+                                      bool isVectorLayer) const
 {
   using namespace boost;
   using namespace std;
@@ -1241,6 +1357,94 @@ Field3DInputFileHDF5::readProxyLayer(const std::string &partitionName,
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
+typename EmptyField<Data_T>::Ptr
+Field3DInputFileHDF5::readProxyLayer(const std::string &partitionName, 
+                                     const size_t index, 
+                                     const std::string &layerName,
+                                     bool isVectorLayer) const
+{
+  using namespace boost;
+  using namespace std;
+  using namespace Hdf5Util;
+
+  // Instantiate a null pointer for easier code reading
+  typename EmptyField<Data_T>::Ptr nullPtr;
+
+  GlobalLock lock(g_hdf5Mutex);
+
+  if (empty()) {
+    return nullPtr;
+  }
+
+  if ((layerName.length() == 0) || (partitionName.length() == 0))
+    return nullPtr;
+
+  const string p = makeIntPartitionName(partitionName, index);
+
+  // Find the partition
+  FileHDF5::Partition::Ptr part = partition(p);
+  if (!part) {
+    Msg::print(Msg::SevWarning, "3 Couldn't find partition: " + p);
+    return nullPtr;
+  }
+
+  std::vector<std::string> layers;
+  if (isVectorLayer) {
+    getIntVectorLayerNames(layers, p);
+  } else {
+    getIntScalarLayerNames(layers, p);
+  }
+
+  if (layers.size() == 0) {
+    // Benign error. Happens if there are no scalars in a vector partition, etc
+    return nullPtr;
+  }
+
+  for (vector<string>::iterator l = layers.begin(); l != layers.end(); ++l) {
+    if (*l == layerName) {
+      // Find the layer
+      const FileHDF5::Layer *layer;
+      if (isVectorLayer)
+        layer = part->vectorLayer(layerName);
+      else
+        layer = part->scalarLayer(layerName);
+      if (!layer) {
+        Msg::print(Msg::SevWarning, "Couldn't find layer: " + layerName);
+        return nullPtr;
+      }
+      // Open the layer group
+      string layerPath = layer->parent + "/" + layer->name;
+      H5ScopedGopen layerGroup(m_file, layerPath.c_str());
+      if (layerGroup.id() < 0) {
+        Msg::print(Msg::SevWarning, "Couldn't find layer group " 
+                   + layerName + " in .f3d file ");
+        return nullPtr;
+      }
+
+      // Make the proxy representation
+      typename EmptyField<Data_T>::Ptr field = 
+        readProxyLayer<Data_T>(layerGroup, partitionName, layerName, 
+                               part->mapping);
+
+      // Read MIPField's number of mip levels
+      int numLevels = 0;
+      H5ScopedGopen mipGroup(layerGroup, "mip_levels");
+      if (mipGroup.id() >= 0)
+        readAttribute(mipGroup, "levels", 1, numLevels);
+      field->metadata().setIntMetadata("mip_levels", numLevels);
+
+      // Done, return.
+      return field;
+    }
+  }
+
+  Msg::print(Msg::SevWarning, "4 Couldn't find partition: " + partitionName);
+  return nullPtr;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
 typename EmptyField<Data_T>::Ptr 
 Field3DInputFileHDF5::readProxyLayer(hid_t location, 
                                      const std::string &name,
@@ -1264,6 +1468,10 @@ Field3DInputFileHDF5::readProxyLayer(hid_t location,
     return null;
   } 
 
+  // Read the class name
+  std::string className;
+  readAttribute(location, "class_name", className);
+
   // Construct the field and load the data
   typename EmptyField<Data_T>::Ptr field(new EmptyField<Data_T>);
   field->setSize(extents, dataW);
@@ -1278,8 +1486,94 @@ Field3DInputFileHDF5::readProxyLayer(hid_t location,
   field->name = name;
   field->attribute = attribute;
   field->setMapping(mapping);
+  field->metadata().setStrMetadata("classname", className);
 
   return field;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+typename EmptyField<Data_T>::Vec
+Field3DInputFileHDF5::readProxyLayers(const FilenameSpec &spec,
+                                      bool isVectorLayer) const
+{
+  using namespace boost;
+  using namespace std;
+  using namespace Hdf5Util;
+
+  if (spec.isUnique()) {
+    return typename EmptyField<Data_T>::Vec
+      (1, readProxyLayer<Data_T>(spec.name(), spec.index(), spec.attribute(),
+                                 isVectorLayer));
+  }
+
+  GlobalLock lock(g_hdf5Mutex);
+
+  // Instantiate a null pointer for easier code reading
+  typename EmptyField<Data_T>::Vec emptyList, output;
+
+  const std::string pattern = spec.pattern();
+
+  std::vector<std::string> parts, layers;
+  getIntPartitionNames(parts);
+ 
+  for (vector<string>::iterator p = parts.begin(); p != parts.end(); ++p) {
+    const std::string name = removeUniqueId(*p);
+    if (isVectorLayer) {
+      getIntVectorLayerNames(layers, *p);
+    } else {
+      getIntScalarLayerNames(layers, *p);
+    }
+    for (vector<string>::iterator l = layers.begin(); 
+         l != layers.end(); ++l) {
+      if (match(name, *l, pattern)) {
+        // Find the partition
+        FileHDF5::Partition::Ptr part = partition(*p);
+        if (!part) {
+          Msg::print(Msg::SevWarning, "5 Couldn't find partition: " + *p);
+          return emptyList;
+        }
+        // Find the layer
+        const FileHDF5::Layer *layer;
+        if (isVectorLayer)
+          layer = part->vectorLayer(*l);
+        else
+          layer = part->scalarLayer(*l);
+        if (!layer) {
+          continue;
+        }
+        // Open the layer group
+        string layerPath = layer->parent + "/" + layer->name;
+        H5ScopedGopen layerGroup(m_file, layerPath.c_str());
+        if (layerGroup.id() < 0) {
+          Msg::print(Msg::SevWarning, "Couldn't find layer group " 
+                     + *l + " in .f3d file ");
+          return emptyList;
+        }
+
+        // Make the proxy representation
+        typename EmptyField<Data_T>::Ptr field = 
+          readProxyLayer<Data_T>(layerGroup, *p, *l, part->mapping);
+
+        if (!field) {
+          continue;
+        }
+
+        // Read MIPField's number of mip levels
+        int numLevels = 0;
+        H5ScopedGopen mipGroup(layerGroup, "mip_levels");
+        if (mipGroup.id() >= 0)
+          readAttribute(mipGroup, "levels", 1, numLevels);
+        field->metadata().setIntMetadata("mip_levels", numLevels);
+
+        // Add field to output
+        output.push_back(field);
+      }
+    }
+  }
+  
+  return output;
 }
 
 //----------------------------------------------------------------------------//

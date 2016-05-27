@@ -91,6 +91,11 @@ struct Filter
   typedef boost::shared_ptr<Filter>       Ptr;
   typedef boost::shared_ptr<const Filter> CPtr;
 
+  // Ctors, dtor ---
+
+  virtual ~Filter()
+  { }
+
   // To be overridden by subclasses ---
 
   //! Evaluates the filter at coordinate 't'
@@ -292,7 +297,7 @@ struct TriangleFilter : public Filter
     return 1.0f * m_width;
   }
   template <typename Value_T>
-  static void op(Value_T &/*accumValue*/, const Value_T /*value*/)
+  static void op(Value_T &accumValue, const Value_T value)
   { /* No-op */ }
 private:
   const float m_width;

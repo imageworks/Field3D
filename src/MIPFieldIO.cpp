@@ -136,10 +136,13 @@ MIPFieldIO::read(hid_t layerGroup, const std::string &filename,
     isFloat = true;
   }
 
-  bool isSparse = false;
-  bool isDense  = false;
+  bool isTemporal = false;
+  bool isSparse   = false;
+  bool isDense    = false;
 
-  if (baseType == "SparseField") {
+  if (baseType == "TemporalField") {
+    isTemporal = true;
+  } else if (baseType == "SparseField") {
     isSparse = true;
   } else if (baseType == "DenseField") {
     isDense = true;
@@ -185,6 +188,24 @@ MIPFieldIO::read(hid_t layerGroup, const std::string &filename,
   if (isSparse && isDouble && components == 3 && typeEnum == DataTypeVecDouble)
     result = readInternal<SparseField, V3d>(layerGroup, filename, 
                                            layerPath, typeEnum);
+  if (isTemporal && isHalf && components == 1 && typeEnum == DataTypeHalf)
+    result = readInternal<TemporalField, half>(layerGroup, filename, 
+                                               layerPath, typeEnum);
+  if (isTemporal && isFloat && components == 1 && typeEnum == DataTypeFloat)
+    result = readInternal<TemporalField, float>(layerGroup, filename, 
+                                                layerPath, typeEnum);
+  if (isTemporal && isDouble && components == 1 && typeEnum == DataTypeDouble)
+    result = readInternal<TemporalField, double>(layerGroup, filename, 
+                                                 layerPath, typeEnum); 
+  if (isTemporal && isHalf && components == 3 && typeEnum == DataTypeVecHalf)
+    result = readInternal<TemporalField, V3h>(layerGroup, filename, 
+                                              layerPath, typeEnum);
+  if (isTemporal && isFloat && components == 3 && typeEnum == DataTypeVecFloat)
+    result = readInternal<TemporalField, V3f>(layerGroup, filename, 
+                                              layerPath, typeEnum);
+  if (isTemporal && isDouble && components == 3 && typeEnum == DataTypeVecDouble)
+    result = readInternal<TemporalField, V3d>(layerGroup, filename, 
+                                              layerPath, typeEnum);
 
   return result;
 }
@@ -236,10 +257,13 @@ MIPFieldIO::read(const OgIGroup &layerGroup, const std::string &filename,
                                     k_baseTypeStr);
   }
 
-  bool isSparse = false;
-  bool isDense  = false;
+  bool isTemporal = false;
+  bool isSparse   = false;
+  bool isDense    = false;
 
-  if (baseTypeAttr.value() == "SparseField") {
+  if (baseTypeAttr.value() == "TemporalField") {
+    isTemporal = true;
+  } else if (baseTypeAttr.value() == "SparseField") {
     isSparse = true;
   } else if (baseTypeAttr.value() == "DenseField") {
     isDense = true;
@@ -292,6 +316,26 @@ MIPFieldIO::read(const OgIGroup &layerGroup, const std::string &filename,
         result = readInternal<SparseField, vec64_t>(layerGroup, filename, 
                                                     layerPath, typeEnum);
       }
+    } else if (isTemporal) {
+      if (typeEnum == F3DFloat16) {
+        result = readInternal<TemporalField, float16_t>(layerGroup, filename, 
+                                                        layerPath, typeEnum);
+      } else if (typeEnum == F3DFloat32) {
+        result = readInternal<TemporalField, float32_t>(layerGroup, filename, 
+                                                        layerPath, typeEnum);
+      } else if (typeEnum == F3DFloat64) {
+        result = readInternal<TemporalField, float64_t>(layerGroup, filename, 
+                                                        layerPath, typeEnum);
+      } else if (typeEnum == F3DVec16) {
+        result = readInternal<TemporalField, vec16_t>(layerGroup, filename, 
+                                                      layerPath, typeEnum);
+      } else if (typeEnum == F3DVec32) {
+        result = readInternal<TemporalField, vec32_t>(layerGroup, filename, 
+                                                      layerPath, typeEnum);
+      } else if (typeEnum == F3DVec64) {
+        result = readInternal<TemporalField, vec64_t>(layerGroup, filename, 
+                                                      layerPath, typeEnum);
+      }
     } 
   }
 
@@ -338,6 +382,18 @@ MIPFieldIO::write(hid_t layerGroup, FieldBase::Ptr field)
     field_dynamic_cast<MIPField<SparseField<V3f> > >(field);
   MIPField<SparseField<V3d> >::Ptr vecDoubleSparseField = 
     field_dynamic_cast<MIPField<SparseField<V3d> > >(field);
+  MIPField<TemporalField<half> >::Ptr halfTemporalField = 
+    field_dynamic_cast<MIPField<TemporalField<half> > >(field);
+  MIPField<TemporalField<float> >::Ptr floatTemporalField = 
+    field_dynamic_cast<MIPField<TemporalField<float> > >(field);
+  MIPField<TemporalField<double> >::Ptr doubleTemporalField = 
+    field_dynamic_cast<MIPField<TemporalField<double> > >(field);
+  MIPField<TemporalField<V3h> >::Ptr vecHalfTemporalField = 
+    field_dynamic_cast<MIPField<TemporalField<V3h> > >(field);
+  MIPField<TemporalField<V3f> >::Ptr vecFloatTemporalField = 
+    field_dynamic_cast<MIPField<TemporalField<V3f> > >(field);
+  MIPField<TemporalField<V3d> >::Ptr vecDoubleTemporalField = 
+    field_dynamic_cast<MIPField<TemporalField<V3d> > >(field);
 
   bool success = true;
 
@@ -376,6 +432,24 @@ MIPFieldIO::write(hid_t layerGroup, FieldBase::Ptr field)
   }
   else if (vecDoubleSparseField) {
     success = writeInternal<SparseField, V3d>(layerGroup, vecDoubleSparseField);
+  }
+  else if (floatTemporalField) {
+    success = writeInternal<TemporalField, float>(layerGroup, floatTemporalField);
+  }
+  else if (halfTemporalField) {
+    success = writeInternal<TemporalField, half>(layerGroup, halfTemporalField);
+  }
+  else if (doubleTemporalField) {
+    success = writeInternal<TemporalField, double>(layerGroup, doubleTemporalField);
+  }
+  else if (vecFloatTemporalField) {
+    success = writeInternal<TemporalField, V3f>(layerGroup, vecFloatTemporalField);
+  }
+  else if (vecHalfTemporalField) {
+    success = writeInternal<TemporalField, V3h>(layerGroup, vecHalfTemporalField);
+  }
+  else if (vecDoubleTemporalField) {
+    success = writeInternal<TemporalField, V3d>(layerGroup, vecDoubleTemporalField);
   }
   else {
     throw WriteLayerException("MIPFieldIO does not support the given "
@@ -417,6 +491,18 @@ MIPFieldIO::write(OgOGroup &layerGroup, FieldBase::Ptr field)
     field_dynamic_cast<MIPField<SparseField<V3f> > >(field);
   MIPField<SparseField<V3d> >::Ptr vecDoubleSparseField = 
     field_dynamic_cast<MIPField<SparseField<V3d> > >(field);
+  MIPField<TemporalField<half> >::Ptr halfTemporalField = 
+    field_dynamic_cast<MIPField<TemporalField<half> > >(field);
+  MIPField<TemporalField<float> >::Ptr floatTemporalField = 
+    field_dynamic_cast<MIPField<TemporalField<float> > >(field);
+  MIPField<TemporalField<double> >::Ptr doubleTemporalField = 
+    field_dynamic_cast<MIPField<TemporalField<double> > >(field);
+  MIPField<TemporalField<V3h> >::Ptr vecHalfTemporalField = 
+    field_dynamic_cast<MIPField<TemporalField<V3h> > >(field);
+  MIPField<TemporalField<V3f> >::Ptr vecFloatTemporalField = 
+    field_dynamic_cast<MIPField<TemporalField<V3f> > >(field);
+  MIPField<TemporalField<V3d> >::Ptr vecDoubleTemporalField = 
+    field_dynamic_cast<MIPField<TemporalField<V3d> > >(field);
   
   bool success = true;
 
@@ -456,12 +542,30 @@ MIPFieldIO::write(OgOGroup &layerGroup, FieldBase::Ptr field)
   else if (vecDoubleSparseField) {
     success = writeInternal<SparseField, V3d>(layerGroup, vecDoubleSparseField);
   }
+  else if (floatTemporalField) {
+    success = writeInternal<TemporalField, float>(layerGroup, floatTemporalField);
+  }
+  else if (halfTemporalField) {
+    success = writeInternal<TemporalField, half>(layerGroup, halfTemporalField);
+  }
+  else if (doubleTemporalField) {
+    success = writeInternal<TemporalField, double>(layerGroup, doubleTemporalField);
+  }
+  else if (vecFloatTemporalField) {
+    success = writeInternal<TemporalField, V3f>(layerGroup, vecFloatTemporalField);
+  }
+  else if (vecHalfTemporalField) {
+    success = writeInternal<TemporalField, V3h>(layerGroup, vecHalfTemporalField);
+  }
+  else if (vecDoubleTemporalField) {
+    success = writeInternal<TemporalField, V3d>(layerGroup, vecDoubleTemporalField);
+  }
   else {
     throw WriteLayerException("MIPFieldIO does not support the given "
                               "MIPField template parameter");
   }
 
-  return true;
+  return success;
 }
 
 //----------------------------------------------------------------------------//

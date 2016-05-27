@@ -40,7 +40,8 @@
 #include <map>
 #include <string>
 
-#include <boost/regex.hpp>
+#include <fnmatch.h>
+
 #include <boost/program_options.hpp>
 #include <boost/foreach.hpp>
 
@@ -78,6 +79,9 @@ void printFileInfo(const std::string &filename, const Options &options);
 //! Prints the information about a single field
 template <typename Data_T>
 void printFieldInfo(typename Field<Data_T>::Ptr field, const Options &options);
+template <typename Data_T>
+void printFieldInfo(typename Field<Data_T>::Ptr field, const Options &options,
+                    const size_t idx);
 
 //! Prints a std::map. Used for metadata. Called from printFieldInfo.
 template <typename T>
@@ -115,33 +119,21 @@ Options parseOptions(int argc, char **argv)
   po::options_description desc("Available options");
 
   desc.add_options()
-    ("help,h", "Display help")
+    ("help", "Display help")
     ("input-file", po::value<vector<string> >(), "Input files")
     ("name,n", po::value<vector<string> >(), "Load field(s) by name")
     ("attribute,a", po::value<vector<string> >(), "Load field(s) by attribute")
     ;
   
   po::variables_map vm;
-  try {
-    po::store(po::parse_command_line(argc, argv, desc), vm);
-  } catch(...) {
-    cerr << "Unknown command line option.\n";
-    cout << desc << endl;
-    exit(1);
-  }
-  po::notify(vm);
+  po::store(po::parse_command_line(argc, argv, desc), vm);
+  po::notify(vm);    
   
   po::positional_options_description p;
   p.add("input-file", -1);
   
-  try {
-    po::store(po::command_line_parser(argc, argv).
-              options(desc).positional(p).run(), vm);
-  } catch(...) {
-    cerr << "Unknown command line option.\n";
-    cout << desc << endl;
-    exit(1);
-  }
+  po::store(po::command_line_parser(argc, argv).
+            options(desc).positional(p).run(), vm);
   po::notify(vm);
   
   if (vm.count("help")) {
@@ -211,12 +203,28 @@ void printMapping(FieldMapping::Ptr mapping)
 template <typename Data_T>
 void printFieldInfo(typename Field<Data_T>::Ptr field, const Options &options)
 {
-  Box3i dataWindow = field->dataWindow();
-  Box3i extents = field->extents();
+  printFieldInfo(field, options, 0);
+}
+
+//----------------------------------------------------------------------------//
+
+template <typename Data_T>
+void printFieldInfo(typename Field<Data_T>::Ptr field, 
+                    const Options &/*options*/,
+                    const size_t idx)
+{
+  if (!field) {
+    // Perfectly ok, may be null
+    return;
+  }
+
+  const Box3i dataWindow = field->dataWindow();
+  const Box3i extents    = field->extents();
 
   cout << "  Field: " << endl
        << "    Name:        " << field->name << endl
        << "    Attribute:   " << field->attribute << endl
+       << "    Index:       " << idx << endl
        << "    Field type:  " << field->className() << endl
        << "    Data type:   " << field->dataTypeString() << endl
        << "    Extents:     " << extents.min << " " << extents.max << endl
@@ -246,9 +254,7 @@ bool matchString(const std::string &str, const vector<string> &patterns)
   }
   // Check all patterns
   BOOST_FOREACH (const string &pattern, patterns) {
-    boost::regex  re(pattern, boost::regex::normal | boost::regex::no_except);
-
-    if (boost::regex_match(str, re)) {
+    if (fnmatch(pattern.c_str(), str.c_str(), 0) != FNM_NOMATCH) {
       return true;
     }
   }
@@ -278,67 +284,52 @@ void printFileInfo(const std::string &filename, const Options &options)
 
   BOOST_FOREACH (const string &partition, partitions) {
 
-    if (!matchString(partition, options.names)) {
-      continue;
-    }
+    const size_t numPartitions = in.numPartitions(partition);
 
-    vector<string> scalarLayers, vectorLayers;
-    in.getScalarLayerNames(scalarLayers, partition);
-    in.getVectorLayerNames(vectorLayers, partition);
+    for (size_t i = 0; i < numPartitions; ++i) {
 
-    BOOST_FOREACH (const string &scalarLayer, scalarLayers) {
+      vector<string> scalarLayers, vectorLayers;
+      in.getScalarLayerNames(scalarLayers, partition, i);
+      in.getVectorLayerNames(vectorLayers, partition, i);
 
-      if (!matchString(scalarLayer, options.attributes)) {
-        continue;
-      }  
+      BOOST_FOREACH (const string &sc, scalarLayers) {
 
-      Field<half>::Vec hScalarFields = 
-        in.readScalarLayers<half>(partition, scalarLayer);
-      BOOST_FOREACH (Field<half>::Ptr field, hScalarFields) {
-        printFieldInfo<half>(field, options);
+        if (!matchString(sc, options.attributes)) {
+          continue;
+        } 
+
+        EmptyField<float>::Ptr f = in.readProxyLayer<float>(partition, i, sc, false);
+
+        printFieldInfo<half>  (in.readScalarLayer<half>  (partition, i, sc),
+                               options, i);
+        printFieldInfo<float> (in.readScalarLayer<float> (partition, i, sc),
+                               options, i);
+        printFieldInfo<double>(in.readScalarLayer<double>(partition, i, sc),
+                               options, i);
+
       }
 
-      Field<float>::Vec fScalarFields = 
-        in.readScalarLayers<float>(partition, scalarLayer);
-      BOOST_FOREACH (Field<float>::Ptr field, fScalarFields) {
-        printFieldInfo<float>(field, options);
-      }
+      BOOST_FOREACH (const string &ve, vectorLayers) {
+        
+        if (!matchString(ve, options.attributes)) {
+          continue;
+        }
 
-      Field<double>::Vec dScalarFields = 
-        in.readScalarLayers<double>(partition, scalarLayer);
-      BOOST_FOREACH (Field<double>::Ptr field, dScalarFields) {
-        printFieldInfo<double>(field, options);
-      }
+        EmptyField<V3h>::Ptr f = in.readProxyLayer<V3h>(partition, i, ve, true);
 
-    }
+        printFieldInfo<V3h>(in.readVectorLayer<half>  (partition, i, ve),
+                            options, i);
+        printFieldInfo<V3f>(in.readVectorLayer<float> (partition, i, ve),
+                            options, i);
+        printFieldInfo<V3d>(in.readVectorLayer<double>(partition, i, ve),
+                            options, i);
 
-    BOOST_FOREACH (const string &vectorLayer, vectorLayers) {
-      
-      if (!matchString(vectorLayer, options.attributes)) {
-        continue;
-      }  
-
-      Field<V3h>::Vec hVectorFields = 
-        in.readVectorLayers<half>(partition, vectorLayer);
-      BOOST_FOREACH (Field<V3h>::Ptr field, hVectorFields) {
-        printFieldInfo<V3h>(field, options);
-      }
-
-      Field<V3f>::Vec fVectorFields = 
-        in.readVectorLayers<float>(partition, vectorLayer);
-      BOOST_FOREACH (Field<V3f>::Ptr field, fVectorFields) {
-        printFieldInfo<V3f>(field, options);
-      }
-
-      Field<V3d>::Vec dVectorFields = 
-        in.readVectorLayers<double>(partition, vectorLayer);
-      BOOST_FOREACH (Field<V3d>::Ptr field, dVectorFields) {
-        printFieldInfo<V3d>(field, options);
       }
 
     }
+
   }
-  
+
   cout << "  Global metadata" << endl;
 
   cout << "    Int metadata:" << endl;

@@ -747,6 +747,23 @@ private:
 };
 
 //----------------------------------------------------------------------------//
+// Utility functions
+//----------------------------------------------------------------------------//
+
+//! Returns list of corner points of a bounding box
+std::vector<V3d> cornerPoints(const Box3d &box);
+
+//----------------------------------------------------------------------------//
+
+//! Gets the corner points into fixed-size array
+void getCornerPoints(const Box3d& box, V3d points[8]);
+
+//----------------------------------------------------------------------------//
+
+//! Returns list of corner points of a unit box
+std::vector<V3d> unitCornerPoints();
+
+//----------------------------------------------------------------------------//
 
 FIELD3D_NAMESPACE_HEADER_CLOSE
 

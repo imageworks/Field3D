@@ -52,6 +52,7 @@
 #include <boost/lexical_cast.hpp>
 
 #include "Field.h"
+#include "StochasticInterp.h"
 #include "SparseFile.h"
 
 #define BLOCK_ORDER 4 // 2^BLOCK_ORDER is the block size along each axis
@@ -109,33 +110,15 @@ public:
 
   // Main methods --------------------------------------------------------------
 
-  value_type sample(const SparseField<Data_T> &field, const V3d &vsP) const
+  value_type sample(const SparseField<Data_T> &field, const V3d &vsP,
+                    const float time = 0.0f) const
   {
-    // Pixel centers are at .5 coordinates
-    // NOTE: Don't use contToDisc for this, we're looking for sample
-    // point locations, not coordinate shifts.
-    FIELD3D_VEC3_T<double> p(vsP - FIELD3D_VEC3_T<double>(0.5));
+    // Voxel coords
+    V3i c1, c2;
+    // Interpolation weights
+    FIELD3D_VEC3_T<double> f1, f2;
 
-    // Lower left corner
-    V3i c1(static_cast<int>(floor(p.x)),
-           static_cast<int>(floor(p.y)),
-           static_cast<int>(floor(p.z)));
-    // Upper right corner
-    V3i c2(c1 + V3i(1));
-    // C1 fractions
-    FIELD3D_VEC3_T<double> f1(static_cast<FIELD3D_VEC3_T<double> >(c2) - p);
-    // C2 fraction
-    FIELD3D_VEC3_T<double> f2(static_cast<FIELD3D_VEC3_T<double> >(1.0) - f1);
-
-    const Box3i &dataWindow = field.dataWindow();
-
-    // Clamp the coordinates
-    c1.x = std::min(dataWindow.max.x, std::max(dataWindow.min.x, c1.x));
-    c1.y = std::min(dataWindow.max.y, std::max(dataWindow.min.y, c1.y));
-    c1.z = std::min(dataWindow.max.z, std::max(dataWindow.min.z, c1.z));
-    c2.x = std::min(dataWindow.max.x, std::max(dataWindow.min.x, c2.x));
-    c2.y = std::min(dataWindow.max.y, std::max(dataWindow.min.y, c2.y));
-    c2.z = std::min(dataWindow.max.z, std::max(dataWindow.min.z, c2.z));
+    getLerpInfo(vsP, field.dataWindow(), f1, f2, c1, c2);
 
     // Determine which block we're in
     int i = c1.x, j = c1.y, k = c1.z, vi, vj, vk, bi, bj, bk;
@@ -357,8 +340,9 @@ public:
   typedef boost::intrusive_ptr<SparseField> Ptr;
   typedef std::vector<Ptr> Vec;
 
-  typedef LinearSparseFieldInterp<Data_T> LinearInterp;
+  typedef LinearSparseFieldInterp<Data_T>               LinearInterp;
   typedef CubicGenericFieldInterp<SparseField<Data_T> > CubicInterp;
+  typedef GenericStochasticInterp<SparseField<Data_T> > StochasticInterp;
 
   // RTTI replacement ----------------------------------------------------------
 

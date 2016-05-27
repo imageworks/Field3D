@@ -48,6 +48,7 @@
 #include "MACFieldIO.h"
 #include "FieldMappingIO.h"
 #include "MIPFieldIO.h"
+#include "TemporalFieldIO.h"
 
 //----------------------------------------------------------------------------//
 
@@ -74,6 +75,7 @@ void initIO()
   factory.registerFieldIO(SparseFieldIO::create);
   factory.registerFieldIO(MACFieldIO::create);
   factory.registerFieldIO(MIPFieldIO::create);
+  factory.registerFieldIO(TemporalFieldIO::create);
 
   factory.registerFieldMappingIO(NullFieldMappingIO::create);
   factory.registerFieldMappingIO(MatrixFieldMappingIO::create);

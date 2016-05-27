@@ -209,6 +209,13 @@ namespace detail {
   template <typename Field_T>
   struct MIPInstance;
 
+  // Specialization for dense field
+  template <typename Data_T>
+  struct MIPInstance<DenseField<Data_T> >
+  {
+    typedef MIPDenseField<Data_T> type;
+  };
+
   //! Specialization for sparse field
   template <typename Data_T>
   struct MIPInstance<SparseField<Data_T> >
@@ -216,11 +223,11 @@ namespace detail {
     typedef MIPSparseField<Data_T> type;
   };
 
-  // Specialization for dense field
+  //! Specialization for temporal field
   template <typename Data_T>
-  struct MIPInstance<DenseField<Data_T> >
+  struct MIPInstance<TemporalField<Data_T> >
   {
-    typedef MIPDenseField<Data_T> type;
+    typedef MIPTemporalField<Data_T> type;
   };
 
 }

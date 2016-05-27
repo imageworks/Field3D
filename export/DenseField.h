@@ -49,6 +49,7 @@
 #include <boost/lexical_cast.hpp>
 
 #include "Field.h"
+#include "StochasticInterp.h"
 
 //----------------------------------------------------------------------------//
 
@@ -93,7 +94,8 @@ public:
   typedef std::vector<Ptr> Vec;
 
   typedef LinearGenericFieldInterp<DenseField<Data_T> > LinearInterp;
-  typedef CubicGenericFieldInterp<DenseField<Data_T> > CubicInterp;
+  typedef CubicGenericFieldInterp<DenseField<Data_T> >  CubicInterp;
+  typedef GenericStochasticInterp<DenseField<Data_T> >  StochasticInterp;
 
   typedef ResizableField<Data_T> base;
 

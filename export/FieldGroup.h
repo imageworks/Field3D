@@ -23,14 +23,13 @@
 #include "DenseField.h"
 #include "Field3DFile.h"
 #include "FieldInterp.h"
+#include "FieldWrapper.h"
 #include "InitIO.h"
 #include "MIPField.h"
 #include "MIPUtil.h"
-#include "SparseField.h"
 #include "MinMaxUtil.h"
-
-// Project includes
-#include "FieldWrapper.h"
+#include "SparseField.h"
+#include "TemporalField.h"
 
 //----------------------------------------------------------------------------//
 
@@ -42,10 +41,10 @@ FIELD3D_NAMESPACE_OPEN
 // MPL stuff 
 //------------------------------------------------------------------------------
 
-namespace mpl       = boost::mpl;
-namespace ph        = mpl::placeholders;
-namespace fusion    = boost::fusion;
-namespace fusion_ro = boost::fusion::result_of;
+namespace mpl    = boost::mpl;
+namespace ph     = mpl::placeholders;
+namespace fusion = boost::fusion;
+namespace f_ro   = boost::fusion::result_of;
 
 typedef mpl::vector<Field3D::half, float, double>             ScalarTypes;
 typedef mpl::vector<Field3D::V3h, Field3D::V3f, Field3D::V3d> VectorTypes;
@@ -83,9 +82,17 @@ struct MakeSparse
 
 //! MPL utility
 template <typename T>
+struct MakeTemporal
+{
+  typedef typename FieldWrapper<Field3D::TemporalField<T> >::Vec type;
+};
+
+//------------------------------------------------------------------------------
+
+//! MPL utility
+template <typename T>
 struct MakeMIPDense
 {
-  // typedef typename MIPFieldWrapper<Field3D::MIPDenseField<T> >::Vec type;
   typedef typename 
   MIPFieldWrapper<Field3D::MIPField<Field3D::DenseField<T> > >::Vec type;
 };
@@ -96,9 +103,18 @@ struct MakeMIPDense
 template <typename T>
 struct MakeMIPSparse
 {
-  // typedef typename MIPFieldWrapper<Field3D::MIPSparseField<T> >::Vec type;
   typedef typename 
   MIPFieldWrapper<Field3D::MIPField<Field3D::SparseField<T> > >::Vec type;
+};
+
+//------------------------------------------------------------------------------
+
+//! MPL utility
+template <typename T>
+struct MakeMIPTemporal
+{
+  typedef typename 
+  MIPFieldWrapper<Field3D::MIPField<Field3D::TemporalField<T> > >::Vec type;
 };
 
 //------------------------------------------------------------------------------
@@ -205,40 +221,6 @@ struct LoadFields<3>
   LoadFieldsParams &m_p;
 };
 
-//----------------------------------------------------------------------------//
-
-inline std::vector<V3d> 
-cornerPoints(const Box3d &box)
-{
-  std::vector<V3d> result;
-  result.push_back(V3d(box.min.x, box.min.y, box.min.z));
-  result.push_back(V3d(box.max.x, box.min.y, box.min.z));
-  result.push_back(V3d(box.min.x, box.max.y, box.min.z));
-  result.push_back(V3d(box.max.x, box.max.y, box.min.z));
-  result.push_back(V3d(box.min.x, box.min.y, box.max.z));
-  result.push_back(V3d(box.max.x, box.min.y, box.max.z));
-  result.push_back(V3d(box.min.x, box.max.y, box.max.z));
-  result.push_back(V3d(box.max.x, box.max.y, box.max.z));
-  return result;
-}
-
-//----------------------------------------------------------------------------//
-
-inline std::vector<V3d> 
-unitCornerPoints()
-{
-  std::vector<V3d> result;
-  result.push_back(V3d(0.0, 0.0, 0.0));
-  result.push_back(V3d(1.0, 0.0, 0.0));
-  result.push_back(V3d(0.0, 1.0, 0.0));
-  result.push_back(V3d(1.0, 1.0, 0.0));
-  result.push_back(V3d(0.0, 0.0, 1.0));
-  result.push_back(V3d(1.0, 0.0, 1.0));
-  result.push_back(V3d(0.0, 1.0, 1.0));
-  result.push_back(V3d(1.0, 1.0, 1.0));
-  return result;
-}
-
 //------------------------------------------------------------------------------
 
 inline bool 
@@ -310,22 +292,34 @@ struct FieldGroup
   // Instantiate FieldWrapper<Field_T> for each family with each basic type
   typedef typename mpl::transform<
     MPLBaseTypes, 
-    detail::MakeDense<ph::_1> >::type     MPLDenseTypes;
+    detail::MakeDense<ph::_1> >::type       MPLDenseTypes;
   typedef typename mpl::transform<
     MPLBaseTypes, 
-    detail::MakeSparse<ph::_1> >::type    MPLSparseTypes;
+    detail::MakeSparse<ph::_1> >::type      MPLSparseTypes;
   typedef typename mpl::transform<
     MPLBaseTypes, 
-    detail::MakeMIPDense<ph::_1> >::type  MPLMIPDenseTypes;
+    detail::MakeTemporal<ph::_1> >::type    MPLTemporalTypes;
   typedef typename mpl::transform<
     MPLBaseTypes, 
-    detail::MakeMIPSparse<ph::_1> >::type MPLMIPSparseTypes;
+    detail::MakeMIPDense<ph::_1> >::type    MPLMIPDenseTypes;
+  typedef typename mpl::transform<
+    MPLBaseTypes, 
+    detail::MakeMIPSparse<ph::_1> >::type   MPLMIPSparseTypes;
+  typedef typename mpl::transform<
+    MPLBaseTypes, 
+    detail::MakeMIPTemporal<ph::_1> >::type MPLMIPTemporalTypes;
 
   // Map MPL types to boost fusion types
-  typedef typename fusion_ro::as_vector<MPLDenseTypes>::type     DenseTypes;
-  typedef typename fusion_ro::as_vector<MPLSparseTypes>::type    SparseTypes;
-  typedef typename fusion_ro::as_vector<MPLMIPDenseTypes>::type  MIPDenseTypes;
-  typedef typename fusion_ro::as_vector<MPLMIPSparseTypes>::type MIPSparseTypes;
+  typedef typename f_ro::as_vector<MPLDenseTypes>::type       DenseTypes;
+  typedef typename f_ro::as_vector<MPLSparseTypes>::type      SparseTypes;
+  typedef typename f_ro::as_vector<MPLTemporalTypes>::type    TemporalTypes;
+  typedef typename f_ro::as_vector<MPLMIPDenseTypes>::type    MIPDenseTypes;
+  typedef typename f_ro::as_vector<MPLMIPSparseTypes>::type   MIPSparseTypes;
+  typedef typename f_ro::as_vector<MPLMIPTemporalTypes>::type MIPTemporalTypes;
+
+  // Typedefs ------------------------------------------------------------------
+
+  typedef FieldRes::Vec FieldsVec;
 
   // Enums ---------------------------------------------------------------------
   
@@ -349,73 +343,140 @@ struct FieldGroup
 
   // Main methods --------------------------------------------------------------
 
+  //! Adds a single field to the group
+  void             setup(const Field3D::FieldRes::Ptr field);
+  //! Initializes the FieldGroup from a set of fields.
+  void             setup(const Field3D::FieldRes::Vec &fields);
+  //! Initializes the FieldGroup from a set of fields with pre-computed
+  //! min/max representations
+  void             setup(const Field3D::FieldRes::Vec &fields,
+                         const Field3D::FieldRes::Vec &minFields,
+                         const Field3D::FieldRes::Vec &maxFields);
+  //! Loads all fields from a given file and optional attribute pattern
+  //! \returns Number of fields loaded, or a negative number if 
+  //! the file failed to open.
+  int              load(const std::string &filename, 
+                        const std::string &attribute);
+  //! Make min/max representations of the fields in the group
+  void             makeMinMax(const float resMult);
+  //! The number of fields in the group
+  size_t           size() const;
+  //! The number of MIP fields in the group
+  size_t           sizeMIP() const;
+  //! The number of temporal fields in the group
+  size_t           sizeTemporal() const;
+
+  // Sampling methods ----------------------------------------------------------
+
+  //! Unified sampling of the group's fields. Will handle both MIP and non-MIP
+  //! data with optional compositing functor
+  void             sample(const V3d &wsP, 
+                          const float wsSpotSize, 
+                          const float time,
+                          float *result, 
+                          const CompositeOp compOp = Add) const;
+  //! Unified sampling of the group's fields. Will handle both MIP and non-MIP
+  //! data with optional compositing functor
+  void             sample(const size_t n, 
+                          const float *wsP, 
+                          const float *wsSpotSize, 
+                          const float *time, 
+                          float *result, 
+                          const float *active = NULL,
+                          const CompositeOp compOp = Add) const;
+  //! Unified sampling of all fields using stochastic interpolation
+  void             sampleStochastic(const size_t n, 
+                                    const float *wsP, 
+                                    const float *wsSpotSize, 
+                                    const float *time, 
+                                    const float *xiX, 
+                                    const float *xiY, 
+                                    const float *xiZ,
+                                    const float *xiSpotSize, 
+                                    const float *xiTime, 
+                                    float *result, 
+                                    const float *active = NULL,
+                                    const CompositeOp compOp = Add) const;
+
+  // Deprecated sampling methods -----------------------------------------------
+
+#if 1
+
+  //! Samples the group of fields at the given point. This call will not
+  //! include MIP fields, which require a spot diameter.
+  //! \warning To be deprecated in favor of sample(wsP, wsSpotSize, time, ...)
+  void             sample(const V3d &vsP, 
+                          float *result, 
+                          bool isVs) const;
+  //! Samples all the MIP fields in the group at the given point and
+  //! spot diameter.
+  //! \warning To be deprecated in favor of sample(wsP, wsSpotSize, time, ...)
+  void             sampleMIP(const V3d &vsP, 
+                             const float wsSpotSize, 
+                             float *result, 
+                             bool isVs) const;
+  //! Samples the fields in the group.
+  //! \warning To be deprecated in favor of sample(wsP, wsSpotSize, time, ...)
+  void             sampleMultiple(const size_t n, 
+                                  const float *wsP, 
+                                  float *result,
+                                  const float *active = NULL) const;
+  //! Samples all the MIP fields in the group.
+  //! \warning To be deprecated in favor of sample(wsP, wsSpotSize, time, ...)
+  void             sampleMIPMultiple(const size_t n, 
+                                     const float *wsP, 
+                                     const float *wsSpotSize, 
+                                     float *result, 
+                                     const float *active = NULL) const;
+
+#endif
+
+  // Info methods --------------------------------------------------------------
+
+  //! Returns the bounds of the group
+  Box3d            wsBounds() const;
+  //! Whether the given point intersects any of the fields in the FieldGroup
+  bool             intersects(const V3d &wsP) const;
+  //! Whether the given point intersects any of the fields in the FieldGroup
+  void             intersectsMultiple(const size_t n, 
+                                      const float *wsP, 
+                                      bool *result) const;
+  //! Gets the intersection intervals between the ray and the fields
+  bool             getIntersections(const Ray3d &ray, 
+                                    IntervalVec &intervals) const;
+  //! Returns the min/max range within a given bounding box.
+  void             getMinMax(const Box3d &wsBounds, 
+                             float *min, 
+                             float *max) const;
+  //! Smallest voxel size 
+  float            minWsVoxelSize() const
+  { return m_minWsVoxelSize; }
+  //! Whether the FieldGroup has a pre-filtered min/max representation
+  bool             hasPrefiltMinMax() const
+  { return m_hasPrefiltMinMax; }
+  //! Returns the memory use in bytes for the fields in the group
+  long long int    memSize() const;
+  //! Returns a vector of FieldRes::Ptrs to the fields in the group
+  const FieldsVec& fields() const
+  { return m_allFields; }
+
+  // Per-instance methods ------------------------------------------------------
+
   //! Sets the current object to world transform. This will be used for
   //! subsequent setup() and load() calls. Primarily used when the FieldGroup
   //! is employed for instancing of multiple fields.
-  void setOsToWs(const Imath::M44d &osToWs);
+  void             setOsToWs(const Imath::M44d &osToWs);
   //! Enable world axis aligned bounding box in lookups. This will be
   //! used for subsequent setup() and load() calls. Primarily used
   //! when the FieldGroup is employed for instancing of multiple
   //! fields.
-  virtual void setWsBoundsOptimization(const bool doWsBoundsOptimization);
+  void             setWsBoundsOptimization(const bool doWsBoundsOptimization);
   //! Sets the current ValueRemap operator. This will be used for
   //! subsequent setup() and load() calls. Primarily used when the FieldGroup
   //! is employed for instancing of multiple fields. By default, no value
   //! remapping takes place.
   //! \note It is ok to pass in a null pointer to disable value remapping.
-  void setValueRemapOp(ValueRemapOp::Ptr op);
-  //! Adds a single field to the group
-  virtual void setup(const Field3D::FieldRes::Ptr field);
-  //! Initializes the FieldGroup from a set of fields.
-  virtual void setup(const Field3D::FieldRes::Vec &fields);
-  //! Initializes the FieldGroup from a set of fields with pre-computed
-  //! min/max representations
-  virtual void setup(const Field3D::FieldRes::Vec &fields,
-                     const Field3D::FieldRes::Vec &minFields,
-                     const Field3D::FieldRes::Vec &maxFields);
-  //! Loads all fields from a given file and optional attribute pattern
-  //! \returns Number of fields loaded, or a negative number if 
-  //! the file failed to open.
-  int load(const std::string &filename, const std::string &attribute);
-  //! Make min/max representations of the fields in the group
-  void makeMinMax(const float resMult);
-  //! The number of fields in the group
-  virtual size_t size() const;
-  //! The number of MIP fields in the group
-  size_t sizeMIP() const;
-   //! Unified sampling of the group's fields. Will handle both MIP and non-MIP
-  //! data with optional compositing functor
-  void sample(const V3d &wsP, const float wsSpotSize, const float time,
-              float *result, const CompositeOp compOp = Add);
- //! Samples the group of fields at the given point. This call will not
-  //! include MIP fields, which require a spot size. 
-  //! \warning To be deprecated in favor of sample(wsP, wsSpotSize, time, ...)
-  void sample(const V3d &vsP, float *result, bool isVs) const;
-  //! Samples all the MIP fields in the group.
-  //! \warning To be deprecated in favor of sample(wsP, wsSpotSize, time, ...)
-  void sampleMIP(const V3d &vsP, const float wsSpotSize, 
-                 float *result, bool isVs) const;
-  //! Samples the fields in the group.
-  void sampleMultiple(const size_t n, const float *wsP, float *result) const;
-  //! Samples all the MIP fields in the group.
-  void sampleMIPMultiple(const size_t n, const float *wsP, const float *wsSpotSize, 
-                         float *result) const;
-  //! Returns the bounds of the group
-  Box3d wsBounds() const;
-  //! Whether the given point intersects any of the fields in the FieldGroup
-  bool intersects(const V3d &wsP) const;
-  //! Gets the intersection intervals between the ray and the fields
-  bool getIntersections(const Ray3d &ray, IntervalVec &intervals) const;
-  //! Returns the min/max range within a given bounding box.
-  void getMinMax(const Box3d &wsBounds, float *min, float *max) const;
-  //! Whether the FieldGroup has a pre-filtered min/max representation
-  bool hasPrefiltMinMax() const
-  { return m_hasPrefiltMinMax; }
-  //! Returns the memory use in bytes for the fields in the group
-  long long int memSize() const;
-  //! Returns a vector of FieldRes::Ptrs to the fields in the group
-  const FieldRes::Vec& fields() const
-  { return m_allFields; }
+  void             setValueRemapOp(ValueRemapOp::Ptr op);
 
 protected:
 
@@ -427,13 +488,18 @@ protected:
 
   // Data members --------------------------------------------------------------
   
-  DenseTypes     m_dense;
-  SparseTypes    m_sparse;
-  MIPDenseTypes  m_mipDense, m_mipDenseMin, m_mipDenseMax;
-  MIPSparseTypes m_mipSparse, m_mipSparseMin, m_mipSparseMax;
+  DenseTypes       m_dense;
+  SparseTypes      m_sparse;
+  TemporalTypes    m_temporal;
+  MIPDenseTypes    m_mipDense, m_mipDenseMin, m_mipDenseMax;
+  MIPSparseTypes   m_mipSparse, m_mipSparseMin, m_mipSparseMax;
+  MIPTemporalTypes m_mipTemporal;
 
   //! Whether pre-filtered min/max are present
   bool m_hasPrefiltMinMax;
+
+  //! Cached min voxel size
+  float m_minWsVoxelSize;
 
   //! Current object to world transform
   M44d m_osToWs;
@@ -460,12 +526,24 @@ protected:
   struct SampleMIP;
   struct SampleMultiple;
   struct SampleMIPMultiple;
+  struct SampleStochastic;
+  struct SampleMIPStochastic;
+  struct SampleTemporal;
+  struct SampleMIPTemporal;
+  struct SampleTemporalMultiple;
+  struct SampleMIPTemporalMultiple;
+  struct SampleTemporalStochastic;
+  struct SampleMIPTemporalStochastic;
   struct GetWsBounds;
   struct GetIntersections;
   struct GetMinMax;
   struct GetMinMaxMIP;
   struct GetMinMaxPrefilt;
+  struct GetMinMaxTemporal;
+  struct GetMinMaxMIPTemporal;
+  struct MinWsVoxelSize;
   struct PointIsect;
+  struct PointIsectMultiple;
   struct MemSize;
 
 };
@@ -481,7 +559,9 @@ typedef FieldGroup<VectorTypes, 3> VectorFieldGroup;
 
 template <typename BaseTypeList_T, int Dims_T>
 FieldGroup<BaseTypeList_T, Dims_T>::FieldGroup()
-  : m_hasPrefiltMinMax(false), m_doWsBoundsOptimization(false)
+  : m_hasPrefiltMinMax(false), 
+    m_minWsVoxelSize(std::numeric_limits<float>::max()),
+    m_doWsBoundsOptimization(false)
 { }
 
 //------------------------------------------------------------------------------
@@ -489,7 +569,9 @@ FieldGroup<BaseTypeList_T, Dims_T>::FieldGroup()
 template <typename BaseTypeList_T, int Dims_T>
 FieldGroup<BaseTypeList_T, Dims_T>::FieldGroup
 (const Field3D::FieldRes::Vec &fields)
-  : m_hasPrefiltMinMax(false), m_doWsBoundsOptimization(false)
+  : m_hasPrefiltMinMax(false), 
+    m_minWsVoxelSize(std::numeric_limits<float>::max()),
+    m_doWsBoundsOptimization(false)
 {
   // Perform setup
   setup(fields);
@@ -508,17 +590,18 @@ FieldGroup<BaseTypeList_T, Dims_T>::setOsToWs(const Imath::M44d &osToWs)
 
 template <typename BaseTypeList_T, int Dims_T>
 void 
-FieldGroup<BaseTypeList_T, Dims_T>::setWsBoundsOptimization(const bool doWsBoundsOptimization)
+FieldGroup<BaseTypeList_T, Dims_T>::setWsBoundsOptimization(const bool enabled)
 {
-  m_doWsBoundsOptimization = doWsBoundsOptimization;
+  m_doWsBoundsOptimization = enabled;
 
-  if (doWsBoundsOptimization) {
+  if (m_doWsBoundsOptimization) {
     DoWsBoundsOptimization op(m_doWsBoundsOptimization);
-
     fusion::for_each(m_dense, op);
     fusion::for_each(m_sparse, op);
+    fusion::for_each(m_temporal, op);
     fusion::for_each(m_mipDense, op);
     fusion::for_each(m_mipSparse, op);
+    fusion::for_each(m_mipTemporal, op);
   }
 }
 
@@ -568,16 +651,32 @@ FieldGroup<BaseTypeList_T, Dims_T>::setup
 
   // Pick out primary fields
   for (size_t i = 0, end = fields.size(); i < end; ++i) {
-    GrabFields op(fields[i], m_osToWs, m_valueRemapOp, m_doWsBoundsOptimization);
+    GrabFields op(fields[i], m_osToWs, m_valueRemapOp, 
+                  m_doWsBoundsOptimization);
     fusion::for_each(m_dense, op);
     fusion::for_each(m_sparse, op);
     fusion::for_each(m_mipDense, op);
     fusion::for_each(m_mipSparse, op);
+    fusion::for_each(m_temporal, op);
+    fusion::for_each(m_mipTemporal, op);
   }
+
+  // Get min voxel size ---
+
+  MinWsVoxelSize op(m_minWsVoxelSize);
+
+  fusion::for_each(this->m_dense, op);
+  fusion::for_each(this->m_sparse, op);
+  fusion::for_each(this->m_mipDense, op);
+  fusion::for_each(this->m_mipSparse, op);    
+  fusion::for_each(m_temporal, op);
+  fusion::for_each(m_mipTemporal, op);
 
   // Pick out min/max fields
   setupMinMax(minFields, maxFields);
 }
+
+//------------------------------------------------------------------------------
 
 template <typename BaseTypeList_T, int Dims_T>
 void
@@ -591,13 +690,15 @@ FieldGroup<BaseTypeList_T, Dims_T>::setupMinMax
 
   // Pick out min fields
   for (size_t i = 0, end = minFields.size(); i < end; ++i) {
-    GrabFields op(minFields[i], m_osToWs, m_valueRemapOp, m_doWsBoundsOptimization);
+    GrabFields op(minFields[i], m_osToWs, m_valueRemapOp, 
+                  m_doWsBoundsOptimization);
     fusion::for_each(m_mipDenseMin, op);
     fusion::for_each(m_mipSparseMin, op);
   }
   // Pick out max fields
   for (size_t i = 0, end = maxFields.size(); i < end; ++i) {
-    GrabFields op(maxFields[i], m_osToWs, m_valueRemapOp, m_doWsBoundsOptimization);
+    GrabFields op(maxFields[i], m_osToWs, m_valueRemapOp, 
+                  m_doWsBoundsOptimization);
     fusion::for_each(m_mipDenseMax, op);
     fusion::for_each(m_mipSparseMax, op);
   }
@@ -693,6 +794,8 @@ FieldGroup<BaseTypeList_T, Dims_T>::size() const
   fusion::for_each(m_sparse, op);
   fusion::for_each(m_mipDense, op);
   fusion::for_each(m_mipSparse, op);
+  fusion::for_each(m_temporal, op);
+  fusion::for_each(m_mipTemporal, op);
   return op.count;
 }
 
@@ -705,6 +808,18 @@ FieldGroup<BaseTypeList_T, Dims_T>::sizeMIP() const
   CountFields op;
   fusion::for_each(m_mipDense, op);
   fusion::for_each(m_mipSparse, op);
+  fusion::for_each(m_mipTemporal, op);
+  return op.count;
+}
+
+//------------------------------------------------------------------------------
+
+template <typename BaseTypeList_T, int Dims_T>
+size_t 
+FieldGroup<BaseTypeList_T, Dims_T>::sizeTemporal() const
+{
+  CountFields op;
+  fusion::for_each(m_temporal, op);
   return op.count;
 }
 
@@ -714,9 +829,9 @@ template <typename BaseTypeList_T, int Dims_T>
 void 
 FieldGroup<BaseTypeList_T, Dims_T>::sample(const V3d &wsP, 
                                            const float wsSpotSize, 
-                                           const float /* time */,
+                                           const float time,
                                            float *result, 
-                                           const CompositeOp compOp)
+                                           const CompositeOp compOp) const
 {
   size_t numHits = 0;
 
@@ -729,6 +844,14 @@ FieldGroup<BaseTypeList_T, Dims_T>::sample(const V3d &wsP,
   SampleMIP mipOp(wsP, wsSpotSize, result, numHits);
   fusion::for_each(m_mipDense, mipOp);
   fusion::for_each(m_mipSparse, mipOp);
+
+  // Handle Temporal fields
+  SampleTemporal temporalOp(wsP, time, result, numHits);
+  fusion::for_each(m_temporal, temporalOp);
+
+  // Handle Temporal MIP fields
+  SampleMIPTemporal mipTemporalOp(wsP, wsSpotSize, time, result, numHits);
+  fusion::for_each(m_mipTemporal, mipTemporalOp);
 
   // Check composite op
   if (compOp == Add) {
@@ -743,6 +866,135 @@ FieldGroup<BaseTypeList_T, Dims_T>::sample(const V3d &wsP,
 }
 
 //------------------------------------------------------------------------------
+
+template <typename BaseTypeList_T, int Dims_T>
+void FieldGroup<BaseTypeList_T, Dims_T>::
+sample(const size_t n, 
+       const float *wsP, 
+       const float *wsSpotSize, 
+       const float *time, 
+       float *result, 
+       const float *active,
+       const CompositeOp compOp) const
+{
+  // Initialize numHits array
+  size_t numHits[n];
+  std::fill_n(numHits, n, 0);
+
+  // Handle ordinary fields
+  SampleMultiple op(n, wsP, result, numHits, active);
+  fusion::for_each(m_dense, op);
+  fusion::for_each(m_sparse, op);
+
+  // Handle MIP fields
+  SampleMIPMultiple mipOp(n, wsP, wsSpotSize, result, numHits, active);
+  fusion::for_each(m_mipDense, mipOp);
+  fusion::for_each(m_mipSparse, mipOp);
+
+  // Handle Temporal fields
+  SampleTemporalMultiple temporalOp(n, wsP, time, result, numHits, active);
+  fusion::for_each(m_temporal, temporalOp);
+
+  // Handle Temporal MIP fields
+  SampleMIPTemporalMultiple mipTemporalOp(n, wsP, wsSpotSize, time, 
+                                          result, numHits, active);
+  fusion::for_each(m_temporal, mipTemporalOp);
+
+  // Check composite op
+  if (compOp == Add) {
+    // Nothing
+  } else {
+    for (int i = 0; i < n; ++i) {
+      if (numHits[i]) {
+        for (size_t c = 0; c < Dims_T; ++c) {
+          result[i * Dims_T + c] /= static_cast<float>(numHits[i]);
+        }
+      }
+    }
+  }
+}
+
+//------------------------------------------------------------------------------
+
+template <typename BaseTypeList_T, int Dims_T>
+void FieldGroup<BaseTypeList_T, Dims_T>::
+sampleStochastic(const size_t n, 
+                 const float *wsP, 
+                 const float *wsSpotSize, 
+                 const float *time, 
+                 const float *xiX, 
+                 const float *xiY, 
+                 const float *xiZ,
+                 const float *xiSpotSize, 
+                 const float *xiTime, 
+                 float *result, 
+                 const float *active,
+                 const CompositeOp compOp) const
+{
+  // Initialize numHits array
+  size_t numHits[n];
+  std::fill_n(numHits, n, 0);
+
+  // Handle ordinary fields
+  if (xiX && xiY && xiZ) {
+    SampleStochastic op(n, SampleStochasticArgs(wsP, xiX, xiY, xiZ, result, 
+                                                numHits, active));
+    fusion::for_each(m_dense, op);
+    fusion::for_each(m_sparse, op);
+  } else {
+    SampleMultiple op(n, wsP, result, numHits, active);
+    fusion::for_each(m_dense, op);
+    fusion::for_each(m_sparse, op);
+  }
+
+  // Handle MIP fields
+  //   ... SampleMIPStochastic works two ways - either stochastic in
+  //   ... all dimensions or only in LOD choice.
+  if ((xiSpotSize && !xiX && !xiY && !xiZ) || 
+      (xiSpotSize && xiX && xiY && xiZ)) {
+    SampleMIPStochastic mipOp(n, SampleMIPStochasticArgs(wsP, wsSpotSize, 
+                                                         xiX, xiY, xiZ, 
+                                                         xiSpotSize, result, 
+                                                         numHits, active));
+    fusion::for_each(m_mipDense, mipOp);
+    fusion::for_each(m_mipSparse, mipOp);
+  } else {
+    SampleMIPMultiple mipOp(n, wsP, wsSpotSize, result, numHits, active);
+    fusion::for_each(m_mipDense, mipOp);
+    fusion::for_each(m_mipSparse, mipOp);
+  }
+
+  // Handle temporal fields
+  if (xiTime && xiSpotSize && xiX && xiY && xiZ) {
+    SampleTemporalStochasticArgs tArgs(wsP, wsSpotSize, time, xiX, xiY, xiZ,
+                                       xiSpotSize, xiTime, result, numHits, 
+                                       active);
+    SampleTemporalStochastic temporalOp(n, tArgs);
+    fusion::for_each(m_temporal, temporalOp);
+    SampleMIPTemporalStochastic mipTemporalOp(n, tArgs);
+    fusion::for_each(m_temporal, mipTemporalOp);
+  } else {
+    SampleMIPTemporalMultiple mipTemporalOp(n, wsP, time, result, active);
+    fusion::for_each(m_temporal, mipTemporalOp);
+  }
+
+  // Check composite op
+  if (compOp == Add) {
+    // Nothing
+  } else {
+    for (int i = 0; i < n; ++i) {
+      if (numHits[i]) {
+        for (size_t c = 0; c < Dims_T; ++c) {
+          result[i * Dims_T + c] /= static_cast<float>(numHits[i]);
+        }
+      }
+    }
+  }
+}
+
+//------------------------------------------------------------------------------
+
+#if 1
 
 template <typename BaseTypeList_T, int Dims_T>
 void 
@@ -763,11 +1015,13 @@ template <typename BaseTypeList_T, int Dims_T>
 void
 FieldGroup<BaseTypeList_T, Dims_T>::sampleMultiple(const size_t n,
                                                    const float *wsP,
-                                                   float *result) const
+                                                   float *result,
+                                                   const float *active) const
 {
-  size_t numHits = 0;
+  size_t numHits[n];
+  std::fill_n(numHits, n, 0);
 
-  SampleMultiple op(n, wsP, result, numHits);
+  SampleMultiple op(n, wsP, result, numHits, active);
   fusion::for_each(m_dense, op);
   fusion::for_each(m_sparse, op);
 }
@@ -795,14 +1049,18 @@ void
 FieldGroup<BaseTypeList_T, Dims_T>::sampleMIPMultiple(const size_t n,
                                                       const float *wsP,
                                                       const float *wsSpotSize, 
-                                                      float *result) const
+                                                      float *result,
+                                                      const float *active) const
 {
-  size_t numHits = 0;
+  size_t numHits[n];
+  std::fill_n(numHits, n, 0);
 
-  SampleMIPMultiple op(n, wsP, wsSpotSize, result, numHits);
+  SampleMIPMultiple op(n, wsP, wsSpotSize, result, numHits, active);
   fusion::for_each(m_mipDense, op);
   fusion::for_each(m_mipSparse, op);
 }
+
+#endif
 
 //------------------------------------------------------------------------------
 
@@ -816,6 +1074,8 @@ FieldGroup<BaseTypeList_T, Dims_T>::wsBounds() const
   fusion::for_each(m_sparse, op);
   fusion::for_each(m_mipDense, op);
   fusion::for_each(m_mipSparse, op);
+  fusion::for_each(m_temporal, op);
+  fusion::for_each(m_mipTemporal, op);
   return wsBounds;
 }
 
@@ -825,12 +1085,34 @@ template <typename BaseTypeList_T, int Dims_T>
 bool
 FieldGroup<BaseTypeList_T, Dims_T>::intersects(const V3d &wsP) const
 {
-  PointIsect op(wsP);
+  bool doesIntersect = false;
+
+  PointIsect op(wsP, doesIntersect);
   fusion::for_each(m_dense, op);
   fusion::for_each(m_sparse, op);
   fusion::for_each(m_mipDense, op);
   fusion::for_each(m_mipSparse, op);
+  fusion::for_each(m_temporal, op);
+  fusion::for_each(m_mipTemporal, op);
   return op.result();
+}
+
+//------------------------------------------------------------------------------
+
+template <typename BaseTypeList_T, int Dims_T>
+void
+FieldGroup<BaseTypeList_T, Dims_T>::intersectsMultiple(const size_t n,
+                                                       const float *wsP,
+                                                       bool *result) const
+
+{
+  PointIsectMultiple op(n, wsP, result);
+  fusion::for_each(m_dense, op);
+  fusion::for_each(m_sparse, op);
+  fusion::for_each(m_mipDense, op);
+  fusion::for_each(m_mipSparse, op);
+  fusion::for_each(m_temporal, op);
+  fusion::for_each(m_mipTemporal, op);
 }
 
 //------------------------------------------------------------------------------
@@ -845,6 +1127,8 @@ FieldGroup<BaseTypeList_T, Dims_T>::getIntersections
   fusion::for_each(m_sparse, op);
   fusion::for_each(m_mipDense, op);
   fusion::for_each(m_mipSparse, op);
+  fusion::for_each(m_temporal, op);
+  fusion::for_each(m_mipTemporal, op);
   return intervals.size() > 0;
 }
 
@@ -856,7 +1140,17 @@ FieldGroup<BaseTypeList_T, Dims_T>::getMinMax(const Box3d &wsBounds,
                                               float *min, 
                                               float *max) const
 {
-  if (m_hasPrefiltMinMax) {
+  // Check whether query region is large enough to warrant using prefiltered
+  // minmax data
+#if 1
+  const double mult       = 2.0;
+  const double querySize  = wsBounds.size().length();
+  const bool   usePrefilt = querySize > this->m_minWsVoxelSize * mult;
+#else
+  const bool   usePrefilt = true;
+#endif
+
+  if (usePrefilt && m_hasPrefiltMinMax) {
     // Pre-filtered types
     GetMinMaxPrefilt opMin(wsBounds, min, GetMinMaxPrefilt::Min);
     GetMinMaxPrefilt opMax(wsBounds, max, GetMinMaxPrefilt::Max);
@@ -873,6 +1167,12 @@ FieldGroup<BaseTypeList_T, Dims_T>::getMinMax(const Box3d &wsBounds,
     GetMinMaxMIP opMIP(wsBounds, min, max);
     fusion::for_each(m_mipDense, opMIP);
     fusion::for_each(m_mipSparse, opMIP);
+    // Non-prefiltered Temporal types
+    GetMinMaxTemporal opTemporal(wsBounds, min, max);
+    fusion::for_each(m_temporal, opTemporal);
+    // Non-prefiltered Temporal MIP types
+    GetMinMaxMIPTemporal opMipTemporal(wsBounds, min, max);
+    fusion::for_each(m_mipTemporal, opMipTemporal);
   }
 }
 
@@ -888,6 +1188,8 @@ FieldGroup<BaseTypeList_T, Dims_T>::memSize() const
   fusion::for_each(m_sparse, op);
   fusion::for_each(m_mipDense, op);
   fusion::for_each(m_mipSparse, op);
+  fusion::for_each(m_temporal, op);
+  fusion::for_each(m_mipTemporal, op);
   return result;
 }
 
@@ -1120,20 +1422,22 @@ struct FieldGroup<BaseTypeList_T, Dims_T>::SampleMultiple
 {
   //! Ctor
   SampleMultiple(const size_t n, const float *p, float *result,
-                 size_t *numHits)
-    : m_n(n), m_p(p), m_result(result), m_numHits(numHits)
+                 size_t *numHits, const float *active = NULL)
+    : m_n(n), m_p(p), m_result(result), m_numHits(numHits), m_active(active)
   { }
   //! Functor
   template <typename T>
   void operator()(const T &vec) const
   { 
-    FieldSampler<T, Dims_T>::sampleMultiple(vec, m_n, m_p, m_result, m_numHits); 
+    FieldSampler<T, Dims_T>::sampleMultiple(vec, m_n, m_p, m_result, 
+                                            m_numHits, m_active); 
   }
   // Data members
-  const int m_n;
+  const int    m_n;
   const float *m_p;
-  float *m_result;
-  size_t *m_numHits;
+  float       *m_result;
+  size_t      *m_numHits;
+  const float *m_active;
 };
 
 //------------------------------------------------------------------------------
@@ -1143,23 +1447,218 @@ struct FieldGroup<BaseTypeList_T, Dims_T>::SampleMIPMultiple
 {
   //! Ctor
   SampleMIPMultiple(const size_t n, const float *p, const float *wsSpotSize,
-                    float *result, size_t *numHits)
-    : m_n(n), m_p(p), m_wsSpotSize(wsSpotSize), m_result(result), 
-      m_numHits(numHits)
+                    float *result, size_t *numHits, const float *active = NULL)
+    : m_n(n), m_p(p), m_wsSpotSize(wsSpotSize), m_result(result),
+      m_numHits(numHits), m_active(active)
   { }
   //! Functor
   template <typename T>
   void operator()(const T &vec) const
   { 
     FieldSampler<T, Dims_T>::sampleMIPMultiple(vec, m_n, m_p, m_wsSpotSize,
-                                               m_result, m_numHits); 
+                                               m_result, m_numHits, m_active); 
   }
   // Data members
-  const int m_n;
+  const int    m_n;
   const float *m_p;
   const float *m_wsSpotSize;
+  float       *m_result;
+  size_t      *m_numHits;
+  const float *m_active;
+};
+
+//------------------------------------------------------------------------------
+
+template <typename BaseTypeList_T, int Dims_T>
+struct FieldGroup<BaseTypeList_T, Dims_T>::SampleStochastic
+{
+  //! Ctor
+  SampleStochastic(const size_t n, const SampleStochasticArgs &args)
+    : m_n(n), m_args(args)
+  { }
+  //! Functor
+  template <typename T>
+  void operator()(const T &vec) const
+  { 
+    FieldSampler<T, Dims_T>::sampleStochastic(vec, m_n, m_args);
+  }
+  // Data members
+  const int                   m_n;
+  const SampleStochasticArgs &m_args;
+};
+
+//------------------------------------------------------------------------------
+
+template <typename BaseTypeList_T, int Dims_T>
+struct FieldGroup<BaseTypeList_T, Dims_T>::SampleMIPStochastic
+{
+  //! Ctor
+  SampleMIPStochastic(const size_t n, const SampleMIPStochasticArgs &args)
+    : m_n(n), m_args(args)
+  { }
+  //! Functor
+  template <typename T>
+  void operator()(const T &vec) const
+  { 
+    FieldSampler<T, Dims_T>::sampleMIPStochastic(vec, m_n, m_args);
+  }
+  // Data members
+  const int                      m_n;
+  const SampleMIPStochasticArgs &m_args;
+};
+
+//------------------------------------------------------------------------------
+
+template <typename BaseTypeList_T, int Dims_T>
+struct FieldGroup<BaseTypeList_T, Dims_T>::SampleTemporal
+{
+  //! Ctor
+  SampleTemporal(const V3d &p, const float t, float *result, size_t &numHits)
+    : m_p(p), m_t(t), m_result(result), m_numHits(numHits)
+  { }
+  //! Functor
+  template <typename T>
+  void operator()(const T &vec) const
+  { 
+    FieldSampler<T, Dims_T>::sampleTemporal(vec, m_p, m_t, m_result, m_numHits);
+  }
+  // Data members
+  const V3d &m_p;
+  const float m_t;
+  float *m_result;
+  size_t &m_numHits;
+};
+
+//------------------------------------------------------------------------------
+
+template <typename BaseTypeList_T, int Dims_T>
+struct FieldGroup<BaseTypeList_T, Dims_T>::SampleMIPTemporal
+{
+  //! Ctor
+  SampleMIPTemporal(const V3d &p, const float wsSpotSize, const float t, 
+                    float *result, size_t &numHits)
+    : m_p(p), m_wsSpotSize(wsSpotSize), m_t(t), 
+      m_result(result), m_numHits(numHits)
+  { }
+  //! Functor
+  template <typename T>
+  void operator()(const T &vec) const
+  { 
+    FieldSampler<T, Dims_T>::sampleMIPTemporal(vec, m_p, m_wsSpotSize, m_t, 
+                                               m_result, m_numHits);
+  }
+  // Data members
+  const V3d &m_p;
+  const float m_wsSpotSize;
+  const float m_t;
+  float *m_result;
+  size_t &m_numHits;
+};
+
+//------------------------------------------------------------------------------
+
+template <typename BaseTypeList_T, int Dims_T>
+struct FieldGroup<BaseTypeList_T, Dims_T>::SampleTemporalMultiple
+{
+  //! Ctor
+  SampleTemporalMultiple(const size_t n,
+                         const float *p,
+                         const float *t,
+                         float *result,
+                         size_t *numHits, 
+                         const float *active)
+    : m_n(n), m_p(p), m_t(t), m_result(result), m_numHits(numHits),
+      m_active(active)
+  { }
+  //! Functor
+  template <typename T>
+  void operator()(const T &vec) const
+  { 
+    FieldSampler<T, Dims_T>::sampleTemporalMultiple(vec, m_n, m_p, m_t,
+                                                    m_result, m_numHits, 
+                                                    m_active); 
+  }
+  // Data members
+  const size_t m_n;
+  const float *m_p;
+  const float *m_t;
   float *m_result;
   size_t *m_numHits;
+  const float *m_active;
+};
+
+//------------------------------------------------------------------------------
+
+template <typename BaseTypeList_T, int Dims_T>
+struct FieldGroup<BaseTypeList_T, Dims_T>::SampleMIPTemporalMultiple
+{
+  //! Ctor
+  SampleMIPTemporalMultiple(const size_t n,
+                            const float *p,
+                            const float *t,
+                            float *result,
+                            size_t *numHits, 
+                            const float *active)
+    : m_n(n), m_p(p), m_t(t), m_result(result), m_numHits(numHits),
+      m_active(active)
+  { }
+  //! Functor
+  template <typename T>
+  void operator()(const T &vec) const
+  { 
+    FieldSampler<T, Dims_T>::sampleMIPTemporalMultiple(vec, m_n, m_p, m_t,
+                                                       m_result, m_numHits, 
+                                                       m_active); 
+  }
+  // Data members
+  const size_t m_n;
+  const float *m_p;
+  const float *m_t;
+  float *m_result;
+  size_t *m_numHits;
+  const float *m_active;
+};
+
+//------------------------------------------------------------------------------
+
+template <typename BaseTypeList_T, int Dims_T>
+struct FieldGroup<BaseTypeList_T, Dims_T>::SampleTemporalStochastic
+{
+  //! Ctor
+  SampleTemporalStochastic(const size_t n, 
+                           const SampleTemporalStochasticArgs &args)
+    : m_n(n), m_args(args)
+  { }
+  //! Functor
+  template <typename T>
+  void operator()(const T &vec) const
+  { 
+    FieldSampler<T, Dims_T>::sampleTemporalStochastic(vec, m_n, m_args);
+  }
+  // Data members
+  const int                           m_n;
+  const SampleTemporalStochasticArgs &m_args;
+};
+
+//------------------------------------------------------------------------------
+
+template <typename BaseTypeList_T, int Dims_T>
+struct FieldGroup<BaseTypeList_T, Dims_T>::SampleMIPTemporalStochastic
+{
+  //! Ctor
+  SampleMIPTemporalStochastic(const size_t n, 
+                              const SampleTemporalStochasticArgs &args)
+    : m_n(n), m_args(args)
+  { }
+  //! Functor
+  template <typename T>
+  void operator()(const T &vec) const
+  { 
+    FieldSampler<T, Dims_T>::sampleMIPTemporalStochastic(vec, m_n, m_args);
+  }
+  // Data members
+  const int                           m_n;
+  const SampleTemporalStochasticArgs &m_args;
 };
 
 //------------------------------------------------------------------------------
@@ -1180,7 +1679,7 @@ struct FieldGroup<BaseTypeList_T, Dims_T>::GetWsBounds
       const FieldMapping* mapping = vec[field].mapping;
       if (mapping) {
         // Corner vertices in local space
-        std::vector<V3d> lsP = detail::unitCornerPoints();
+        std::vector<V3d> lsP = unitCornerPoints();
         // Transform to world space and pad resulting bounds
         for (size_t i = 0; i < 8; ++i) {
           V3d wsP;
@@ -1249,7 +1748,7 @@ struct FieldGroup<BaseTypeList_T, Dims_T>::GetIntersections
 
     // Get the eight corners of the local space bounding box
     Box3d lsBounds(V3d(0.0), V3d(1.0));
-    PointVec lsCorners = detail::cornerPoints(lsBounds);
+    PointVec lsCorners = cornerPoints(lsBounds);
     // Get the world space positions of the eight corners of the frustum
     PointVec wsCorners(lsCorners.size());
     for (PointVec::iterator lsP = lsCorners.begin(), wsP = wsCorners.begin(),
@@ -1397,6 +1896,69 @@ struct FieldGroup<BaseTypeList_T, Dims_T>::GetMinMaxPrefilt
 //------------------------------------------------------------------------------
 
 template <typename BaseTypeList_T, int Dims_T>
+struct FieldGroup<BaseTypeList_T, Dims_T>::GetMinMaxTemporal
+{
+  //! Ctor
+  GetMinMaxTemporal(const Box3d &wsBounds, float *min, float *max)
+    : m_wsBounds(wsBounds), m_min(min), m_max(max)
+  { }
+  //! Functor
+  template <typename T>
+  void operator()(const T &vec) const
+  { 
+    FieldSampler<T, Dims_T>::getMinMaxTemporal(vec, m_wsBounds, 
+                                               m_min, m_max);
+  }
+  // Data members
+  const Box3d &m_wsBounds;
+  float *m_min;
+  float *m_max;
+};
+
+//------------------------------------------------------------------------------
+
+template <typename BaseTypeList_T, int Dims_T>
+struct FieldGroup<BaseTypeList_T, Dims_T>::GetMinMaxMIPTemporal
+{
+  //! Ctor
+  GetMinMaxMIPTemporal(const Box3d &wsBounds, float *min, float *max)
+    : m_wsBounds(wsBounds), m_min(min), m_max(max)
+  { }
+  //! Functor
+  template <typename T>
+  void operator()(const T &vec) const
+  { 
+    FieldSampler<T, Dims_T>::getMinMaxTemporal(vec, m_wsBounds, 
+                                               m_min, m_max);
+  }
+  // Data members
+  const Box3d &m_wsBounds;
+  float *m_min;
+  float *m_max;
+};
+
+//------------------------------------------------------------------------------
+
+template <typename BaseTypeList_T, int Dims_T>
+struct FieldGroup<BaseTypeList_T, Dims_T>::MinWsVoxelSize
+{
+  //! Ctor
+  MinWsVoxelSize(float &sizeMin)
+    : m_sizeMin(sizeMin)
+  { }
+  //! Functor
+  template <typename T>
+  void operator()(const T &vec) const
+  { 
+    FieldSampler<T, Dims_T>::getMinWsVoxelSize(vec, m_sizeMin);
+  }
+  // Data members
+  float &m_sizeMin;
+};
+
+//------------------------------------------------------------------------------
+
+template <typename BaseTypeList_T, int Dims_T>
 struct FieldGroup<BaseTypeList_T, Dims_T>::MemSize
 {
   //! Ctor
@@ -1424,8 +1986,8 @@ template <typename BaseTypeList_T, int Dims_T>
 struct FieldGroup<BaseTypeList_T, Dims_T>::PointIsect
 {
   //! Ctor
-  PointIsect(const V3d &wsP)
-    : m_wsP(wsP), m_doesIntersect(false)
+  PointIsect(const V3d &wsP, bool &doesIntersect)
+    : m_wsP(wsP), m_doesIntersect(&doesIntersect)
   { }
   //! Functor
   template <typename T>
@@ -1445,18 +2007,75 @@ struct FieldGroup<BaseTypeList_T, Dims_T>::PointIsect
         }
         // Sample
         if (vec[i].vsBounds.intersects(vsP)) {
-          m_doesIntersect = true;
+          *m_doesIntersect = true;
         } 
       }
     }
   }
   //! Result
   bool result() const
-  { return m_doesIntersect; }
+  { return *m_doesIntersect; }
 private:
   // Data members
   V3d  m_wsP;
-  bool m_doesIntersect;
+  bool *m_doesIntersect;
+};
+
+//------------------------------------------------------------------------------
+
+template <typename BaseTypeList_T, int Dims_T>
+struct FieldGroup<BaseTypeList_T, Dims_T>::PointIsectMultiple
+{
+  //! Ctor
+  PointIsectMultiple(const size_t n, const float *p, 
+                     bool *result)
+    : m_neval(n), m_p(p), m_result(result)
+  { }
+  //! Functor
+  template <typename T>
+  void operator()(const T &vec) const
+  { 
+    for (size_t field = 0, end = vec.size(); field < end; ++field) {
+      // Loop over fields in vector
+      for (size_t i = 0, end = vec.size(); i < end; ++i) {
+        const Imath::Box3d &vsBounds = vec[i].vsBounds;
+        const FieldMapping *m = vec[i].mapping;
+
+        if (vec[i].doOsToWs) {
+          for (size_t ieval = 0; ieval < m_neval; ++ieval) {
+
+            const V3d wsP(*reinterpret_cast<const V3f*>(m_p + 3 * ieval));
+
+            // Apply world to object transform
+            V3d osP;
+            V3d vsP;
+            vec[i].wsToOs.multVecMatrix(wsP, osP);
+            m->worldToVoxel(osP, vsP);
+            // Sample
+            if (vsBounds.intersects(vsP))
+              m_result[ieval] = true;
+          }
+        } else {
+          for (size_t ieval = 0; ieval < m_neval; ++ieval) {
+
+            const V3d wsP(*reinterpret_cast<const V3f*>(m_p + 3 * ieval));
+            V3d vsP;
+
+            // Apply world to object transform
+            m->worldToVoxel(wsP, vsP);
+            // Sample
+            if (vsBounds.intersects(vsP))
+              m_result[ieval] = true;
+          }
+        }
+      }
+    }
+  }
+private:
+  // Data members
+  const int m_neval;
+  const float *m_p;
+  bool *m_result;
 };
 
 //----------------------------------------------------------------------------//

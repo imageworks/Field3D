@@ -382,6 +382,14 @@ Field3DFileHDF5Base::removeUniqueId(const std::string &partitionName) const
 
 //----------------------------------------------------------------------------//
 
+size_t 
+Field3DFileHDF5Base::numPartitions(const std::string &name) const
+{
+  return numIntPartitions(name);
+}
+
+//----------------------------------------------------------------------------//
+
 void 
 Field3DFileHDF5Base::getPartitionNames(vector<string> &names) const
 {
@@ -418,6 +426,24 @@ Field3DFileHDF5Base::getScalarLayerNames(vector<string> &names,
 //----------------------------------------------------------------------------//
 
 void 
+Field3DFileHDF5Base::getScalarLayerNames(vector<string> &names, 
+                                         const string &partitionName,
+                                         const size_t index) const
+{
+  names.clear();
+
+  const string internalName = makeIntPartitionName(partitionName, index);
+  Partition::Ptr part = partition(internalName);
+  if (part) {
+    part->getScalarLayerNames(names);
+  }
+
+  names = makeUnique(names);
+}
+
+//----------------------------------------------------------------------------//
+
+void 
 Field3DFileHDF5Base::getVectorLayerNames(vector<string> &names, 
                                      const string &partitionName) const
 {
@@ -428,6 +454,24 @@ Field3DFileHDF5Base::getVectorLayerNames(vector<string> &names,
     Partition::Ptr part = partition(internalName);
     if (part)
       part->getVectorLayerNames(names);
+  }
+
+  names = makeUnique(names);
+}
+
+//----------------------------------------------------------------------------//
+
+void 
+Field3DFileHDF5Base::getVectorLayerNames(vector<string> &names, 
+                                         const string &partitionName,
+                                         const size_t index) const
+{
+  names.clear();
+
+  const string internalName = makeIntPartitionName(partitionName, index);
+  Partition::Ptr part = partition(internalName);
+  if (part) {
+    part->getVectorLayerNames(names);
   }
 
   names = makeUnique(names);
@@ -480,6 +524,13 @@ Field3DFileHDF5Base::getIntVectorLayerNames(vector<string> &names,
   }
 
   part->getVectorLayerNames(names);
+}
+
+//----------------------------------------------------------------------------//
+
+bool Field3DFileHDF5Base::empty() const
+{
+  return m_partitions.size() == 0;
 }
 
 //----------------------------------------------------------------------------//
@@ -711,9 +762,10 @@ bool Field3DInputFileHDF5::readPartitionAndLayerInfo()
 
   // First, find the partitions ---
 
-  herr_t status;
-  status = H5Literate(m_file, H5_INDEX_NAME, H5_ITER_NATIVE, NULL, 
-                      &parsePartitions, this);
+  // herr_t status;
+  // status =
+  H5Literate(m_file, H5_INDEX_NAME, H5_ITER_NATIVE, NULL, 
+             &parsePartitions, this);
 
   // Get the partition names to store 
   m_partitions.clear();
@@ -768,8 +820,9 @@ bool Field3DInputFileHDF5::readPartitionAndLayerInfo()
 
     m_layerInfo.clear();
 
-    status = H5Literate(partitionGroup.id(), H5_INDEX_NAME, H5_ITER_NATIVE, 
-                        NULL, &parseLayers, &info);
+    // status =
+    H5Literate(partitionGroup.id(), H5_INDEX_NAME, H5_ITER_NATIVE, 
+               NULL, &parseLayers, &info);
 
     //set the layer information on the partitions here
 
@@ -1172,10 +1225,11 @@ herr_t parseLayers(hid_t loc_id, const char *itemName,
 {
   GlobalLock lock(g_hdf5Mutex);
 
-  herr_t          status;
+  // herr_t          status;
   H5O_info_t      infobuf;
   
-  status = H5Oget_info_by_name (loc_id, itemName, &infobuf, H5P_DEFAULT);
+  // status = 
+  H5Oget_info_by_name (loc_id, itemName, &infobuf, H5P_DEFAULT);
 
   if (infobuf.type == H5O_TYPE_GROUP) {
 

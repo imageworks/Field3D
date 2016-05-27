@@ -54,34 +54,11 @@
 FIELD3D_NAMESPACE_OPEN
 
 //----------------------------------------------------------------------------//
-// MIPInterp 
+// detail namespace
 //----------------------------------------------------------------------------//
 
-template <typename MIPField_T>
-class MIPLinearInterp : boost::noncopyable
+namespace detail 
 {
-public:
-
-  // Typedefs ---
-
-  typedef typename MIPField_T::NestedType  FieldType;
-  typedef typename FieldType::LinearInterp LinearInterpType;
-  typedef typename FieldType::value_type   value_type;
-
-  // Ctors ---
-
-  //! Must be constructed with a MIP field to operate on
-  MIPLinearInterp(const MIPField_T &mip);
-
-  // Main methods ---
-
-  //! Performs interpolation. A MIP field interpolation requires a spot
-  //! size (which may be zero, forcing a lookup in the 0-level field).
-  value_type sample(const V3d &vsP, const float wsSpotSize) const;
-
-private:
-
-  // Structs ---
 
   struct InterpInfo
   {
@@ -103,12 +80,52 @@ private:
     size_t upper;
     //! Parametric position between finest and coarser
     float  lerpT;
+
   };
 
-  // Utility methods ---
+  inline InterpInfo interpInfo(const size_t numLevels, 
+                               const std::vector<float> &wsVoxelSize, 
+                               const float wsSpotSize)
+  {
+    // First case, spot size smaller than first level
+    if (wsSpotSize <= wsVoxelSize[0]) {
+      return InterpInfo();
+    }
+    // Check in-between sizes
+    for (size_t i = 1, end = numLevels; i < end; ++i) {
+      if (wsSpotSize <= wsVoxelSize[i]) {
+        const float lerpT = FIELD3D_LERPFACTOR(wsSpotSize, wsVoxelSize[i - 1],
+                                               wsVoxelSize[i]);
+        return InterpInfo(i - 1, i, lerpT);
+      }
+    }
+    // Final case, spot size larger or equal to highest level
+    return InterpInfo(numLevels - 1, numLevels - 1, 0.0f);
+  }
 
-  //! Computes between which levels to interpolate
-  InterpInfo interpInfo(const float wsSpotSize) const;
+}
+
+//----------------------------------------------------------------------------//
+// MIPInterpBase
+//----------------------------------------------------------------------------//
+
+template <typename MIPField_T>
+class MIPInterpBase : boost::noncopyable
+{
+public:
+
+  // Typedefs ---
+
+  typedef typename MIPField_T::NestedType  FieldType;
+  typedef typename FieldType::LinearInterp LinearInterpType;
+  typedef typename FieldType::value_type   value_type;
+
+  // Ctors ---
+
+  //! Must be constructed with a MIP field to operate on
+  MIPInterpBase(const MIPField_T &mip);
+
+protected:
 
   // Data members ---
 
@@ -116,8 +133,176 @@ private:
   const MIPField_T& m_mip;
   //! Min world space voxel size for each MIP level
   std::vector<float> m_wsVoxelSize;
+
+};
+
+//----------------------------------------------------------------------------//
+// MIPLinearInterp 
+//----------------------------------------------------------------------------//
+
+template <typename MIPField_T>
+class MIPLinearInterp : public MIPInterpBase<MIPField_T>
+{
+public:
+
+  // Typedefs ---
+
+  typedef typename MIPField_T::NestedType  FieldType;
+  typedef typename FieldType::LinearInterp LinearInterpType;
+  typedef typename FieldType::value_type   value_type;
+
+  // Ctors ---
+
+  //! Must be constructed with a MIP field to operate on
+  MIPLinearInterp(const MIPField_T &mip)
+    : MIPInterpBase<MIPField_T>(mip)
+  { }
+
+  // Main methods ---
+
+  //! Performs interpolation. A MIP field interpolation requires a spot
+  //! size (which may be zero, forcing a lookup in the 0-level field).
+  //! The time argument is ignored for non-temporal fields
+  value_type sample(const V3d &vsP, const float wsSpotSize,
+                    const float time) const;
+
+private:
+
+  // Typedefs ------------------------------------------------------------------
+
+  //! Convenience typedef for referring to base class
+  typedef MIPInterpBase<MIPField_T> base;    
+
+  // Data members ---
+
   //! Linear interpolator
   LinearInterpType m_interp;
+
+};
+
+//----------------------------------------------------------------------------//
+// MIPStochasticInterp
+//----------------------------------------------------------------------------//
+
+template <typename MIPField_T>
+class MIPStochasticInterp : public MIPInterpBase<MIPField_T>
+{
+public:
+  
+  // Typedefs ---
+
+  typedef typename MIPField_T::NestedType      FieldType;
+  typedef typename FieldType::StochasticInterp NestedInterpType;
+  typedef typename FieldType::value_type       value_type;
+
+  // Ctors ---------------------------------------------------------------------
+
+  //! Must be constructed with a MIP field to operate on
+  MIPStochasticInterp(const MIPField_T &mip)
+    : MIPInterpBase<MIPField_T>(mip)
+  { }
+
+  // Main methods --------------------------------------------------------------
+
+  //! Sample LOD and spatial dimensions stochastically
+  value_type linear(const V3d &vsP, const float wsSpotSize,
+                    const float xiX, const float xiY, const float xiZ,
+                    const float xiSpotSize) const
+  {
+    const detail::InterpInfo i = detail::interpInfo(base::m_mip.numLevels(),
+                                                    base::m_wsVoxelSize, 
+                                                    wsSpotSize);
+
+    if (i.lower == i.upper) {
+      // Special case where spot size is not in-between levels
+      if (i.lower == 0) {
+        // Special case for 0-level
+        return m_interp.linear(*base::m_mip.rawMipLevel(0), vsP, 
+                               xiX, xiY, xiZ);
+      } else {
+        // Not the 0-level, so we must transform vsP
+        V3f mipVsP;
+        base::m_mip.getVsMIPCoord(vsP, i.lower, mipVsP);
+        return m_interp.linear(*base::m_mip.rawMipLevel(i.lower), mipVsP, 
+                               xiX, xiY, xiZ);
+      }
+    } else {
+      V3f mipVsP0, mipVsP1;
+      base::m_mip.getVsMIPCoord(V3f(vsP), i.lower, mipVsP0);
+      base::m_mip.getVsMIPCoord(V3f(vsP), i.upper, mipVsP1);
+      // Quadrilinear interpolation choice
+      return xiSpotSize < (1.0 - i.lerpT) ? 
+        (m_interp.linear(*base::m_mip.rawMipLevel(i.lower), mipVsP0, 
+                         xiX, xiY, xiZ)) :
+        (m_interp.linear(*base::m_mip.rawMipLevel(i.upper), mipVsP1, 
+                         xiX, xiY, xiZ));
+    }
+  }
+
+  //! Sample LOD stochastically and spatial dimensions normally
+  value_type linear(const V3d &vsP, const float wsSpotSize,
+                    const float xiSpotSize) const
+  {
+    const detail::InterpInfo i = detail::interpInfo(base::m_mip.numLevels(),
+                                                    base::m_wsVoxelSize, 
+                                                    wsSpotSize);
+
+    if (i.lower == i.upper) {
+      // Special case where spot size is not in-between levels
+      if (i.lower == 0) {
+        // Special case for 0-level
+        return m_plainInterp.sample(*base::m_mip.rawMipLevel(0), vsP);
+      } else {
+        // Not the 0-level, so we must transform vsP
+        V3f mipVsP;
+        base::m_mip.getVsMIPCoord(vsP, i.lower, mipVsP);
+        return m_plainInterp.sample(*base::m_mip.rawMipLevel(i.lower), mipVsP);
+      }
+    } else {
+      V3f mipVsP0, mipVsP1;
+      base::m_mip.getVsMIPCoord(V3f(vsP), i.lower, mipVsP0);
+      base::m_mip.getVsMIPCoord(V3f(vsP), i.upper, mipVsP1);
+      // Quadrilinear interpolation choice
+      return xiSpotSize < (1.0 - i.lerpT) ? 
+        (m_plainInterp.sample(*base::m_mip.rawMipLevel(i.lower), mipVsP0)) :
+        (m_plainInterp.sample(*base::m_mip.rawMipLevel(i.upper), mipVsP1));
+    }    
+  } 
+  
+private:
+
+  // Utility methods -----------------------------------------------------------
+
+  value_type linear(const FieldType &data, const V3d &vsP, 
+                    const float xiX, const float xiY, const float xiZ) const
+  {
+    // Voxel coords
+    V3i c1, c2;
+    // Interpolation weights
+    FIELD3D_VEC3_T<double> f1, f2;
+
+    getLerpInfo(vsP, data.dataWindow(), f1, f2, c1, c2);
+
+    // Choose c1 or c2 based on random variables
+    return data.fastValue(xiX < f1.x ? c1.x : c2.x, 
+                          xiY < f1.y ? c1.y : c2.y,
+                          xiZ < f1.z ? c1.z : c2.z);
+  }
+
+  // Typedefs ------------------------------------------------------------------
+
+  //! Convenience typedef for referring to base class
+  typedef MIPInterpBase<MIPField_T> base;    
+
+  // Data members --------------------------------------------------------------
+
+  //! Interpolator to use for the nested type
+  NestedInterpType m_interp;
+  typename base::LinearInterpType m_plainInterp;
+
+  // Static data members -------------------------------------------------------
+
+  static TemplatedFieldType<MIPStochasticInterp<MIPField_T> > ms_classType;
 
 };
 
@@ -126,7 +311,7 @@ private:
 //----------------------------------------------------------------------------//
 
 template <typename MIPField_T>
-MIPLinearInterp<MIPField_T>::MIPLinearInterp(const MIPField_T &mip)
+MIPInterpBase<MIPField_T>::MIPInterpBase(const MIPField_T &mip)
   : m_mip(mip)
 {
   // Base voxel size (represents finest level)
@@ -145,53 +330,35 @@ MIPLinearInterp<MIPField_T>::MIPLinearInterp(const MIPField_T &mip)
 template <typename MIPField_T>
 typename MIPLinearInterp<MIPField_T>::value_type
 MIPLinearInterp<MIPField_T>::sample(const V3d &vsP, 
-                                    const float wsSpotSize) const
+                                    const float wsSpotSize,
+                                    const float time) const
 {
-  const InterpInfo i = interpInfo(wsSpotSize);
+  const detail::InterpInfo i = detail::interpInfo(base::m_mip.numLevels(),
+                                                  base::m_wsVoxelSize, 
+                                                  wsSpotSize);
 
   if (i.lower == i.upper) {
     // Special case where spot size is not in-between levels
     if (i.lower == 0) {
       // Special case for 0-level
-      return m_interp.sample(*m_mip.rawMipLevel(0), vsP);
+      return m_interp.sample(*base::m_mip.rawMipLevel(0), vsP, time);
     } else {
       // Not the 0-level, so we must transform vsP
       V3f mipVsP;
-      m_mip.getVsMIPCoord(vsP, i.lower, mipVsP);
-      return m_interp.sample(*m_mip.rawMipLevel(i.lower), mipVsP);
+      base::m_mip.getVsMIPCoord(vsP, i.lower, mipVsP);
+      return m_interp.sample(*base::m_mip.rawMipLevel(i.lower), mipVsP, time);
     }
   } else {
     // Quadrilinear interpolation
     V3f mipVsP0, mipVsP1;
-    m_mip.getVsMIPCoord(V3f(vsP), i.lower, mipVsP0);
-    m_mip.getVsMIPCoord(V3f(vsP), i.upper, mipVsP1);
-    const value_type v0 = m_interp.sample(*m_mip.rawMipLevel(i.lower), mipVsP0);
-    const value_type v1 = m_interp.sample(*m_mip.rawMipLevel(i.upper), mipVsP1);
+    base::m_mip.getVsMIPCoord(V3f(vsP), i.lower, mipVsP0);
+    base::m_mip.getVsMIPCoord(V3f(vsP), i.upper, mipVsP1);
+    const value_type v0 = m_interp.sample(*base::m_mip.rawMipLevel(i.lower), 
+                                          mipVsP0, time);
+    const value_type v1 = m_interp.sample(*base::m_mip.rawMipLevel(i.upper), 
+                                          mipVsP1, time);
     return FIELD3D_LERP(v0, v1, i.lerpT);
   }
-}
-
-//----------------------------------------------------------------------------//
-
-template <typename MIPField_T>
-typename MIPLinearInterp<MIPField_T>::InterpInfo
-MIPLinearInterp<MIPField_T>::interpInfo(const float wsSpotSize) const
-{
-  const size_t numLevels = m_mip.numLevels();
-  // First case, spot size smaller than first level
-  if (wsSpotSize <= m_wsVoxelSize[0]) {
-    return InterpInfo();
-  }
-  // Check in-between sizes
-  for (size_t i = 1, end = numLevels; i < end; ++i) {
-    if (wsSpotSize <= m_wsVoxelSize[i]) {
-      const float lerpT = FIELD3D_LERPFACTOR(wsSpotSize, m_wsVoxelSize[i - 1],
-                                             m_wsVoxelSize[i]);
-      return InterpInfo(i - 1, i, lerpT);
-    }
-  }
-  // Final case, spot size larger or equal to highest level
-  return InterpInfo(numLevels - 1, numLevels - 1, 0.0f);
 }
 
 //----------------------------------------------------------------------------//

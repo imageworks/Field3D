@@ -64,6 +64,7 @@
 #include "OgOAttribute.h"
 #include "OgODataset.h"
 #include "OgOGroup.h"
+#include "PatternMatch.h"
 
 //----------------------------------------------------------------------------//
 
@@ -526,8 +527,38 @@ Field3DFileBase::getScalarLayerNames(vector<string> &names,
   for (int i = 0; i < numIntPartitions(partitionName); i++) {
     string internalName = makeIntPartitionName(partitionName, i);
     File::Partition::Ptr part = partition(internalName);
-    if (part)
+    if (part) {
       part->getLayerNames(names);
+    }
+  }
+
+  names = makeUnique(names);
+}
+
+//----------------------------------------------------------------------------//
+
+void 
+Field3DFileBase::getScalarLayerNames(vector<string> &names, 
+                                     const string &partitionName,
+                                     const size_t index) const
+{
+  if (m_hdf5Base) {
+    m_hdf5Base->getScalarLayerNames(names, partitionName, index);
+    return;
+  }
+
+  if (index >= numPartitions(partitionName)) {
+    return;
+  }
+
+  //! \todo Make this really only return scalar layers
+
+  names.clear();
+
+  const string internalName = makeIntPartitionName(partitionName, index);
+  File::Partition::Ptr part = partition(internalName);
+  if (part) {
+    part->getLayerNames(names);
   }
 
   names = makeUnique(names);
@@ -551,8 +582,38 @@ Field3DFileBase::getVectorLayerNames(vector<string> &names,
   for (int i = 0; i < numIntPartitions(partitionName); i++) {
     string internalName = makeIntPartitionName(partitionName, i);
     File::Partition::Ptr part = partition(internalName);
-    if (part)
+    if (part) {
       part->getLayerNames(names);
+    }
+  }
+
+  names = makeUnique(names);
+}
+
+//----------------------------------------------------------------------------//
+
+void 
+Field3DFileBase::getVectorLayerNames(vector<string> &names, 
+                                     const string &partitionName,
+                                     const size_t index) const
+{
+  if (m_hdf5Base) {
+    m_hdf5Base->getVectorLayerNames(names, partitionName, index);
+    return;
+  }
+
+  if (index >= numPartitions(partitionName)) {
+    return;
+  }
+
+  //! \todo Make this really only return vector layers
+
+  names.clear();
+
+  const string internalName = makeIntPartitionName(partitionName, index);
+  File::Partition::Ptr part = partition(internalName);
+  if (part) {
+    part->getLayerNames(names);
   }
 
   names = makeUnique(names);
@@ -563,6 +624,11 @@ Field3DFileBase::getVectorLayerNames(vector<string> &names,
 void 
 Field3DFileBase::getIntPartitionNames(vector<string> &names) const
 {
+  if (m_hdf5Base) {
+    m_hdf5Base->getIntPartitionNames(names);
+    return;
+  }
+
   names.clear();
 
   for (PartitionList::const_iterator i = m_partitions.begin();
@@ -577,6 +643,11 @@ void
 Field3DFileBase::getIntScalarLayerNames(vector<string> &names, 
                                         const string &intPartitionName) const
 {
+  if (m_hdf5Base) {
+    m_hdf5Base->getIntScalarLayerNames(names, intPartitionName);
+    return;
+  }
+
   //! \todo Make this really only return scalar layers
 
   names.clear();
@@ -597,6 +668,11 @@ void
 Field3DFileBase::getIntVectorLayerNames(vector<string> &names, 
                                         const string &intPartitionName) const
 {
+  if (m_hdf5Base) {
+    m_hdf5Base->getIntVectorLayerNames(names, intPartitionName);
+    return;
+  }
+
   //! \todo Make this really only return vector layers
 
   names.clear();
@@ -609,6 +685,17 @@ Field3DFileBase::getIntVectorLayerNames(vector<string> &names,
   }
 
   part->getLayerNames(names);
+}
+
+//----------------------------------------------------------------------------//
+
+bool Field3DFileBase::empty() const
+{
+  if (m_hdf5Base) {
+    return m_hdf5Base->empty();
+  }
+
+  return m_partitions.size() == 0;
 }
 
 //----------------------------------------------------------------------------//
@@ -636,6 +723,17 @@ bool Field3DFileBase::close()
   closeInternal();
 
   return true;
+}
+
+//----------------------------------------------------------------------------//
+
+size_t Field3DFileBase::numPartitions(const std::string &name) const
+{
+  if (m_hdf5Base) {
+    return m_hdf5Base->numPartitions(name);
+  }
+
+  return numIntPartitions(name);
 }
 
 //----------------------------------------------------------------------------//
@@ -850,6 +948,13 @@ bool Field3DInputFile::open(const string &filename)
   }
 
   return success;
+}
+
+//----------------------------------------------------------------------------//
+
+bool Field3DInputFile::open(const FilenameSpec &spec)
+{
+  return open(spec.filename());
 }
 
 //----------------------------------------------------------------------------//
@@ -1518,6 +1623,11 @@ Field3DInputFile::readLayer(const std::string &intPartitionName,
 {
   typedef typename Field<Data_T>::Ptr FieldPtr;
 
+  if (m_hdf5) {
+    return m_hdf5->readLayer<Data_T>(intPartitionName, layerName, 
+                                     FieldTraits<Data_T>::dataDims() > 1);
+  }
+  
   // Instantiate a null pointer for easier code reading
   FieldPtr nullPtr;
 
@@ -1605,7 +1715,7 @@ Field3DInputFile::readLayer(const std::string &intPartitionName,
 
 template <class Data_T>
 typename Field<Data_T>::Vec
-Field3DInputFile::readLayers(const std::string &name) const
+Field3DInputFile::readLayers(const std::string &layerName) const
 {
   using std::vector;
   using std::string;
@@ -1622,7 +1732,7 @@ Field3DInputFile::readLayers(const std::string &name) const
     getIntScalarLayerNames(layers, *p);
     for (vector<string>::iterator l = layers.begin(); l != layers.end(); ++l) {
       // Only read if it matches the name
-      if ((name.length() == 0) || (*l == name)) {
+      if (match(*l, layerName)) {
         FieldPtr mf = readLayer<Data_T>(*p, *l);
         if (mf) {
           ret.push_back(mf);
@@ -1672,6 +1782,103 @@ Field3DInputFile::readLayers(const std::string &partitionName,
   
   return ret;
 }
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+typename Field<Data_T>::Ptr
+Field3DInputFile::readLayer(const std::string &partitionName, 
+                            const size_t index, 
+                            const std::string &layerName) const
+{
+  using namespace std;
+  
+  typedef typename Field<Data_T>::Ptr FieldPtr;
+
+  if ((layerName.length() == 0) || (partitionName.length() == 0)) {
+    return FieldPtr();
+  }
+  
+  const string p = makeIntPartitionName(partitionName, index);
+
+  std::vector<std::string> layers;
+  getIntScalarLayerNames(layers, p);
+  if (removeUniqueId(p) == partitionName) {
+    for (vector<string>::iterator l = layers.begin(); 
+         l != layers.end(); ++l) {
+      // Only read if it matches the name
+      if (*l == layerName) {
+        FieldPtr mf = readLayer<Data_T>(p, *l);
+        if (mf) {
+          return mf;
+        }
+      }
+    }
+  }
+  
+  return FieldPtr();
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+typename Field<Data_T>::Vec
+Field3DInputFile::readLayers(const FilenameSpec &spec) const
+{
+  using namespace std;
+  
+  typedef typename Field<Data_T>::Ptr FieldPtr;
+  typedef typename Field<Data_T>::Vec FieldList;
+
+  if (spec.isUnique()) {
+
+    // Defer to readLayer()
+    return typename Field<Data_T>::Vec(1, readLayer<Data_T>(spec));
+
+  } else {
+
+    FieldList ret;
+
+    const std::string pattern = spec.pattern();
+  
+    std::vector<std::string> parts;
+    getIntPartitionNames(parts);
+ 
+    for (vector<string>::iterator p = parts.begin(); p != parts.end(); ++p) {
+      std::vector<std::string> layers;
+      getIntScalarLayerNames(layers, *p);
+      const std::string name = removeUniqueId(*p);
+      for (vector<string>::iterator l = layers.begin(); 
+           l != layers.end(); ++l) {
+        // Only read if it matches the name
+        if (match(name, *l, pattern)) {
+          FieldPtr mf = readLayer<Data_T>(*p, *l);
+          if (mf) {
+            ret.push_back(mf);
+          }
+        }
+      }
+    }
+  
+    return ret;
+
+  }
+
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+typename Field<Data_T>::Ptr
+Field3DInputFile::readLayer(const FilenameSpec &spec) const
+{
+  if (spec.isUnique()) {
+    return readLayer<Data_T>(spec.name(), spec.index(), spec.attribute());
+  } else {
+    return typename Field<Data_T>::Ptr();
+  }
+}
+
 
 //----------------------------------------------------------------------------//
 
@@ -1730,6 +1937,15 @@ Field3DInputFile::readProxyLayer(OgIGroup &location,
   dataW.min = dwMinAttr.value();
   dataW.max = dwMaxAttr.value();
 
+  // Get class name ---
+  
+  std::string className;
+  OgIAttribute<std::string> classNameAttr = 
+    location.findAttribute<std::string>(k_classNameAttrName);
+  if (classNameAttr.isValid()) {
+    className = classNameAttr.value(); 
+  }
+
   // Construct the field
   typename EmptyField<Data_T>::Ptr field(new EmptyField<Data_T>);
   field->setSize(extents, dataW);
@@ -1744,6 +1960,7 @@ Field3DInputFile::readProxyLayer(OgIGroup &location,
   field->name = name;
   field->attribute = attribute;
   field->setMapping(mapping);
+  field->metadata().setStrMetadata("classname", className);
 
   return field;
 }
@@ -1752,16 +1969,16 @@ Field3DInputFile::readProxyLayer(OgIGroup &location,
 
 template <class Data_T>
 typename EmptyField<Data_T>::Vec
-Field3DInputFile::readProxyLayer(const std::string &partitionName, 
-                                 const std::string &layerName,
-                                 bool isVectorLayer) const
+Field3DInputFile::readProxyLayers(const std::string &partitionName, 
+                                  const std::string &layerName,
+                                  bool isVectorLayer) const
 {
   using namespace boost;
   using namespace std;
   using namespace Hdf5Util;
 
   if (m_hdf5) {
-    return m_hdf5->readProxyLayer<Data_T>(partitionName, layerName, 
+    return m_hdf5->readProxyLayers<Data_T>(partitionName, layerName, 
                                           isVectorLayer);
   }
 
@@ -1854,6 +2071,223 @@ Field3DInputFile::readProxyLayer(const std::string &partitionName,
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
+typename EmptyField<Data_T>::Ptr
+Field3DInputFile::readProxyLayer(const std::string &partitionName, 
+                                 const size_t index, 
+                                 const std::string &layerName,
+                                 bool isVectorLayer) const
+{
+  using namespace boost;
+  using namespace std;
+  using namespace Hdf5Util;
+
+  typename EmptyField<Data_T>::Ptr nullPtr;
+
+  if (empty()) {
+    return nullPtr;
+  }
+
+  if (m_hdf5) {
+    return m_hdf5->readProxyLayer<Data_T>(partitionName, index, layerName, 
+                                          isVectorLayer);
+  }
+
+  if ((layerName.length() == 0) || (partitionName.length() == 0)) {
+    return nullPtr;
+  }
+
+  const string p = makeIntPartitionName(partitionName, index);
+
+  // Find the partition
+  File::Partition::Ptr part = partition(p);
+  if (!part) {
+    Msg::print(Msg::SevWarning, "Couldn't find partition: " + p);
+    return nullPtr;
+  }
+        
+  std::vector<std::string> layers;
+  if (isVectorLayer) {
+    getIntVectorLayerNames(layers, p);
+  } else {
+    getIntScalarLayerNames(layers, p);
+  }
+
+  if (layers.size() == 0) {
+    // Benign error. Happens if there are no scalars in a vector partition, etc
+    return nullPtr;
+  }
+
+  for (vector<string>::iterator l = layers.begin(); l != layers.end(); ++l) {
+    if (*l == layerName) {
+      // Find the layer
+      const File::Layer *layer;
+      if (isVectorLayer) {
+        layer = part->layer(layerName);
+      } else {
+        layer = part->layer(layerName);
+      }
+      if (!layer) {
+        Msg::print(Msg::SevWarning, "Couldn't find layer: " + layerName);
+        return nullPtr;
+      }
+      // Open the layer group
+      string layerPath = layer->parent + "/" + layer->name;
+      OgIGroup parent = m_root->findGroup(layer->parent);
+      if (!parent.isValid()) {
+        Msg::print(Msg::SevWarning, "Couldn't find layer parent " 
+                   + layerPath + " in .f3d file ");
+        return nullPtr;
+      }
+      OgIGroup layerGroup = parent.findGroup(layer->name);
+      if (!layerGroup.isValid()) {
+        Msg::print(Msg::SevWarning, "Couldn't find layer group " 
+                   + layerPath + " in .f3d file ");
+        return nullPtr;
+      }
+
+      // Make the proxy representation
+      typename EmptyField<Data_T>::Ptr field = 
+        readProxyLayer<Data_T>(layerGroup, partitionName, layerName, 
+                               part->mapping);
+
+      // Read MIPField's number of mip levels
+      int numLevels = 0;
+      OgIGroup mipGroup = layerGroup.findGroup("mip_levels");
+      if (mipGroup.isValid()) {
+        OgIAttribute<uint32_t> levelsAttr = 
+          mipGroup.findAttribute<uint32_t>("levels");
+        if (levelsAttr.isValid()) {
+          numLevels = levelsAttr.value();
+        }
+      }
+      field->metadata().setIntMetadata("mip_levels", numLevels);
+
+      // Return field
+      return field;
+    }
+  }
+
+  Msg::print(Msg::SevWarning, "Couldn't find partition: " + p);
+  return nullPtr;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+typename EmptyField<Data_T>::Vec
+Field3DInputFile::readProxyLayers(const FilenameSpec &spec, 
+                                  bool isVectorLayer) const
+{
+  using namespace boost;
+  using namespace std;
+
+  // Special case for unique spec
+  if (spec.isUnique()) {
+    return typename EmptyField<Data_T>::Vec
+      (1, readProxyLayer<Data_T>(spec.name(), spec.index(), spec.attribute(),
+                                 isVectorLayer));
+  } 
+
+  const std::string pattern = spec.pattern();
+
+  if (m_hdf5) {
+    return m_hdf5->readProxyLayers<Data_T>(spec, isVectorLayer);
+  }
+
+  // Instantiate a null pointer for easier code reading
+  typename EmptyField<Data_T>::Vec emptyList, output;
+
+  std::vector<std::string> parts, layers;
+  getIntPartitionNames(parts);
+ 
+  for (vector<string>::iterator p = parts.begin(); p != parts.end(); ++p) {
+    const std::string name = removeUniqueId(*p);
+    if (isVectorLayer) {
+      getIntVectorLayerNames(layers, *p);
+    } else {
+      getIntScalarLayerNames(layers, *p);
+    }
+    for (vector<string>::iterator l = layers.begin(); 
+         l != layers.end(); ++l) {
+      if (match(name, *l, pattern)) {
+        // Find the partition
+        File::Partition::Ptr part = partition(*p);
+        if (!part) {
+          continue;
+        }
+        // Find the layer
+        const File::Layer *layer;
+        if (isVectorLayer) {
+          layer = part->layer(*l);
+        } else {
+          layer = part->layer(*l);
+        }
+        if (!layer) {
+          continue;
+        }
+        // Open the layer group
+        string layerPath = layer->parent + "/" + layer->name;
+        OgIGroup parent = m_root->findGroup(layer->parent);
+        if (!parent.isValid()) {
+          Msg::print(Msg::SevWarning, "Couldn't find layer parent " 
+                     + layerPath + " in .f3d file ");
+          return emptyList;
+        }
+        OgIGroup layerGroup = parent.findGroup(layer->name);
+        if (!layerGroup.isValid()) {
+          Msg::print(Msg::SevWarning, "Couldn't find layer group " 
+                     + layerPath + " in .f3d file ");
+          return emptyList;
+        }
+
+        // Make the proxy representation
+        typename EmptyField<Data_T>::Ptr field = 
+          readProxyLayer<Data_T>(layerGroup, *p, *l, part->mapping);
+
+        if (!field) {
+          continue;
+        }
+
+        // Read MIPField's number of mip levels
+        int numLevels = 0;
+        OgIGroup mipGroup = layerGroup.findGroup("mip_levels");
+        if (mipGroup.isValid()) {
+          OgIAttribute<uint32_t> levelsAttr = 
+            mipGroup.findAttribute<uint32_t>("levels");
+          if (levelsAttr.isValid()) {
+            numLevels = levelsAttr.value();
+          }
+        }
+        field->metadata().setIntMetadata("mip_levels", numLevels);
+
+        // Add field to output
+        output.push_back(field);
+      }
+    }
+  }
+
+  return output;
+
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
+typename EmptyField<Data_T>::Ptr
+Field3DInputFile::readProxyLayer(const FilenameSpec &spec, 
+                                 bool isVectorLayer) const
+{
+  if (spec.isUnique()) {
+    return readProxyLayer<Data_T>(spec.name(), spec.index(), spec.attribute(),
+                                  isVectorLayer);
+  } else {
+    return typename EmptyField<Data_T>::Ptr();
+  }
+}  
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
 typename EmptyField<Data_T>::Vec
 Field3DInputFile::readProxyScalarLayers(const std::string &name) const
 {
@@ -1873,7 +2307,7 @@ Field3DInputFile::readProxyScalarLayers(const std::string &name) const
     for (vector<string>::iterator l = layers.begin(); l != layers.end(); ++l) {
       // Only read if it matches the name
       if ((name.length() == 0) || (*l == name)) {
-        FieldList f = readProxyLayer<Data_T>(*p, *l, false);
+        FieldList f = readProxyLayers<Data_T>(*p, *l, false);
         for (typename FieldList::iterator i = f.begin(); i != f.end(); ++i) {
           if (*i) {
             ret.push_back(*i);
@@ -1908,7 +2342,7 @@ Field3DInputFile::readProxyVectorLayers(const std::string &name) const
     for (vector<string>::iterator l = layers.begin(); l != layers.end(); ++l) {
       // Only read if it matches the name
       if ((name.length() == 0) || (*l == name)) {
-        FieldList f = readProxyLayer<Data_T>(*p, *l, true);
+        FieldList f = readProxyLayers<Data_T>(*p, *l, true);
         for (typename FieldList::iterator i = f.begin(); i != f.end(); ++i) {
           if (*i) {
             ret.push_back(*i);
@@ -1987,12 +2421,56 @@ FIELD3D_INSTANTIATION_READLAYERS2(vec64_t);
 
 //----------------------------------------------------------------------------//
 
+#define FIELD3D_INSTANTIATION_READLAYER(type)                           \
+  template                                                              \
+  Field<type>::Ptr                                                      \
+  Field3DInputFile::readLayer<type>(const std::string &partitionName,   \
+                                    const size_t index,                 \
+                                    const std::string &layerName) const; \
+
+FIELD3D_INSTANTIATION_READLAYER(float16_t);
+FIELD3D_INSTANTIATION_READLAYER(float32_t);
+FIELD3D_INSTANTIATION_READLAYER(float64_t);
+FIELD3D_INSTANTIATION_READLAYER(vec16_t);
+FIELD3D_INSTANTIATION_READLAYER(vec32_t);
+FIELD3D_INSTANTIATION_READLAYER(vec64_t);
+
+//----------------------------------------------------------------------------//
+
+#define FIELD3D_INSTANTIATION_READLAYER2(type)                          \
+  template                                                              \
+  Field<type>::Ptr                                                      \
+  Field3DInputFile::readLayer<type>(const FilenameSpec &spec) const; \
+
+FIELD3D_INSTANTIATION_READLAYER2(float16_t);
+FIELD3D_INSTANTIATION_READLAYER2(float32_t);
+FIELD3D_INSTANTIATION_READLAYER2(float64_t);
+FIELD3D_INSTANTIATION_READLAYER2(vec16_t);
+FIELD3D_INSTANTIATION_READLAYER2(vec32_t);
+FIELD3D_INSTANTIATION_READLAYER2(vec64_t);
+
+//----------------------------------------------------------------------------//
+
+#define FIELD3D_INSTANTIATION_READLAYERS3(type)                         \
+  template                                                              \
+  Field<type>::Vec                                                      \
+  Field3DInputFile::readLayers<type>(const FilenameSpec &spec) const;   \
+
+FIELD3D_INSTANTIATION_READLAYERS3(float16_t);
+FIELD3D_INSTANTIATION_READLAYERS3(float32_t);
+FIELD3D_INSTANTIATION_READLAYERS3(float64_t);
+FIELD3D_INSTANTIATION_READLAYERS3(vec16_t);
+FIELD3D_INSTANTIATION_READLAYERS3(vec32_t);
+FIELD3D_INSTANTIATION_READLAYERS3(vec64_t);
+
+//----------------------------------------------------------------------------//
+
 #define FIELD3D_INSTANTIATION_READPROXYLAYER(type)                      \
   template                                                              \
   EmptyField<type>::Vec                                                 \
-  Field3DInputFile::readProxyLayer<type>(const std::string &partitionName, \
-                                         const std::string &layerName,  \
-                                         bool isVectorLayer) const      \
+  Field3DInputFile::readProxyLayers<type>(const std::string &partitionName, \
+                                          const std::string &layerName, \
+                                          bool isVectorLayer) const     \
   
 FIELD3D_INSTANTIATION_READPROXYLAYER(float16_t);
 FIELD3D_INSTANTIATION_READPROXYLAYER(float32_t);
@@ -2000,6 +2478,53 @@ FIELD3D_INSTANTIATION_READPROXYLAYER(float64_t);
 FIELD3D_INSTANTIATION_READPROXYLAYER(vec16_t);
 FIELD3D_INSTANTIATION_READPROXYLAYER(vec32_t);
 FIELD3D_INSTANTIATION_READPROXYLAYER(vec64_t);
+
+//----------------------------------------------------------------------------//
+
+#define FIELD3D_INSTANTIATION_READPROXYLAYER2(type)                      \
+  template                                                              \
+  EmptyField<type>::Ptr                                                 \
+  Field3DInputFile::readProxyLayer<type>(const std::string &partitionName, \
+                                         const size_t idx,              \
+                                         const std::string &layerName,  \
+                                         bool isVectorLayer) const      \
+  
+FIELD3D_INSTANTIATION_READPROXYLAYER2(float16_t);
+FIELD3D_INSTANTIATION_READPROXYLAYER2(float32_t);
+FIELD3D_INSTANTIATION_READPROXYLAYER2(float64_t);
+FIELD3D_INSTANTIATION_READPROXYLAYER2(vec16_t);
+FIELD3D_INSTANTIATION_READPROXYLAYER2(vec32_t);
+FIELD3D_INSTANTIATION_READPROXYLAYER2(vec64_t);
+
+//----------------------------------------------------------------------------//
+
+#define FIELD3D_INSTANTIATION_READPROXYLAYER3(type)                     \
+  template                                                              \
+  EmptyField<type>::Vec                                                 \
+  Field3DInputFile::readProxyLayers<type>(const FilenameSpec &spec,     \
+                                          bool isVectorLayer) const     \
+  
+FIELD3D_INSTANTIATION_READPROXYLAYER3(float16_t);
+FIELD3D_INSTANTIATION_READPROXYLAYER3(float32_t);
+FIELD3D_INSTANTIATION_READPROXYLAYER3(float64_t);
+FIELD3D_INSTANTIATION_READPROXYLAYER3(vec16_t);
+FIELD3D_INSTANTIATION_READPROXYLAYER3(vec32_t);
+FIELD3D_INSTANTIATION_READPROXYLAYER3(vec64_t);
+
+//----------------------------------------------------------------------------//
+
+#define FIELD3D_INSTANTIATION_READPROXYLAYER4(type)                     \
+  template                                                              \
+  EmptyField<type>::Ptr                                                 \
+  Field3DInputFile::readProxyLayer<type>(const FilenameSpec &spec,      \
+                                         bool isVectorLayer) const      \
+  
+FIELD3D_INSTANTIATION_READPROXYLAYER4(float16_t);
+FIELD3D_INSTANTIATION_READPROXYLAYER4(float32_t);
+FIELD3D_INSTANTIATION_READPROXYLAYER4(float64_t);
+FIELD3D_INSTANTIATION_READPROXYLAYER4(vec16_t);
+FIELD3D_INSTANTIATION_READPROXYLAYER4(vec32_t);
+FIELD3D_INSTANTIATION_READPROXYLAYER4(vec64_t);
 
 //----------------------------------------------------------------------------//
 

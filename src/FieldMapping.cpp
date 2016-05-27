@@ -800,6 +800,49 @@ FieldMapping::Ptr FrustumFieldMapping::clone() const
 }
 
 //----------------------------------------------------------------------------//
+// Utility function implementations
+//----------------------------------------------------------------------------//
+
+std::vector<V3d> 
+cornerPoints(const Box3d &box)
+{
+  std::vector<V3d> result(8);
+  getCornerPoints(box, &result[0]);
+  return result;
+}
+
+//----------------------------------------------------------------------------//
+
+void getCornerPoints(const Box3d& box, V3d points[8])
+{
+  points[0].setValue(box.min.x, box.min.y, box.min.z);
+  points[1].setValue(box.max.x, box.min.y, box.min.z);
+  points[2].setValue(box.min.x, box.max.y, box.min.z);
+  points[3].setValue(box.max.x, box.max.y, box.min.z);
+  points[4].setValue(box.min.x, box.min.y, box.max.z);
+  points[5].setValue(box.max.x, box.min.y, box.max.z);
+  points[6].setValue(box.min.x, box.max.y, box.max.z);
+  points[7].setValue(box.max.x, box.max.y, box.max.z);
+}
+
+//----------------------------------------------------------------------------//
+
+std::vector<V3d> 
+unitCornerPoints()
+{
+  std::vector<V3d> result;
+  result.push_back(V3d(0.0, 0.0, 0.0));
+  result.push_back(V3d(1.0, 0.0, 0.0));
+  result.push_back(V3d(0.0, 1.0, 0.0));
+  result.push_back(V3d(1.0, 1.0, 0.0));
+  result.push_back(V3d(0.0, 0.0, 1.0));
+  result.push_back(V3d(1.0, 0.0, 1.0));
+  result.push_back(V3d(0.0, 1.0, 1.0));
+  result.push_back(V3d(1.0, 1.0, 1.0));
+  return result;
+}
+
+//----------------------------------------------------------------------------//
 
 FIELD3D_NAMESPACE_SOURCE_CLOSE
 

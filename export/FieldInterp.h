@@ -47,7 +47,6 @@
 #define _INCLUDED_Field3D_FieldInterp_H_
 
 #include "Field.h"
-#include "DenseField.h"
 #include "MACField.h"
 #include "ProceduralField.h"
 #include "RefCount.h"
@@ -98,9 +97,10 @@ public:
   virtual ~FieldInterp() 
   { }
 
-  // Main methods --------------------------------------------------------------    
+  // Main methods --------------------------------------------------------------
 
-  virtual Data_T sample(const Field<Data_T> &data, const V3d &vsP) const = 0;
+  virtual Data_T sample(const Field<Data_T> &data, const V3d &vsP,
+                        const float time = 0.0f) const = 0;
   
 private:
 
@@ -120,6 +120,66 @@ private:
 //----------------------------------------------------------------------------//
 
 FIELD3D_CLASSTYPE_TEMPL_INSTANTIATION(FieldInterp);
+
+//----------------------------------------------------------------------------//
+// Utility methods
+//----------------------------------------------------------------------------//
+
+inline void getLerpInfo(const V3d &vsP, const Box3i &dataWindow,
+                        FIELD3D_VEC3_T<double> &f1,
+                        FIELD3D_VEC3_T<double> &f2,
+                        V3i &c1, V3i &c2)
+{
+  // Voxel centers are at .5 coordinates
+  // NOTE: Don't use contToDisc for this, we're looking for sample
+  // point locations, not coordinate shifts.
+  FIELD3D_VEC3_T<double> p(vsP - FIELD3D_VEC3_T<double>(0.5));
+
+  // Lower left corner
+  c1 = V3i(static_cast<int>(floor(p.x)), 
+           static_cast<int>(floor(p.y)), 
+           static_cast<int>(floor(p.z)));
+  // Upper right corner
+  c2 = V3i(c1 + V3i(1));
+  // C1 fractions
+  f1 = FIELD3D_VEC3_T<double>(static_cast<FIELD3D_VEC3_T<double> >(c2) - p);
+  // C2 fraction
+  f2 = FIELD3D_VEC3_T<double>(static_cast<FIELD3D_VEC3_T<double> >(1.0) - f1);
+
+  // Clamp the indexing coordinates
+  if (true) {
+    c1.x = std::max(dataWindow.min.x, std::min(c1.x, dataWindow.max.x));
+    c2.x = std::max(dataWindow.min.x, std::min(c2.x, dataWindow.max.x));
+    c1.y = std::max(dataWindow.min.y, std::min(c1.y, dataWindow.max.y));
+    c2.y = std::max(dataWindow.min.y, std::min(c2.y, dataWindow.max.y));
+    c1.z = std::max(dataWindow.min.z, std::min(c1.z, dataWindow.max.z));
+    c2.z = std::max(dataWindow.min.z, std::min(c2.z, dataWindow.max.z));
+  }
+}
+
+//----------------------------------------------------------------------------//
+
+inline void getLerpInfo(const V3d &vsP, 
+                        FIELD3D_VEC3_T<double> &f1,
+                        FIELD3D_VEC3_T<double> &f2,
+                        V3i &c1, V3i &c2)
+{
+  // Voxel centers are at .5 coordinates
+  // NOTE: Don't use contToDisc for this, we're looking for sample
+  // point locations, not coordinate shifts.
+  FIELD3D_VEC3_T<double> p(vsP - FIELD3D_VEC3_T<double>(0.5));
+
+  // Lower left corner
+  c1 = V3i(static_cast<int>(floor(p.x)), 
+           static_cast<int>(floor(p.y)), 
+           static_cast<int>(floor(p.z)));
+  // Upper right corner
+  c2 = V3i(c1 + V3i(1));
+  // C1 fractions
+  f1 = FIELD3D_VEC3_T<double>(static_cast<FIELD3D_VEC3_T<double> >(c2) - p);
+  // C2 fraction
+  f2 = FIELD3D_VEC3_T<double>(static_cast<FIELD3D_VEC3_T<double> >(1.0) - f1);
+}
 
 //----------------------------------------------------------------------------//
 // LinearFieldInterp
@@ -159,8 +219,9 @@ class LinearFieldInterp : public FieldInterp<Data_T>
 
   // From FieldInterp ----------------------------------------------------------
 
-  virtual Data_T sample(const Field<Data_T> &data, const V3d &vsP) const;
-  
+  virtual Data_T sample(const Field<Data_T> &data, const V3d &vsP,
+                        const float time = 0.0f) const;
+
 private:
 
   // Static data members -------------------------------------------------------
@@ -218,7 +279,8 @@ class CubicFieldInterp : public FieldInterp<Data_T>
   
   // From FieldInterp ----------------------------------------------------------
   
-  virtual Data_T sample(const Field<Data_T> &data, const V3d &vsP) const;
+  virtual Data_T sample(const Field<Data_T> &data, const V3d &vsP,
+                        const float time = 0.0f) const;
 
 private:
 
@@ -276,7 +338,8 @@ public:
 
   // Main methods --------------------------------------------------------------
 
-  value_type sample(const Field_T &data, const V3d &vsP) const;
+  value_type sample(const Field_T &data, const V3d &vsP,
+                    const float time = 0.0f) const;
 
 private:
 
@@ -336,11 +399,13 @@ public:
   
   // Main methods --------------------------------------------------------------
   
-  Data_T sample(const MACField<Data_T> &data, const V3d &vsP) const;
+  Data_T sample(const MACField<Data_T> &data, const V3d &vsP,
+                const float time = 0.0f) const;
 
   double sample(const MACField<Data_T> &data,
                 const MACComponent &comp, 
-                const V3d &vsP) const;
+                const V3d &vsP,
+                const float time = 0.0f) const;
                 
 private:
 
@@ -398,7 +463,8 @@ public:
 
   // Main methods --------------------------------------------------------------
 
-  value_type sample(const Field_T &data, const V3d &vsP) const;
+  value_type sample(const Field_T &data, const V3d &vsP, 
+                    const float time = 0.0f) const;
 
   
 private:
@@ -457,7 +523,8 @@ public:
 
   // Main methods --------------------------------------------------------------
   
-  Data_T sample(const MACField<Data_T> &data, const V3d &vsP) const;
+  Data_T sample(const MACField<Data_T> &data, const V3d &vsP,
+                const float time = 0.0f) const;
 
 private:
 
@@ -516,7 +583,8 @@ public:
   
   // Main methods --------------------------------------------------------------
 
-  Data_T sample(const ProceduralField<Data_T> &data, const V3d &vsP) const;
+  Data_T sample(const ProceduralField<Data_T> &data, const V3d &vsP,
+                const float time = 0.0f) const;
 
 private:
 
@@ -549,7 +617,7 @@ Data_T wsSample(const typename Field<Data_T>::Ptr f,
 {
   V3d vsP;
   f->mapping()->worldToVoxel(wsP, vsP);
-  return interp.sample(*f, vsP);
+  return interp.sample(*f, vsP, 0.0f);
 }
 
 //----------------------------------------------------------------------------//
@@ -604,35 +672,16 @@ Data_T monotonicCubicInterpolantVec(const Data_T &f1, const Data_T &f2,
 
 template <class Data_T>
 Data_T LinearFieldInterp<Data_T>::sample(const Field<Data_T> &data, 
-                                         const V3d &vsP) const
+                                         const V3d &vsP,
+                                         const float /* time */) const
 {
-  // Voxel centers are at .5 coordinates
-  // NOTE: Don't use contToDisc for this, we're looking for sample
-  // point locations, not coordinate shifts.
-  FIELD3D_VEC3_T<double> p(vsP - FIELD3D_VEC3_T<double>(0.5));
+  // Voxel coords
+  V3i c1, c2;
+  // Interpolation weights
+  FIELD3D_VEC3_T<double> f1, f2;
 
-  // Lower left corner
-  V3i c1(static_cast<int>(floor(p.x)), 
-         static_cast<int>(floor(p.y)), 
-         static_cast<int>(floor(p.z)));
-  // Upper right corner
-  V3i c2(c1 + V3i(1));
-  // C1 fractions
-  FIELD3D_VEC3_T<double> f1(static_cast<FIELD3D_VEC3_T<double> >(c2) - p);
-  // C2 fraction
-  FIELD3D_VEC3_T<double> f2(static_cast<FIELD3D_VEC3_T<double> >(1.0) - f1);
+  getLerpInfo(vsP, data.dataWindow(), f1, f2, c1, c2);
 
-  // Clamp the indexing coordinates
-  if (true) {
-    const Box3i &dataWindow = data.dataWindow();        
-    c1.x = std::max(dataWindow.min.x, std::min(c1.x, dataWindow.max.x));
-    c2.x = std::max(dataWindow.min.x, std::min(c2.x, dataWindow.max.x));
-    c1.y = std::max(dataWindow.min.y, std::min(c1.y, dataWindow.max.y));
-    c2.y = std::max(dataWindow.min.y, std::min(c2.y, dataWindow.max.y));
-    c1.z = std::max(dataWindow.min.z, std::min(c1.z, dataWindow.max.z));
-    c2.z = std::max(dataWindow.min.z, std::min(c2.z, dataWindow.max.z));
-  }
-    
   return static_cast<Data_T>
     (f1.x * (f1.y * (f1.z * data.value(c1.x, c1.y, c1.z) +
                      f2.z * data.value(c1.x, c1.y, c2.z)) +
@@ -649,7 +698,8 @@ Data_T LinearFieldInterp<Data_T>::sample(const Field<Data_T> &data,
 
 template <class Data_T>
 Data_T CubicFieldInterp<Data_T>::sample(const Field<Data_T> &data, 
-                                        const V3d &vsP) const
+                                        const V3d &vsP,
+                                        const float /* time */) const
 {
   // Voxel centers are at .5 coordinates
   // NOTE: Don't use contToDisc for this, we're looking for sample
@@ -771,35 +821,17 @@ Data_T CubicFieldInterp<Data_T>::sample(const Field<Data_T> &data,
 template <class Field_T>
 typename Field_T::value_type
 LinearGenericFieldInterp<Field_T>::sample(const Field_T &data, 
-                                          const V3d &vsP) const
+                                          const V3d &vsP,
+                                          const float /* time */) const
 {
   typedef typename Field_T::value_type Data_T;
 
-  // Pixel centers are at .5 coordinates
-  // NOTE: Don't use contToDisc for this, we're looking for sample
-  // point locations, not coordinate shifts.
-  FIELD3D_VEC3_T<double> p(vsP - FIELD3D_VEC3_T<double>(0.5));
+  // Voxel coords
+  V3i c1, c2;
+  // Interpolation weights
+  FIELD3D_VEC3_T<double> f1, f2;
 
-  // Lower left corner
-  V3i c1(static_cast<int>(floor(p.x)), 
-         static_cast<int>(floor(p.y)), 
-         static_cast<int>(floor(p.z)));
-  // Upper right corner
-  V3i c2(c1 + V3i(1));
-  // C1 fractions
-  FIELD3D_VEC3_T<double> f1(static_cast<FIELD3D_VEC3_T<double> >(c2) - p);
-  // C2 fraction
-  FIELD3D_VEC3_T<double> f2(static_cast<FIELD3D_VEC3_T<double> >(1.0) - f1);
-
-  const Box3i &dataWindow = data.dataWindow();        
-
-  // Clamp the coordinates
-  c1.x = std::min(dataWindow.max.x, std::max(dataWindow.min.x, c1.x));
-  c1.y = std::min(dataWindow.max.y, std::max(dataWindow.min.y, c1.y));
-  c1.z = std::min(dataWindow.max.z, std::max(dataWindow.min.z, c1.z));
-  c2.x = std::min(dataWindow.max.x, std::max(dataWindow.min.x, c2.x));
-  c2.y = std::min(dataWindow.max.y, std::max(dataWindow.min.y, c2.y));
-  c2.z = std::min(dataWindow.max.z, std::max(dataWindow.min.z, c2.z));
+  getLerpInfo(vsP, data.dataWindow(), f1, f2, c1, c2);
 
   return static_cast<Data_T>
     (f1.x * (f1.y * (f1.z * data.fastValue(c1.x, c1.y, c1.z) +
@@ -816,7 +848,8 @@ LinearGenericFieldInterp<Field_T>::sample(const Field_T &data,
 
 template <class Data_T>
 Data_T LinearMACFieldInterp<Data_T>::sample(const MACField<Data_T> &data, 
-                                            const V3d &vsP) const
+                                            const V3d &vsP,
+                                            const float /* time */) const
 {
   // Pixel centers are at .5 coordinates
   // NOTE: Don't use contToDisc for this, we're looking for sample
@@ -940,7 +973,8 @@ Data_T LinearMACFieldInterp<Data_T>::sample(const MACField<Data_T> &data,
 template <class Data_T>
 double LinearMACFieldInterp<Data_T>::sample(const MACField<Data_T> &data,
                                             const MACComponent &comp, 
-                                            const V3d &vsP) const
+                                            const V3d &vsP,
+                                            const float /* time */) const
 {
   // Pixel centers are at .5 coordinates
   // NOTE: Don't use contToDisc for this, we're looking for sample
@@ -1081,7 +1115,8 @@ double LinearMACFieldInterp<Data_T>::sample(const MACField<Data_T> &data,
 template <class Field_T>
 typename Field_T::value_type
 CubicGenericFieldInterp<Field_T>::sample(const Field_T &data, 
-                                         const V3d &vsP) const
+                                         const V3d &vsP,
+                                         const float /* time */) const
 {
   typedef typename Field_T::value_type Data_T;
 
@@ -1203,7 +1238,8 @@ CubicGenericFieldInterp<Field_T>::sample(const Field_T &data,
 
 template <class Data_T>
 Data_T CubicMACFieldInterp<Data_T>::sample(const MACField<Data_T> &data, 
-                                           const V3d &vsP) const
+                                           const V3d &vsP,
+                                           const float /* time */) const
 {
   typedef typename Data_T::BaseType T;
 
@@ -1545,7 +1581,8 @@ Data_T CubicMACFieldInterp<Data_T>::sample(const MACField<Data_T> &data,
 template <class Data_T>
 Data_T 
 ProceduralFieldLookup<Data_T>::sample(const ProceduralField<Data_T> &data,
-                                      const V3d &vsP) const 
+                                      const V3d &vsP,
+                                      const float /* time */) const 
 {
   V3d voxelScale = V3d(1.0) / data.dataResolution();
   V3d lsP = vsP * voxelScale;

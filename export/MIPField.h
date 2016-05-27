@@ -55,6 +55,7 @@
 #include "MIPUtil.h"
 #include "DenseField.h"
 #include "SparseField.h"
+#include "TemporalField.h"
 
 //----------------------------------------------------------------------------//
 
@@ -87,9 +88,7 @@ class CubicMIPFieldInterp;
   \ingroup field
   \brief This subclass stores a MIP representation of a Field_T field
 
-  Each level in the MIPField is stored as a SparseField, and each level
-  shares the same FieldMapping definition, even though their resolution is
-  different.
+  Each level in the MIPField is stored as a separate Field_T.
 
   The class is lazy loading, such that no MIP levels are read from disk until
   they are needed. On top of this, standard SparseField caching (memory 
@@ -112,23 +111,24 @@ public:
 
   // Typedefs ------------------------------------------------------------------
   
-  typedef typename Field_T::value_type        Data_T;
-  typedef Field_T                             NestedType;
+  typedef typename Field_T::value_type            Data_T;
+  typedef Field_T                                 NestedType;
 
-  typedef boost::intrusive_ptr<MIPField>      Ptr;
-  typedef std::vector<Ptr>                    Vec;
+  typedef boost::intrusive_ptr<MIPField>          Ptr;
+  typedef std::vector<Ptr>                        Vec;
 
-  typedef MIPLinearInterp<MIPField<Field_T> > LinearInterp;
-  typedef CubicMIPFieldInterp<Data_T>         CubicInterp;
+  typedef MIPLinearInterp<MIPField<Field_T> >     LinearInterp;
+  typedef CubicMIPFieldInterp<Data_T>             CubicInterp;
+  typedef MIPStochasticInterp<MIPField<Field_T> > StochasticInterp;
 
-  typedef Data_T                              value_type;
+  typedef Data_T                                  value_type;
 
-  typedef EmptyField<Data_T>                  ProxyField;
-  typedef typename ProxyField::Ptr            ProxyPtr;
-  typedef std::vector<ProxyPtr>               ProxyVec;
+  typedef EmptyField<Data_T>                      ProxyField;
+  typedef typename ProxyField::Ptr                ProxyPtr;
+  typedef std::vector<ProxyPtr>                   ProxyVec;
 
-  typedef typename Field_T::Ptr               FieldPtr;
-  typedef std::vector<FieldPtr>               FieldVec;
+  typedef typename Field_T::Ptr                   FieldPtr;
+  typedef std::vector<FieldPtr>                   FieldVec;
 
   // Constructors --------------------------------------------------------------
 
@@ -295,6 +295,18 @@ protected:
 //----------------------------------------------------------------------------//
 
 template <typename Data_T>
+class MIPDenseField : public MIPField<DenseField<Data_T> >
+{
+  public:
+    virtual FieldBase::Ptr clone() const
+  { 
+    return FieldBase::Ptr(new MIPDenseField(*this));
+  }
+};
+
+//----------------------------------------------------------------------------//
+
+template <typename Data_T>
 class MIPSparseField : public MIPField<SparseField<Data_T> >
 {
 public:
@@ -307,12 +319,12 @@ public:
 //----------------------------------------------------------------------------//
 
 template <typename Data_T>
-class MIPDenseField : public MIPField<DenseField<Data_T> >
+class MIPTemporalField : public MIPField<TemporalField<Data_T> >
 {
-  public:
+public:
     virtual FieldBase::Ptr clone() const
   { 
-    return FieldBase::Ptr(new MIPDenseField(*this));
+    return FieldBase::Ptr(new MIPTemporalField(*this));
   }
 };
 

@@ -52,7 +52,9 @@
 #include <boost/thread/thread.hpp>
 #include <boost/thread/mutex.hpp>
 
+#include "MIPField.h"
 #include "MIPUtil.h"
+#include "TemporalFieldUtil.h"
 
 //----------------------------------------------------------------------------//
 
@@ -68,6 +70,13 @@ FIELD3D_NAMESPACE_OPEN
 template <typename MIPField_T>
 std::pair<typename MIPField_T::Ptr, typename MIPField_T::Ptr>
 makeMinMax(const typename MIPField_T::NestedType &base, 
+           const float resMult, const size_t numThreads);
+
+//! Constructs a min/max MIP representation of the given TemporalField.
+template <typename Data_T>
+std::pair<typename MIPField<SparseField<Data_T> >::Ptr,
+          typename MIPField<SparseField<Data_T> >::Ptr>
+makeMinMax(const typename TemporalField<Data_T>::Ptr &base, 
            const float resMult, const size_t numThreads);
 
 //----------------------------------------------------------------------------//
@@ -119,6 +128,53 @@ makeMinMax(const typename MIPField_T::NestedType &base,
   result.second = makeMIP<MIPField_T, MaxFilter>(*maxSrc, 2, numThreads);
 
   return result;
+}
+
+//----------------------------------------------------------------------------//
+
+template <typename Data_T>
+std::pair<typename MIPField<SparseField<Data_T> >::Ptr,
+          typename MIPField<SparseField<Data_T> >::Ptr>
+makeMinMax(const typename TemporalField<Data_T>::Ptr &base, 
+           const float resMult, const size_t numThreads)
+{
+  typedef SparseField<Data_T>     Field;
+  typedef typename Field::Ptr     FieldPtr;
+  typedef MIPField<Field>         MIPField;
+  typedef typename MIPField::Ptr  MIPPtr;
+
+  // Storage for results
+  std::pair<MIPPtr, MIPPtr> result;
+
+  // First, downsample the field into a min and max representation ---
+
+  V3i srcRes = base->dataWindow().size() + Field3D::V3i(1);
+  V3i res    = V3f(srcRes) * std::min(1.0f, resMult);
+
+  // Corner case handling
+  res.x = std::max(res.x, 2);
+  res.y = std::max(res.y, 2);
+  res.z = std::max(res.z, 2);
+
+  // Get min/max values from temporal samples in base
+  FieldPtr baseMin = minTemporalField<Data_T>(base, -1.0f, 1.0f);
+  FieldPtr baseMax = maxTemporalField<Data_T>(base, -1.0f, 1.f);
+
+  // Storage for min/max fields
+  FieldPtr minSrc(new Field);
+  FieldPtr maxSrc(new Field);
+
+  // Resample 
+  resample(*baseMin, *minSrc, res, MinFilter());
+  resample(*baseMax, *maxSrc, res, MaxFilter());
+
+  // Second, generate MIP representations ---
+
+  result.first  = makeMIP<MIPField, MinFilter>(*minSrc, 2, numThreads);
+  result.second = makeMIP<MIPField, MaxFilter>(*maxSrc, 2, numThreads);
+
+  return result;
+
 }
 
 //----------------------------------------------------------------------------//

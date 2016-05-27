@@ -76,6 +76,13 @@ struct FieldWrapper
       valueRemapOp(NULL)
   { }
 
+  FieldWrapper()
+    : worldScale(1.0), 
+      doOsToWs(false),
+      doWsBoundsOptimization(false),
+      valueRemapOp(NULL)
+  { }
+
   void setOsToWs(const M44d &i_osToWs)
   {
     osToWs   = i_osToWs;
@@ -99,8 +106,10 @@ struct FieldWrapper
 
   void setWsBoundsOptimization(const bool doWsBoundsOptimization_)
   {
-    if (!doWsBoundsOptimization_)
+    if (!doWsBoundsOptimization_) {
+      doWsBoundsOptimization = false;
       return;
+    }
     // wsBounds can be set only if mapping is a matrix
     const MatrixFieldMapping *mtx_mapping = 
       dynamic_cast<const MatrixFieldMapping*>(mapping);
@@ -127,24 +136,25 @@ struct FieldWrapper
     valueRemapOp    = valueRemapOpPtr.get();
   }
 
-  typename Field_T::LinearInterp  interp;
-  const Field_T                  *field;
-  typename Field_T::Ptr           fieldPtr;
-  const Field3D::FieldMapping    *mapping;
-  Box3d                           vsBounds;
+  typename Field_T::LinearInterp     interp;
+  typename Field_T::StochasticInterp stochasticInterp;
+  const Field_T                     *field;
+  typename Field_T::Ptr              fieldPtr;
+  const Field3D::FieldMapping       *mapping;
+  Box3d                              vsBounds;
   //! Optionally, enable doOsToWs to apply a world to object transform before
   //! lookups.
-  M44d                            osToWs, wsToOs;
-  double                          worldScale;
-  bool                            doOsToWs;
+  M44d                               osToWs, wsToOs;
+  double                             worldScale;
+  bool                               doOsToWs;
   //! Optionally, enable wsBounds optimization to use a world axis
   //! aligned bounding box in lookups.
-  M44d                            wsToVs;
-  Imath::Box3f                    wsBounds;
-  bool                            doWsBoundsOptimization;
+  M44d                               wsToVs;
+  Imath::Box3f                       wsBounds;
+  bool                               doWsBoundsOptimization;
   //! Optionally, set a ValueRemapOp to remap values
-  ValueRemapOp::Ptr               valueRemapOpPtr;
-  const ValueRemapOp             *valueRemapOp;
+  ValueRemapOp::Ptr                  valueRemapOpPtr;
+  const ValueRemapOp                *valueRemapOp;
 };
 
 //------------------------------------------------------------------------------
@@ -156,21 +166,33 @@ struct FieldWrapper
 template <typename Field_T>
 struct MIPFieldWrapper
 {
-  typedef Field_T                        field_type;
-  typedef std::vector<MIPFieldWrapper>   Vec;
-  typedef typename Field_T::LinearInterp LinearInterp;
+  typedef Field_T                            field_type;
+  typedef std::vector<MIPFieldWrapper>       Vec;
+  typedef typename Field_T::LinearInterp     LinearInterp;
+  typedef typename Field_T::StochasticInterp StochasticInterp;
 
   MIPFieldWrapper(const typename Field_T::Ptr f)
     : interpPtr(new LinearInterp(*f)), 
+      stochasticInterpPtr(new StochasticInterp(*f)), 
       field(f.get()), 
       fieldPtr(f), 
       mapping(f->mapping().get()), 
       vsBounds(continuousBounds(f->dataWindow())),
       worldScale(1.0), 
       doOsToWs(false),
+      doWsBoundsOptimization(false),
       valueRemapOp(NULL)
   { 
     interp = interpPtr.get();
+    stochasticInterp = stochasticInterpPtr.get();
+  }
+
+  MIPFieldWrapper()
+    : worldScale(1.0), 
+      doOsToWs(false),
+      doWsBoundsOptimization(false),
+      valueRemapOp(NULL)
+  { 
   }
 
   void setOsToWs(const M44d &i_osToWs)
@@ -196,8 +218,10 @@ struct MIPFieldWrapper
 
   void setWsBoundsOptimization(const bool doWsBoundsOptimization_)
   {
-    if (!doWsBoundsOptimization_)
+    if (!doWsBoundsOptimization_) {
+      doWsBoundsOptimization = false;
       return;
+    }
     // wsBounds can be set only if mapping is a matrix
     const MatrixFieldMapping *mtx_mapping = 
       dynamic_cast<const MatrixFieldMapping*>(mapping);
@@ -224,25 +248,27 @@ struct MIPFieldWrapper
     valueRemapOp    = valueRemapOpPtr.get();
   }
 
-  boost::shared_ptr<LinearInterp>  interpPtr;
-  LinearInterp                    *interp;
-  const Field_T                   *field;
-  typename Field_T::Ptr            fieldPtr;
-  const Field3D::FieldMapping     *mapping;
-  Box3d                            vsBounds;
+  boost::shared_ptr<LinearInterp>     interpPtr;
+  boost::shared_ptr<StochasticInterp> stochasticInterpPtr;
+  LinearInterp                       *interp;
+  StochasticInterp                   *stochasticInterp;
+  const Field_T                      *field;
+  typename Field_T::Ptr               fieldPtr;
+  const Field3D::FieldMapping        *mapping;
+  Box3d                               vsBounds;
   //! Optionally, enable doOsToWs to apply a world to object transform before
   //! lookups.
-  M44d                             osToWs, wsToOs;
-  double                           worldScale;
-  bool                             doOsToWs;
+  M44d                                osToWs, wsToOs;
+  double                              worldScale;
+  bool                                doOsToWs;
   //! Optionally, enable wsBounds optimization to use a world axis
   //! aligned bounding box in lookups.
-  M44d                             wsToVs;
-  Imath::Box3f                     wsBounds;
-  bool                             doWsBoundsOptimization;
+  M44d                                wsToVs;
+  Imath::Box3f                        wsBounds;
+  bool                                doWsBoundsOptimization;
   //! Optionally, set a ValueRemapOp to remap values
-  ValueRemapOp::Ptr                valueRemapOpPtr;
-  const ValueRemapOp              *valueRemapOp;
+  ValueRemapOp::Ptr                   valueRemapOpPtr;
+  const ValueRemapOp                 *valueRemapOp;
 };
 
 //----------------------------------------------------------------------------//

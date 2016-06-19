@@ -661,7 +661,23 @@ public:
 
   //! Whether to output ogawa files
   static void useOgawa(const bool enabled)
-  { ms_doOgawa = enabled; }
+  { 
+    // simple temporary endian check
+    union {
+      uint32_t l;
+      char c[4];
+    } u;
+    
+    u.l = 0x01234567;
+    
+    if (u.c[0] == 0x67) {
+      ms_doOgawa = enabled;
+    } else {
+      std::cerr << "WARNING: Field3D only supports Ogawa-backed files "
+                << "on little-endian systems." << std::endl;
+      ms_doOgawa = false;
+    }
+  }
 
   //! \name Writing layer to disk
   //! \{

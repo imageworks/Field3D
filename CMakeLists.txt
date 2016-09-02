@@ -38,7 +38,7 @@ PROJECT ( field3d )
 set( CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJECT_SOURCE_DIR}/cmake )
 
 FIND_PACKAGE (Doxygen)
-FIND_PACKAGE (HDF5)
+FIND_PACKAGE (HDF5 COMPONENTS C)
 IF ( CMAKE_HOST_WIN32 )
 # f3dinfo relies on program_options but don't include it, since
 # for some reason, unlike all the other boost components, a link is

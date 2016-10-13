@@ -826,6 +826,19 @@ bool Field3DInputFile::open(const string &filename)
                "In file: " + filename + " - Bad file hierarchy. ");
     success = false;    
   }
+  catch (runtime_error &e) {
+    // HDF5 fallback
+    m_hdf5.reset(new Field3DInputFileHDF5);
+    m_hdf5Base = m_hdf5;
+    if (m_hdf5->open(filename)) {
+      // Handled. Just return.
+      return true;
+    } else {
+      Msg::print(Msg::SevWarning,
+                 "In file: " + filename + ": " + string(e.what()));
+      success = false;
+    }
+  }
   catch (...) {
     Msg::print(Msg::SevWarning, 
                "In file: " + filename + " Unknown exception ");

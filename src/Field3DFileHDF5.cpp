@@ -85,6 +85,7 @@ namespace {
   const std::string k_partitionName("partition");  
   const std::string k_versionAttrName("version_number");
   const std::string k_classNameAttrName("class_name");
+  const std::string k_typeNameAttrName("type_name");
   const std::string k_mappingTypeAttrName("mapping_type");
 
   //! This version is stored in every file to determine which library version
@@ -1652,10 +1653,15 @@ bool writeField(hid_t layerGroup, FieldBase::Ptr field)
     return false;
   }
 
-  // Add class name attribute
+  // Add class name and type attributes
   if (!writeAttribute(layerGroup, k_classNameAttrName, 
                       field->className())) {
     Msg::print(Msg::SevWarning, "Error adding class name attribute.");
+    return false;
+  }
+  if (!writeAttribute(layerGroup, k_typeNameAttrName, 
+                      field->classType())) {
+    Msg::print(Msg::SevWarning, "Error adding class type attribute.");
     return false;
   }
 

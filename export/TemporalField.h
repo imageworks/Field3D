@@ -491,6 +491,8 @@ public:
   typedef std::vector<Ptr> Vec;
 
   typedef LinearTemporalFieldInterp<Data_T> LinearInterp;
+  //! TODO Implement cubic interpolation for TemporalField.
+  typedef LinearTemporalFieldInterp<Data_T> CubicInterp;
   typedef TemporalStochasticInterp<Data_T>  StochasticInterp;
 
   typedef TemporalBlock<Data_T> Block;

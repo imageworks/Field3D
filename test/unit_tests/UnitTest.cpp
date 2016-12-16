@@ -1320,15 +1320,15 @@ void testLayerFetching()
   // Try fetching proxy versions ---
 
   EmptyField<float>::Vec field1Density = 
-    in.readProxyLayer<float>("field1", "density", false);
+    in.readProxyLayers<float>("field1", "density", false);
   EmptyField<float>::Vec field2Density = 
-    in.readProxyLayer<float>("field2", "density", false);
+    in.readProxyLayers<float>("field2", "density", false);
   EmptyField<float>::Vec field3Density = 
-    in.readProxyLayer<float>("field3", "density", false);
+    in.readProxyLayers<float>("field3", "density", false);
   EmptyField<float>::Vec field1Vel = 
-    in.readProxyLayer<float>("field1", "v", true);
+    in.readProxyLayers<float>("field1", "v", true);
   EmptyField<float>::Vec field2Vel = 
-    in.readProxyLayer<float>("field2", "v", true);
+    in.readProxyLayers<float>("field2", "v", true);
 
   BOOST_CHECK(field1Density.size() == static_cast<size_t>(1));
   BOOST_CHECK(field2Density.size() == static_cast<size_t>(1));

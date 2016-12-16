@@ -14,6 +14,7 @@
 #include "FieldInterp.h"
 #include "InitIO.h"
 #include "MIPField.h"
+#include "MIPInterp.h"
 #include "MIPUtil.h"
 #include "SparseField.h"
 #include "FieldSampler.h"
@@ -137,6 +138,7 @@ struct FieldWrapper
   }
 
   typename Field_T::LinearInterp     interp;
+  typename Field_T::CubicInterp      cubicInterp;
   typename Field_T::StochasticInterp stochasticInterp;
   const Field_T                     *field;
   typename Field_T::Ptr              fieldPtr;
@@ -169,10 +171,12 @@ struct MIPFieldWrapper
   typedef Field_T                            field_type;
   typedef std::vector<MIPFieldWrapper>       Vec;
   typedef typename Field_T::LinearInterp     LinearInterp;
+  typedef typename Field_T::CubicInterp      CubicInterp;
   typedef typename Field_T::StochasticInterp StochasticInterp;
 
   MIPFieldWrapper(const typename Field_T::Ptr f)
     : interpPtr(new LinearInterp(*f)), 
+      cubicInterpPtr(new CubicInterp(*f)), 
       stochasticInterpPtr(new StochasticInterp(*f)), 
       field(f.get()), 
       fieldPtr(f), 
@@ -184,6 +188,7 @@ struct MIPFieldWrapper
       valueRemapOp(NULL)
   { 
     interp = interpPtr.get();
+    cubicInterp = cubicInterpPtr.get();
     stochasticInterp = stochasticInterpPtr.get();
   }
 
@@ -249,8 +254,10 @@ struct MIPFieldWrapper
   }
 
   boost::shared_ptr<LinearInterp>     interpPtr;
+  boost::shared_ptr<CubicInterp>      cubicInterpPtr;
   boost::shared_ptr<StochasticInterp> stochasticInterpPtr;
   LinearInterp                       *interp;
+  CubicInterp                        *cubicInterp;
   StochasticInterp                   *stochasticInterp;
   const Field_T                      *field;
   typename Field_T::Ptr               fieldPtr;

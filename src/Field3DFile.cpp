@@ -92,7 +92,9 @@ namespace {
   const std::string k_partitionName("partition");  
   const std::string k_versionAttrName("version_number");
   const std::string k_classNameAttrName("class_name");
+  const std::string k_typeNameAttrName("type_name");
   const std::string k_mappingTypeAttrName("mapping_type");
+  const std::string k_componentsAttrName("components");
 
   //! This version is stored in every file to determine which library version
   //! produced it.
@@ -233,8 +235,9 @@ namespace {
       return false;
     }
 
-    // Add class name attribute
+    // Add class name and type attributes
     OgOAttribute<string>(layerGroup, k_classNameAttrName, field->className());
+    OgOAttribute<string>(layerGroup, k_typeNameAttrName, field->classType());
 
     return io->write(layerGroup, field);
     //! \todo FIXME!
@@ -383,6 +386,36 @@ Partition::getLayerNames(std::vector<std::string> &names) const
 
 //----------------------------------------------------------------------------//
 
+void 
+Partition::getScalarLayerNames(std::vector<std::string> &names) const 
+{
+  // We don't want to do names.clear() here, since this gets called
+  // inside some loops that want to accumulate names.
+  for (LayerList::const_iterator i = m_layers.begin();
+       i != m_layers.end(); ++i) {
+    if (!i->isVector) {
+      names.push_back(i->name);
+    }
+  }
+}
+
+//----------------------------------------------------------------------------//
+
+void 
+Partition::getVectorLayerNames(std::vector<std::string> &names) const 
+{
+  // We don't want to do names.clear() here, since this gets called
+  // inside some loops that want to accumulate names.
+  for (LayerList::const_iterator i = m_layers.begin();
+       i != m_layers.end(); ++i) {
+    if (i->isVector) {
+      names.push_back(i->name);
+    }
+  }
+}
+
+//----------------------------------------------------------------------------//
+
 OgOGroup& Partition::group() const
 {
   return *m_group;
@@ -520,15 +553,13 @@ Field3DFileBase::getScalarLayerNames(vector<string> &names,
     return;
   }
 
-  //! \todo Make this really only return scalar layers
-
   names.clear();
 
   for (int i = 0; i < numIntPartitions(partitionName); i++) {
     string internalName = makeIntPartitionName(partitionName, i);
     File::Partition::Ptr part = partition(internalName);
     if (part) {
-      part->getLayerNames(names);
+      part->getScalarLayerNames(names);
     }
   }
 
@@ -551,14 +582,12 @@ Field3DFileBase::getScalarLayerNames(vector<string> &names,
     return;
   }
 
-  //! \todo Make this really only return scalar layers
-
   names.clear();
 
   const string internalName = makeIntPartitionName(partitionName, index);
   File::Partition::Ptr part = partition(internalName);
   if (part) {
-    part->getLayerNames(names);
+    part->getScalarLayerNames(names);
   }
 
   names = makeUnique(names);
@@ -575,15 +604,13 @@ Field3DFileBase::getVectorLayerNames(vector<string> &names,
     return;
   }
 
-  //! \todo Make this really only return vector layers
-
   names.clear();
 
   for (int i = 0; i < numIntPartitions(partitionName); i++) {
     string internalName = makeIntPartitionName(partitionName, i);
     File::Partition::Ptr part = partition(internalName);
     if (part) {
-      part->getLayerNames(names);
+      part->getVectorLayerNames(names);
     }
   }
 
@@ -606,14 +633,12 @@ Field3DFileBase::getVectorLayerNames(vector<string> &names,
     return;
   }
 
-  //! \todo Make this really only return vector layers
-
   names.clear();
 
   const string internalName = makeIntPartitionName(partitionName, index);
   File::Partition::Ptr part = partition(internalName);
   if (part) {
-    part->getLayerNames(names);
+    part->getVectorLayerNames(names);
   }
 
   names = makeUnique(names);
@@ -648,8 +673,6 @@ Field3DFileBase::getIntScalarLayerNames(vector<string> &names,
     return;
   }
 
-  //! \todo Make this really only return scalar layers
-
   names.clear();
 
   File::Partition::Ptr part = partition(intPartitionName);
@@ -659,7 +682,7 @@ Field3DFileBase::getIntScalarLayerNames(vector<string> &names,
     return;
   }
 
-  part->getLayerNames(names);
+  part->getScalarLayerNames(names);
 }
 
 //----------------------------------------------------------------------------//
@@ -673,8 +696,6 @@ Field3DFileBase::getIntVectorLayerNames(vector<string> &names,
     return;
   }
 
-  //! \todo Make this really only return vector layers
-
   names.clear();
 
   File::Partition::Ptr part = partition(intPartitionName);
@@ -684,7 +705,7 @@ Field3DFileBase::getIntVectorLayerNames(vector<string> &names,
     return;
   }
 
-  part->getLayerNames(names);
+  part->getVectorLayerNames(names);
 }
 
 //----------------------------------------------------------------------------//
@@ -1034,6 +1055,8 @@ bool Field3DInputFile::readPartitionAndLayerInfo()
       File::Layer layer;
       layer.name = *l;
       layer.parent = partitionName;
+      layer.isVector =  partitionGroup.findGroup(layer.name)
+        .findAttribute<uint8_t>(k_componentsAttrName).value() == 3;
       // Add to partition
       partition(partitionName)->addLayer(layer);
     }
@@ -1728,8 +1751,11 @@ Field3DInputFile::readLayers(const std::string &layerName) const
   getIntPartitionNames(parts);
 
   for (vector<string>::iterator p = parts.begin(); p != parts.end(); ++p) {
-    vector<std::string> layers;
-    getIntScalarLayerNames(layers, *p);
+    vector<std::string> layers, scalarLayers, vectorLayers;
+    getIntScalarLayerNames(scalarLayers, *p);
+    getIntVectorLayerNames(vectorLayers, *p);
+    layers.insert(layers.end(), scalarLayers.begin(), scalarLayers.end());
+    layers.insert(layers.end(), vectorLayers.begin(), vectorLayers.end());
     for (vector<string>::iterator l = layers.begin(); l != layers.end(); ++l) {
       // Only read if it matches the name
       if (match(*l, layerName)) {
@@ -1765,13 +1791,16 @@ Field3DInputFile::readLayers(const std::string &partitionName,
   getIntPartitionNames(parts);
  
   for (vector<string>::iterator p = parts.begin(); p != parts.end(); ++p) {
-    std::vector<std::string> layers;
-    getIntScalarLayerNames(layers, *p);
+    vector<std::string> layers, scalarLayers, vectorLayers;
+    getIntScalarLayerNames(scalarLayers, *p);
+    getIntVectorLayerNames(vectorLayers, *p);
+    layers.insert(layers.end(), scalarLayers.begin(), scalarLayers.end());
+    layers.insert(layers.end(), vectorLayers.begin(), vectorLayers.end());
     if (removeUniqueId(*p) == partitionName) {
       for (vector<string>::iterator l = layers.begin(); 
            l != layers.end(); ++l) {
         // Only read if it matches the name
-        if (*l == layerName) {
+        if (match(*l,layerName)) {
           FieldPtr mf = readLayer<Data_T>(*p, *l);
           if (mf)
             ret.push_back(mf);
@@ -1801,8 +1830,11 @@ Field3DInputFile::readLayer(const std::string &partitionName,
   
   const string p = makeIntPartitionName(partitionName, index);
 
-  std::vector<std::string> layers;
-  getIntScalarLayerNames(layers, p);
+  vector<std::string> layers, scalarLayers, vectorLayers;
+  getIntScalarLayerNames(scalarLayers, p);
+  getIntVectorLayerNames(vectorLayers, p);
+  layers.insert(layers.end(), scalarLayers.begin(), scalarLayers.end());
+  layers.insert(layers.end(), vectorLayers.begin(), vectorLayers.end());
   if (removeUniqueId(p) == partitionName) {
     for (vector<string>::iterator l = layers.begin(); 
          l != layers.end(); ++l) {
@@ -1845,8 +1877,11 @@ Field3DInputFile::readLayers(const FilenameSpec &spec) const
     getIntPartitionNames(parts);
  
     for (vector<string>::iterator p = parts.begin(); p != parts.end(); ++p) {
-      std::vector<std::string> layers;
-      getIntScalarLayerNames(layers, *p);
+      vector<std::string> layers, scalarLayers, vectorLayers;
+      getIntScalarLayerNames(scalarLayers, *p);
+      getIntVectorLayerNames(vectorLayers, *p);
+      layers.insert(layers.end(), scalarLayers.begin(), scalarLayers.end());
+      layers.insert(layers.end(), vectorLayers.begin(), vectorLayers.end());
       const std::string name = removeUniqueId(*p);
       for (vector<string>::iterator l = layers.begin(); 
            l != layers.end(); ++l) {
@@ -1937,13 +1972,18 @@ Field3DInputFile::readProxyLayer(OgIGroup &location,
   dataW.min = dwMinAttr.value();
   dataW.max = dwMaxAttr.value();
 
-  // Get class name ---
+  // Get class name and type ---
   
-  std::string className;
+  std::string className, typeName;
   OgIAttribute<std::string> classNameAttr = 
     location.findAttribute<std::string>(k_classNameAttrName);
   if (classNameAttr.isValid()) {
     className = classNameAttr.value(); 
+  }
+  OgIAttribute<std::string> typeNameAttr = 
+    location.findAttribute<std::string>(k_typeNameAttrName);
+  if (typeNameAttr.isValid()) {
+    typeName = typeNameAttr.value(); 
   }
 
   // Construct the field
@@ -1961,6 +2001,7 @@ Field3DInputFile::readProxyLayer(OgIGroup &location,
   field->attribute = attribute;
   field->setMapping(mapping);
   field->metadata().setStrMetadata("classname", className);
+  field->metadata().setStrMetadata("classtype", typeName);
 
   return field;
 }

@@ -43,8 +43,8 @@ maxTemporalField(const typename TemporalField<Data_T>::Ptr &tfPtr,
 template <typename Data_T>
 typename SparseField<Data_T>::Ptr 
 sliceTemporalField(typename TemporalField<Data_T>::Ptr tfPtr, 
-                   const float sliceTime);
-
+                   const float sliceTime,
+                   const Data_T valueScale = Data_T(1.0));
 
 //----------------------------------------------------------------------------//
 // Helper functions
@@ -434,7 +434,8 @@ maxTemporalField(const typename TemporalField<Data_T>::Ptr &tfPtr,
 template <typename Data_T>
 typename SparseField<Data_T>::Ptr 
 sliceTemporalField(typename TemporalField<Data_T>::Ptr tfPtr, 
-                   const float sliceTime)
+                   const float sliceTime,
+                   const Data_T valueScale)
 {
   TemporalField<Data_T> *tf = tfPtr.get();
 
@@ -456,7 +457,8 @@ sliceTemporalField(typename TemporalField<Data_T>::Ptr tfPtr,
           for (int k = ext.min.z; k <= ext.max.z; ++k) {
             for (int j = ext.min.y; j <= ext.max.y; ++j) {
               for (int i = ext.min.x; i <= ext.max.x; ++i) {
-                field->fastLValue(i, j, k) = tf->fastValue(i, j, k, sliceTime);
+                field->fastLValue(i, j, k)
+                    = tf->fastValue(i, j, k, sliceTime) * valueScale;
               }
             }
           }

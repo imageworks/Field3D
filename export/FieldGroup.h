@@ -384,6 +384,14 @@ struct FieldGroup
                           float *result, 
                           const float *active = NULL,
                           const CompositeOp compOp = Add) const;
+  //! Unified sampling of the group's fields using cubic interpolation.
+  //! TODO Cubic interpolation isn't implemented for MIP and Temporal fields,
+  //! and will fallback to linear interpolation.
+  void             sampleCubic(const V3d &wsP, 
+                               const float wsSpotSize, 
+                               const float time,
+                               float *result, 
+                               const CompositeOp compOp = Add) const;
   //! Unified sampling of all fields using stochastic interpolation
   void             sampleStochastic(const size_t n, 
                                     const float *wsP, 
@@ -523,6 +531,7 @@ protected:
   struct MakeMinMax;
   struct MakeMinMaxMIP;
   struct Sample;
+  struct SampleCubic;
   struct SampleMIP;
   struct SampleMultiple;
   struct SampleMIPMultiple;
@@ -898,7 +907,7 @@ sample(const size_t n,
   // Handle Temporal MIP fields
   SampleMIPTemporalMultiple mipTemporalOp(n, wsP, wsSpotSize, time, 
                                           result, numHits, active);
-  fusion::for_each(m_temporal, mipTemporalOp);
+  fusion::for_each(m_mipTemporal, mipTemporalOp);
 
   // Check composite op
   if (compOp == Add) {
@@ -909,6 +918,50 @@ sample(const size_t n,
         for (size_t c = 0; c < Dims_T; ++c) {
           result[i * Dims_T + c] /= static_cast<float>(numHits[i]);
         }
+      }
+    }
+  }
+}
+
+//------------------------------------------------------------------------------
+
+//! Cubic sampling currently not implemented for MIP and Temporal fields.
+//! This will fallback to linear interpolation for those types.
+template <typename BaseTypeList_T, int Dims_T>
+void FieldGroup<BaseTypeList_T, Dims_T>::
+sampleCubic(const V3d &wsP, 
+            const float wsSpotSize, 
+            const float time,
+            float *result, 
+            const CompositeOp compOp) const
+{
+  size_t numHits = 0;
+
+  // Handle ordinary fields
+  SampleCubic op(wsP, result, numHits);
+  fusion::for_each(m_dense, op);
+  fusion::for_each(m_sparse, op);
+
+  // Handle MIP fields
+  SampleMIP mipOp(wsP, wsSpotSize, result, numHits);
+  fusion::for_each(m_mipDense, mipOp);
+  fusion::for_each(m_mipSparse, mipOp);
+
+  // Handle Temporal fields
+  SampleTemporal temporalOp(wsP, time, result, numHits);
+  fusion::for_each(m_temporal, temporalOp);
+
+  // Handle Temporal MIP fields
+  SampleMIPTemporal mipTemporalOp(wsP, wsSpotSize, time, result, numHits);
+  fusion::for_each(m_mipTemporal, mipTemporalOp);
+
+  // Check composite op
+  if (compOp == Add) {
+    // Nothing
+  } else {
+    if (numHits > 1) {
+      for (size_t i = 0; i < Dims_T; ++i) {
+        result[i] /= static_cast<float>(numHits);
       }
     }
   }
@@ -974,8 +1027,8 @@ sampleStochastic(const size_t n,
     SampleMIPTemporalStochastic mipTemporalOp(n, tArgs);
     fusion::for_each(m_temporal, mipTemporalOp);
   } else {
-    SampleMIPTemporalMultiple mipTemporalOp(n, wsP, time, result, active);
-    fusion::for_each(m_temporal, mipTemporalOp);
+    SampleMIPTemporalMultiple mipTemporalOp(n, wsP, time, wsSpotSize, result, active);
+    fusion::for_each(m_mipTemporal, mipTemporalOp);
   }
 
   // Check composite op
@@ -1470,6 +1523,27 @@ struct FieldGroup<BaseTypeList_T, Dims_T>::SampleMIPMultiple
 //------------------------------------------------------------------------------
 
 template <typename BaseTypeList_T, int Dims_T>
+struct FieldGroup<BaseTypeList_T, Dims_T>::SampleCubic
+{
+  //! Ctor
+  SampleCubic(const V3d &p, float *result, size_t &numHits)
+    : m_p(p), m_result(result), m_numHits(numHits)
+  { }
+  //! Functor
+  template <typename T>
+  void operator()(const T &vec) const
+  { 
+    FieldSampler<T, Dims_T>::sampleCubic(vec, m_p, m_result, m_numHits); 
+  }
+  // Data members
+  const V3d &m_p;
+  float     *m_result;
+  size_t    &m_numHits;
+};
+
+//------------------------------------------------------------------------------
+
+template <typename BaseTypeList_T, int Dims_T>
 struct FieldGroup<BaseTypeList_T, Dims_T>::SampleStochastic
 {
   //! Ctor
@@ -1595,24 +1669,26 @@ struct FieldGroup<BaseTypeList_T, Dims_T>::SampleMIPTemporalMultiple
   //! Ctor
   SampleMIPTemporalMultiple(const size_t n,
                             const float *p,
+                            const float *wsSpotSize, 
                             const float *t,
                             float *result,
                             size_t *numHits, 
                             const float *active)
-    : m_n(n), m_p(p), m_t(t), m_result(result), m_numHits(numHits),
+    : m_n(n), m_p(p), m_wsSpotSize(wsSpotSize), m_t(t), m_result(result), m_numHits(numHits),
       m_active(active)
   { }
   //! Functor
   template <typename T>
   void operator()(const T &vec) const
   { 
-    FieldSampler<T, Dims_T>::sampleMIPTemporalMultiple(vec, m_n, m_p, m_t,
+    FieldSampler<T, Dims_T>::sampleMIPTemporalMultiple(vec, m_n, m_p, m_wsSpotSize, m_t,
                                                        m_result, m_numHits, 
                                                        m_active); 
   }
   // Data members
   const size_t m_n;
   const float *m_p;
+  const float *m_wsSpotSize;
   const float *m_t;
   float *m_result;
   size_t *m_numHits;

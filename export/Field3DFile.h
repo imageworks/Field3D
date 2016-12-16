@@ -102,6 +102,8 @@ public:
   //! The name of the parent partition. We need this in order to open
   //! its group.
   std::string parent;
+  //! Whether this is a vector layer.
+  bool isVector;
 };
   
 } // namespace File
@@ -164,6 +166,12 @@ public:
   
   //! Gets all the layer names. 
   void getLayerNames(std::vector<std::string> &names) const;
+  
+  //! Gets scalar layer names. 
+  void getScalarLayerNames(std::vector<std::string> &names) const;
+
+  //! Gets vector layer names. 
+  void getVectorLayerNames(std::vector<std::string> &names) const;
 
   //! Returns a reference to the OgOGroup
   OgOGroup& group() const;

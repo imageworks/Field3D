@@ -1468,9 +1468,13 @@ Field3DInputFileHDF5::readProxyLayer(hid_t location,
     return null;
   } 
 
-  // Read the class name
-  std::string className;
+  // Read the class name and type
+  std::string className, typeName;
   readAttribute(location, "class_name", className);
+
+  if (H5Aexists(location, "type_name") > 0) {
+      readAttribute(location, "type_name", typeName);
+  }
 
   // Construct the field and load the data
   typename EmptyField<Data_T>::Ptr field(new EmptyField<Data_T>);
@@ -1487,6 +1491,7 @@ Field3DInputFileHDF5::readProxyLayer(hid_t location,
   field->attribute = attribute;
   field->setMapping(mapping);
   field->metadata().setStrMetadata("classname", className);
+  field->metadata().setStrMetadata("classtype", typeName);
 
   return field;
 }

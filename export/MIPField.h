@@ -118,7 +118,12 @@ public:
   typedef std::vector<Ptr>                        Vec;
 
   typedef MIPLinearInterp<MIPField<Field_T> >     LinearInterp;
+#if 0
   typedef CubicMIPFieldInterp<Data_T>             CubicInterp;
+#else
+  //! TODO Implement cubic interpolation for MIPField.
+  typedef MIPLinearInterp<MIPField<Field_T> >     CubicInterp;
+#endif
   typedef MIPStochasticInterp<MIPField<Field_T> > StochasticInterp;
 
   typedef Data_T                                  value_type;
@@ -373,21 +378,28 @@ MIPField<Field_T>::init(const MIPField &rhs)
   m_relativeResolution = rhs.m_relativeResolution;
   // The contained fields must be individually cloned if they have already
   // been loaded
-  m_fields.resize(rhs.m_fields.size());
-  m_rawFields.resize(rhs.m_rawFields.size());
-  for (size_t i = 0, end = m_fields.size(); i < end; ++i) {
-    // Update the field pointer
-    if (rhs.m_fields[i]) {
-      FieldBase::Ptr baseClone = rhs.m_fields[i]->clone();
-      FieldPtr clone = field_dynamic_cast<Field_T>(baseClone);
-      if (clone) {
-        m_fields[i] = clone;
-      } else {
-        std::cerr << "MIPField::op=(): Failed to clone." << std::endl;
+  const size_t fieldSize    = rhs.m_fields.size();
+  const size_t rawFieldSize = rhs.m_rawFields.size();
+  // TODO The need for this comparison indicates a possible bug in calling
+  // the copy constructor with an uninitialized MIPField as rhs.
+  if (rawFieldSize >= fieldSize) {
+    m_fields.resize(fieldSize);
+    m_rawFields.resize(rawFieldSize);
+
+    for (size_t i = 0, end = m_fields.size(); i < end; ++i) {
+      // Update the field pointer
+      if (rhs.m_fields[i]) {
+        FieldBase::Ptr baseClone = rhs.m_fields[i]->clone();
+        FieldPtr clone = field_dynamic_cast<Field_T>(baseClone);
+        if (clone) {
+          m_fields[i] = clone;
+        } else {
+          std::cerr << "MIPField::op=(): Failed to clone." << std::endl;
+        }
       }
+      // Update the raw pointer
+      m_rawFields[i] = m_fields[i].get();
     }
-    // Update the raw pointer
-    m_rawFields[i] = m_fields[i].get();
   }
   // New mutex
   m_ioMutex.reset(new boost::mutex);

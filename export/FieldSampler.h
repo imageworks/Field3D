@@ -446,6 +446,38 @@ struct FieldSampler
   }
 
   // Ordinary fields
+  static void sampleCubic(const WrapperVec_T &f, const V3d &wsP, float *value, 
+                          size_t &numHits)
+  {
+    // Reinterpret the pointer according to Dims_T
+    Input_T *data = reinterpret_cast<Input_T*>(value);
+    // Loop over fields in vector
+    for (size_t i = 0, end = f.size(); i < end; ++i) {
+      V3d vsP;
+      // Apply world to object transform
+      if (f[i].doOsToWs) {
+        V3d osP;
+        f[i].wsToOs.multVecMatrix(wsP, osP);
+        f[i].mapping->worldToVoxel(osP, vsP);
+      } else {
+        f[i].mapping->worldToVoxel(wsP, vsP);
+      }
+      // Sample
+      if (f[i].vsBounds.intersects(vsP)) {
+        // Count as within field
+        numHits++;
+        // Sample and remap
+        if (f[i].valueRemapOp) {
+          const Data_T unremapped = f[i].cubicInterp.sample(*f[i].field, vsP);
+          *data += f[i].valueRemapOp->remap(unremapped);
+        } else {
+          *data += f[i].cubicInterp.sample(*f[i].field, vsP);
+        }
+      } 
+    }
+  }
+
+  // Ordinary fields
   static void sampleStochastic(const WrapperVec_T &f, const size_t neval,
                                const SampleStochasticArgs &args)
   {
@@ -1111,8 +1143,8 @@ void FieldSampler<WrapperVec_T, Dims_T>::sampleMIPTemporalMultiple
             // Count as within field
             numHits[ieval]++;
             // Sample
-            data[ieval] += field.interp.sample(*field.field, vsP, 
-                                               wsSpotSizes[ieval], t[ieval]);
+            data[ieval] += field.interp->sample(vsP, wsSpotSizes[ieval],
+                                                t[ieval]);
           }
         }
       }

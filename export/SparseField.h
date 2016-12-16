@@ -48,6 +48,7 @@
 
 #include <vector>
 
+#include <boost/interprocess/sync/lock_options.hpp>
 #include <boost/thread/mutex.hpp>
 #include <boost/lexical_cast.hpp>
 
@@ -239,10 +240,13 @@ struct SparseBlock : boost::noncopyable
   { return data[(k << blockOrder << blockOrder) + (j << blockOrder) + i]; }
 
   //! Alloc data
-  void resize(int n)
+  void resize(int n, bool enforceThreadSafety = true)
   {
     // First hold lock
-    boost::mutex::scoped_lock lock(ms_resizeMutex);
+    boost::mutex::scoped_lock lock(ms_resizeMutex, boost::defer_lock);
+    if (enforceThreadSafety) {
+      lock.lock();
+    }
     // Perform work
     if (data) {
       delete[] data;
@@ -253,10 +257,13 @@ struct SparseBlock : boost::noncopyable
   }
 
   //! Remove data
-  void clear()
+  void clear(bool enforceThreadSafety = true)
   {
     // First hold lock
-    boost::mutex::scoped_lock lock(ms_resizeMutex);
+    boost::mutex::scoped_lock lock(ms_resizeMutex, boost::defer_lock);
+    if (enforceThreadSafety) {
+      lock.lock();
+    }
     // Perform work
     if (data) {
       delete[] data;
@@ -265,18 +272,18 @@ struct SparseBlock : boost::noncopyable
   }
 
   //! Copy data from another block
-  void copy(const SparseBlock &other, size_t n)
+  void copy(const SparseBlock &other, size_t n, bool enforceThreadSafety = true)
   {
     if (other.isAllocated) {
       if (!data) {
-        resize(n);
+        resize(n, enforceThreadSafety);
       }
       Data_T *p = data, *end = data + n, *o = other.data;
       while (p != end) {
         *p++ = *o++;
       }
     } else {
-      clear();
+      clear(enforceThreadSafety);
     }
   }
 
@@ -365,7 +372,9 @@ public:
   //! \{
 
   //! Constructs an empty buffer
-  SparseField();
+  //! If enforceThreadSafety is true each block will aquire a lock shared with
+  //! all blocks in this field when allocating or deallocating it's data.
+  explicit SparseField(bool enforceThreadSafety = true);
 
   //! Copy constructor
   SparseField(const SparseField &o);
@@ -421,6 +430,13 @@ public:
   //! \returns Number of released blocks
   template <typename Functor_T>
   int releaseBlocks(Functor_T func);
+
+  //! Releases a single block if the supplied function object returns true.
+  //! See releaseBlocks() above.
+  //! \param func A function object with the method "bool check(SparseBlock&)"
+  //! \returns true if block was released, false otherwise
+  template <typename Functor_T>
+  bool releaseBlock(const size_t idx, Functor_T func); 
 
   //! Calculates the block number based on a block i,j,k index
   int blockId(int blockI, int blockJ, int blockK) const;
@@ -600,6 +616,9 @@ public:
   Block *m_blocks;
   //! Number of blocks in field.
   size_t m_numBlocks;
+
+  //! Whether to lock when allocating and deallocating block data.
+  bool m_enforceThreadSafety;
 
   //! Pointer to SparseFileManager. Used when doing dynamic reading.
   //! NULL if not in use.
@@ -1268,10 +1287,11 @@ private:
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-SparseField<Data_T>::SparseField()
+SparseField<Data_T>::SparseField(bool enforceThreadSafety)
   : base(),
     m_blockOrder(BLOCK_ORDER),
     m_blocks(NULL),
+    m_enforceThreadSafety(enforceThreadSafety),
     m_fileManager(NULL)
 {
   setupBlocks();
@@ -1284,6 +1304,7 @@ SparseField<Data_T>::SparseField(const SparseField<Data_T> &o)
  : base(o),
    m_blockOrder(o.m_blockOrder),
    m_blocks(NULL),
+   m_enforceThreadSafety(o.m_enforceThreadSafety),
    m_fileManager(o.m_fileManager)
 {
   copySparseField(o);
@@ -1350,8 +1371,10 @@ SparseField<Data_T>::copySparseField(const SparseField<Data_T> &o)
       m_blocks[i].isAllocated = o.m_blocks[i].isAllocated;
       m_blocks[i].emptyValue = o.m_blocks[i].emptyValue;
       m_blocks[i].copy(o.m_blocks[i],
-                       1 << m_blockOrder << m_blockOrder << m_blockOrder);
+                       1 << m_blockOrder << m_blockOrder << m_blockOrder,
+                       m_enforceThreadSafety);
     }
+    m_enforceThreadSafety = o.m_enforceThreadSafety;
     m_fileId = -1;
     m_fileManager = NULL;
   }
@@ -1387,7 +1410,7 @@ void SparseField<Data_T>::copyBlockStates(const SparseField<Data_T> &o)
   for (size_t i = 0; i < m_numBlocks; ++i) {
     m_blocks[i].isAllocated = o.m_blocks[i].isAllocated;
     m_blocks[i].emptyValue = o.m_blocks[i].emptyValue;
-    m_blocks[i].clear();
+    m_blocks[i].clear(m_enforceThreadSafety);
   }
 }
 
@@ -1579,6 +1602,44 @@ int SparseField<Data_T>::releaseBlocks(Functor_T func)
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
+template <typename Functor_T>
+bool SparseField<Data_T>::releaseBlock(const size_t idx, Functor_T func)
+{
+  Data_T emptyValue;
+
+  // If the block is on the edge of the field, it may have unused
+  // voxels, with undefined values.  We need to pass the range of
+  // valid voxels into the check function, so it only looks at valid
+  // voxels.
+  V3i dataRes = FieldRes::dataResolution();
+  V3i validSize;
+  V3i blockAllocSize(blockSize());
+
+  V3i blockCoord = indexToCoord(idx, m_blockRes);
+  validSize = blockAllocSize;
+  if (blockCoord.x == m_blockRes.x-1) {
+    validSize.x = dataRes.x - blockCoord.x * blockAllocSize.x;
+  }
+  if (blockCoord.y == m_blockRes.y-1) {
+    validSize.y = dataRes.y - blockCoord.y * blockAllocSize.y;
+  }
+  if (blockCoord.z == m_blockRes.z-1) {
+    validSize.z = dataRes.z - blockCoord.z * blockAllocSize.z;
+  }
+
+  if (m_blocks[idx].isAllocated) {
+    if (func.check(m_blocks[idx], emptyValue, validSize, blockAllocSize)) {
+      deallocBlock(m_blocks[idx], emptyValue);
+      return true;
+    }
+  }
+
+  return false;
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
 Data_T SparseField<Data_T>::value(int i, int j, int k) const
 {
   return fastValue(i, j, k);
@@ -1667,7 +1728,7 @@ Data_T& SparseField<Data_T>::fastLValue(int i, int j, int k)
   } else {
     // ... Otherwise, allocate block
     size_t blockSize = 1 << m_blockOrder << m_blockOrder << m_blockOrder;
-    block.resize(blockSize);
+    block.resize(blockSize, m_enforceThreadSafety);
     return block.value(vi, vj, vk, m_blockOrder);
   }
 }
@@ -1955,7 +2016,7 @@ void SparseField<Data_T>::deallocBlock(Block &block, const Data_T &emptyValue)
 {
   block.isAllocated = false;
   //! Block::clear() deallocates the data
-  block.clear();
+  block.clear(m_enforceThreadSafety);
   block.emptyValue = emptyValue;
 }
 

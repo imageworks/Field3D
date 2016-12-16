@@ -763,7 +763,7 @@ TemporalFieldIO::readData(const OgIGroup &location, const Box3i &extents,
       }
       length   = valueDataset.dataSize(curIdx, OGAWA_THREAD);
       ucmpData = reinterpret_cast<uint8_t *>(valueData);
-      ucmpLen  = numSamples * sizeof(float32_t);
+      ucmpLen  = numSamples * sizeof(Data_T);
       status   = uncompress(ucmpData, &ucmpLen, &valueCache[0], length);
       if (status != Z_OK) {
         std::cout << "ERROR in uncompress value: " << status

@@ -43,7 +43,7 @@ public:
 
   // Ctor, dtor ----------------------------------------------------------------
 
-  //! The default constructor leaves m_group initialized, which implies it 
+  //! The default constructor leaves m_group uninitialized, which implies it 
   //! is in an invalid state.
   OgIAttribute();
 

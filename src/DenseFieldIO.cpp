@@ -226,8 +226,8 @@ DenseFieldIO::read(const OgIGroup &lg, const std::string &/*filename*/,
 
   // Get num components ---
 
-  OgIAttribute<int> numComponentsAttr = 
-    lg.findAttribute<int>(k_componentsStr);
+  OgIAttribute<uint8_t> numComponentsAttr = 
+    lg.findAttribute<uint8_t>(k_componentsStr);
   if (!numComponentsAttr.isValid()) {
     throw MissingAttributeException("Couldn't find attribute " + 
                                     k_componentsStr);
@@ -498,7 +498,7 @@ bool DenseFieldIO::writeInternal(OgOGroup &layerGroup,
 
   // Add components attribute ---
 
-  OgOAttribute<int> componentsAttr(layerGroup, k_componentsStr, components);
+  OgOAttribute<uint8_t> componentsAttr(layerGroup, k_componentsStr, components);
 
   // Add the bits per component attribute ---
 

@@ -56,7 +56,7 @@ FIELD3D_NAMESPACE_OPEN
 // Static instances
 //----------------------------------------------------------------------------//
 
-ClassFactory* ClassFactory::ms_instance = NULL;
+boost::scoped_ptr<ClassFactory> ClassFactory::ms_instance;
 
 //----------------------------------------------------------------------------//
 // ClassFactory implementations
@@ -277,8 +277,9 @@ ClassFactory::createFieldMappingIO(const std::string &className) const
 ClassFactory& 
 ClassFactory::singleton()
 { 
-  if (!ms_instance)
-    ms_instance = new ClassFactory;
+  if (ms_instance.get() == NULL) {
+    ms_instance.reset(new ClassFactory);
+  }
   return *ms_instance;
 }
 

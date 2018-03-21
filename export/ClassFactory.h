@@ -44,6 +44,7 @@
 #ifndef _INCLUDED_Field3D_ClassFactory_H_
 #define _INCLUDED_Field3D_ClassFactory_H_
 
+#include <boost/scoped_ptr.hpp>
 #include <map>
 #include <vector>
 
@@ -161,7 +162,7 @@ private:
   NameVec m_fieldMappingIONames;
 
   //! Pointer to static instance
-  static ClassFactory *ms_instance;
+  static boost::scoped_ptr<ClassFactory> ms_instance;
 
 };
 

@@ -58,6 +58,8 @@ FieldBase::FieldBase()
   // Empty
 }
 
+//----------------------------------------------------------------------------//
+
 FieldBase::FieldBase(const FieldBase &other)
   : RefBase(),
     name(other.name),
@@ -73,6 +75,35 @@ FieldBase::FieldBase(const FieldBase &other)
 FieldBase::~FieldBase()
 { 
   // Empty
+}
+
+//----------------------------------------------------------------------------//
+// FieldRes
+//----------------------------------------------------------------------------//
+
+size_t FieldRes::numGrains() const
+{
+  // Grain resolution
+  const V3i res = m_dataWindow.size() + V3i(1);
+  // Num grains is Y * Z
+  return res.y * res.z;
+}
+
+//----------------------------------------------------------------------------//
+
+bool FieldRes::getGrainBounds(const size_t idx, Box3i &bounds) const
+{
+  // Grain resolution
+  const V3i res   = m_dataWindow.size() + V3i(1);
+  // Compute coordinate
+  const int y     = idx % res.y;
+  const int z     = idx / res.y;
+  // Build bbox
+  const V3i start = m_dataWindow.min + V3i(0, y, z);
+  const V3i end   = m_dataWindow.min + V3i(res.x, y, z);
+  bounds = Field3D::clipBounds(Box3i(start, end), m_dataWindow);
+  // Done. We return false since we don't know the underlying memory layout.
+  return false;
 }
 
 //----------------------------------------------------------------------------//

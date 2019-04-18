@@ -646,10 +646,10 @@ public:
   // Threading-related ---------------------------------------------------------
 
   //! Number of 'grains' to use with threaded access
-  size_t numGrains() const;
+  virtual size_t numGrains() const;
   //! Bounding box of the given 'grain'
   //! \return Whether the grain is contiguous in memory
-  bool   getGrainBounds(const size_t idx, Box3i &vsBounds) const;
+  virtual bool   getGrainBounds(const size_t idx, Box3i &vsBounds) const;
 
 protected:
 

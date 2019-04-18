@@ -49,6 +49,7 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/thread/mutex.hpp>
 
+#include "CSparseField.h"
 #include "EmptyField.h"
 #include "MIPBase.h"
 #include "MIPInterp.h"
@@ -306,6 +307,18 @@ class MIPDenseField : public MIPField<DenseField<Data_T> >
     virtual FieldBase::Ptr clone() const
   { 
     return FieldBase::Ptr(new MIPDenseField(*this));
+  }
+};
+
+//----------------------------------------------------------------------------//
+
+template <typename Data_T>
+class MIPCSparseField : public MIPField<CSparseField<Data_T> >
+{
+public:
+    virtual FieldBase::Ptr clone() const
+  { 
+    return FieldBase::Ptr(new MIPCSparseField(*this));
   }
 };
 
@@ -779,6 +792,42 @@ MIPField<Field_T>::sanityChecks(const T &fields)
     prevSize = size;
   }
   // All good.
+}
+
+//----------------------------------------------------------------------------//
+// Utility functions
+//----------------------------------------------------------------------------//
+
+template <typename Data_T>
+typename MIPField<CSparseField<Data_T> >::Ptr
+compressMIP(const MIPField<SparseField<Data_T> > &f, const int bitRate)
+{
+  typedef typename SparseField<Data_T>::Ptr SparsePtr;
+  typedef typename CSparseField<Data_T>::Ptr CSparsePtr;
+
+  typename MIPCSparseField<Data_T>::Ptr mip(new MIPCSparseField<Data_T>);
+  std::vector<CSparsePtr> levels;
+
+  for (size_t i = 0, end = f.numLevels(); i < end; ++i) {
+    SparsePtr level = f.concreteMipLevel(i);
+    CSparsePtr cLevel(new CSparseField<Data_T>);
+    if (!level) {
+      printf("null level pointer!\n");
+    }
+    if (!cLevel) {
+      printf("null cLevel pointer!\n");
+    }
+    cLevel->compress(*level, bitRate);
+    levels.push_back(cLevel);
+  }
+
+  mip->name = f.name;
+  mip->attribute = f.attribute;
+  mip->copyMetadata(f);
+  mip->setMIPOffset(f.mipOffset());
+  mip->setup(levels);
+
+  return mip;
 }
 
 //----------------------------------------------------------------------------//

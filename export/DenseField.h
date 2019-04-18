@@ -116,10 +116,8 @@ public:
 
   // Threading-related ---------------------------------------------------------
 
-  //! Number of 'grains' to use with threaded access
-  size_t numGrains() const;
   //! Bounding box of the given 'grain'
-  bool   getGrainBounds(const size_t idx, Box3i &vsBounds) const;  
+  virtual bool getGrainBounds(const size_t idx, Box3i &vsBounds) const;
 
   // From Field base class -----------------------------------------------------
 
@@ -463,19 +461,10 @@ void DenseField<Data_T>::clear(const Data_T &value)
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
-size_t DenseField<Data_T>::numGrains() const
-{
-  // Grain resolution
-  const V3i res = base::m_dataWindow.size() + V3i(1);
-  // Num grains is Y * Z
-  return res.y * res.z;
-}
-
-//----------------------------------------------------------------------------//
-
-template <class Data_T>
 bool DenseField<Data_T>::getGrainBounds(const size_t idx, Box3i &bounds) const
 {
+  // Note: This is the same as Field::getGrainBounds(), but returns true.
+
   // Grain resolution
   const V3i res   = base::m_dataWindow.size() + V3i(1);
   // Compute coordinate

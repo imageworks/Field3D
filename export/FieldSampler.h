@@ -36,6 +36,14 @@ namespace detail {
     return std::max(a, static_cast<T>(b));
   }
 
+  //! Composite min operation on mixed types. This is used
+  //! when combining overlapping min values
+  template <typename T, typename T2>
+  T compositeMin(const T a, const T2 b)
+  {
+    return static_cast<T>(a + static_cast<T>(b));
+  }
+
   //! Composite max operation on mixed types. This is used
   //! when combining overlapping max values
   template <typename T, typename T2>
@@ -80,6 +88,18 @@ namespace detail {
                 static_cast<T>(a.y + static_cast<T>(b.y))),
        std::max(std::max(a.z, static_cast<T>(b.z)),
                 static_cast<T>(a.z + static_cast<T>(b.z))));
+  }
+  
+  template <typename T>
+  bool hasMinMax(const T &a, const T &b)
+  {
+    return a <= b;
+  }
+
+  template <typename T>
+  bool hasMinMax(const FIELD3D_VEC3_T<T> &a, const FIELD3D_VEC3_T<T> &b)
+  {
+    return a.x <= b.x || a.y <= b.y || a.z <= b.z;
   }
 
   //! Typedefs float or V3f, depending on Dims_T
@@ -205,7 +225,8 @@ struct FieldSampler
     Max
   };
 
-  typedef typename WrapperVec_T::value_type::field_type Field_T;
+  typedef typename WrapperVec_T::value_type             Wrapper_T;
+  typedef typename Wrapper_T::field_type                Field_T;
   typedef typename Field_T::value_type                  Data_T;
   typedef typename detail::ScalarOrVector<Dims_T>::type Input_T;
 
@@ -723,6 +744,29 @@ struct FieldSampler
                                           const size_t neval,
                                           const SampleTemporalStochasticArgs &a);
 
+  static Box3i transformWsBounds(const Wrapper_T &f, 
+                                 const Box3d &wsBounds)
+  {
+    // Data window
+    const Box3i dw = f.field->dataWindow();
+    // Compute discrete voxel space bounds
+    Box3i dvsBounds;
+    if (wsBounds.isInfinite()) {
+      dvsBounds = dw;
+    } else {
+      Box3d vsBounds;
+      if (f.doOsToWs) {
+        Box3d osBounds;
+        transformBounds(f.wsToOs, wsBounds, osBounds);
+        worldToVoxel(f.mapping, osBounds, vsBounds);
+      } else {
+        worldToVoxel(f.mapping, wsBounds, vsBounds);
+      }
+      dvsBounds = clipBounds(discreteBounds(vsBounds), dw);
+    }
+    return dvsBounds;
+  }
+
   // Get min/max
   static void getMinMax(const WrapperVec_T &f, 
                         const Box3d &wsBounds, float *min, float *max)
@@ -735,27 +779,15 @@ struct FieldSampler
       // Store min/max for values in current field
       Input_T thisMin(std::numeric_limits<float>::max());
       Input_T thisMax(-std::numeric_limits<float>::max());
-      // Data window
-      const Box3i dw = f[field].field->dataWindow();
       // Transform corners to voxel space and compute bounds
-      Box3i dvsBounds;
-      if (wsBounds.isInfinite()) {
-        dvsBounds = dw;
-      } else {
-        Box3d vsBounds;
-        if (f[field].doOsToWs) {
-          Box3d osBounds;
-          transformBounds(f[field].wsToOs, wsBounds, osBounds);
-          worldToVoxel(f[field].mapping, osBounds, vsBounds);
-        } else {
-          worldToVoxel(f[field].mapping, wsBounds, vsBounds);
-        }
-        dvsBounds = clipBounds(discreteBounds(vsBounds), dw);
-        // Early termination if no intersection
-        if (!dw.intersects(dvsBounds)) {
-          return;
-        }
+      Box3i dvsBounds = transformWsBounds(f[field], wsBounds);
+      // If there are no voxels to visit in dvsBounds, skip to next field.
+      // (This makes sure the udpate to minData/maxData below doesn't happen
+      // without thisMin/thisMax getting updated first).
+      if (dvsBounds.isEmpty()) {
+        continue;
       }
+      // Visit voxels
       for (int k = dvsBounds.min.z; k <= dvsBounds.max.z; ++k) {
         for (int j = dvsBounds.min.y; j <= dvsBounds.max.y; ++j) {
           for (int i = dvsBounds.min.x; i <= dvsBounds.max.x; ++i) {
@@ -773,8 +805,40 @@ struct FieldSampler
         }
       }
       // With each iteration, update overlapping max
-      *minData = detail::min(*minData, thisMin);
-      *maxData = detail::compositeMax(*maxData, thisMax);
+      if (detail::hasMinMax(*minData, *maxData)) {
+        *minData = detail::compositeMin(*minData, thisMin);
+        *maxData = detail::compositeMax(*maxData, thisMax);
+      }
+    }
+  }
+
+  // Gets the mass over a given bounding box, for computing average value
+  static void getMass(const WrapperVec_T &f, const Box3d &wsBounds, 
+                      float *mass)
+  {
+    // Reinterpret the pointer according to Dims_T
+    Input_T *massData = reinterpret_cast<Input_T*>(mass);
+    // Loop over fields in vector
+    for (size_t field = 0, end = f.size(); field < end; ++field) {
+      // Compute size of voxel
+      const V3d   wsVoxelSize   = f[field].mapping->wsVoxelSize(0,0,0);
+      const float wsVoxelVolume = wsVoxelSize.x * wsVoxelSize.y * wsVoxelSize.z;
+      // Transform corners to voxel space and compute bounds
+      Box3i dvsBounds = transformWsBounds(f[field], wsBounds);
+      // Visit voxels
+      for (int k = dvsBounds.min.z; k <= dvsBounds.max.z; ++k) {
+        for (int j = dvsBounds.min.y; j <= dvsBounds.max.y; ++j) {
+          for (int i = dvsBounds.min.x; i <= dvsBounds.max.x; ++i) {
+            const Data_T val = f[field].field->fastValue(i, j, k);
+            // Sample and remap
+            if (f[field].valueRemapOp) {
+              *massData += f[field].valueRemapOp->remap(val) * wsVoxelVolume;
+            } else {
+              *massData += val * wsVoxelVolume;
+            }
+          }
+        }
+      }
     }
   }
 
@@ -790,27 +854,15 @@ struct FieldSampler
       // Store min/max for values in current field
       Input_T thisMin(std::numeric_limits<float>::max());
       Input_T thisMax(-std::numeric_limits<float>::max());
-      // Data window
-      const Box3i dw = f[field].field->dataWindow();
       // Transform corners to voxel space and compute bounds
-      Box3i dvsBounds;
-      if (wsBounds.isInfinite()) {
-        dvsBounds = dw;
-      } else {
-        Box3d vsBounds;
-        if (f[field].doOsToWs) {
-          Box3d osBounds;
-          transformBounds(f[field].wsToOs, wsBounds, osBounds);
-          worldToVoxel(f[field].mapping, osBounds, vsBounds);
-        } else {
-          worldToVoxel(f[field].mapping, wsBounds, vsBounds);
-        }
-        dvsBounds = clipBounds(discreteBounds(vsBounds), dw);
-        // Early termination if no intersection
-        if (!dw.intersects(dvsBounds)) {
-          return;
-        }
+      Box3i dvsBounds = transformWsBounds(f[field], wsBounds);
+      // If there are no voxels to visit in dvsBounds, skip to next field.
+      // (This makes sure the udpate to minData/maxData below doesn't happen
+      // without thisMin/thisMax getting updated first).
+      if (dvsBounds.isEmpty()) {
+        continue;
       }
+      // Visit voxels
       for (int k = dvsBounds.min.z; k <= dvsBounds.max.z; ++k) {
         for (int j = dvsBounds.min.y; j <= dvsBounds.max.y; ++j) {
           for (int i = dvsBounds.min.x; i <= dvsBounds.max.x; ++i) {
@@ -828,8 +880,40 @@ struct FieldSampler
         }
       }
       // With each iteration, update overlapping max
-      *minData = detail::min(*minData, thisMin);
-      *maxData = detail::compositeMax(*maxData, thisMax);
+      if (detail::hasMinMax(*minData, *maxData)) {
+        *minData = detail::compositeMin(*minData, thisMin);
+        *maxData = detail::compositeMax(*maxData, thisMax);
+      }
+    }
+  }
+
+  // Get mass from MIP (uses finest level)
+  static void getMassMIP(const WrapperVec_T &f, 
+                         const Box3d &wsBounds, float *mass)
+  {
+    // Reinterpret the pointer according to Dims_T
+    Input_T *massData = reinterpret_cast<Input_T*>(mass);
+    // Loop over fields in vector
+    for (size_t field = 0, end = f.size(); field < end; ++field) {
+      // Compute size of voxel
+      const V3d   wsVoxelSize   = f[field].mapping->wsVoxelSize(0,0,0);
+      const float wsVoxelVolume = wsVoxelSize.x * wsVoxelSize.y * wsVoxelSize.z;
+      // Transform corners to voxel space and compute bounds
+      Box3i dvsBounds = transformWsBounds(f[field], wsBounds);
+      // Visit voxels
+      for (int k = dvsBounds.min.z; k <= dvsBounds.max.z; ++k) {
+        for (int j = dvsBounds.min.y; j <= dvsBounds.max.y; ++j) {
+          for (int i = dvsBounds.min.x; i <= dvsBounds.max.x; ++i) {
+            const Data_T val = f[field].field->fastMipValue(0, i, j, k);
+            // Sample and remap
+            if (f[field].valueRemapOp) {
+              *massData += f[field].valueRemapOp->remap(val) * wsVoxelVolume;
+            } else {
+              *massData += val * wsVoxelVolume;
+            }
+          }
+        }
+      }
     }
   }
 
@@ -846,6 +930,7 @@ struct FieldSampler
       // Store min/max for values in current field
       Input_T thisData(mode == Min ? 
         std::numeric_limits<float>::max() : -std::numeric_limits<float>::max());
+      Input_T initialVal = thisData;
       // Choose the MIP level to check
       const size_t numLevels  = f[field].field->numLevels();
       size_t       level      = 0;
@@ -872,9 +957,9 @@ struct FieldSampler
                          wsBounds, vsBounds);
           }
           dvsBounds = clipBounds(discreteBounds(vsBounds), dw);
-          // If size of dvsBounds is <= 2, stop
+          // If size of dvsBounds is small enough, stop
           Imath::V3i size = dvsBounds.size();
-          if (std::max(size.x, std::max(size.y, size.z)) <= 2) {
+          if (std::max(size.x, std::max(size.y, size.z)) <= 16) {
             break;
           }
         }
@@ -903,17 +988,88 @@ struct FieldSampler
         }
       }
       // With each iteration, update overlapping max
-      if (mode == Min) {
-        *data = detail::min(*data, thisData);
+      if (thisData != initialVal) {
+        if (mode == Min) {
+          *data = detail::compositeMin(*data, thisData);
+        } else {
+          *data = detail::compositeMax(*data, thisData);
+        }
+      }
+    }
+  }
+
+  // Get min/max for pre-filtered data
+  static void getMassPrefilt(const WrapperVec_T &f, const Box3d &wsBounds, 
+                             float *mass)
+  {
+    // Reinterpret the pointer according to Dims_T
+    Input_T *massData = reinterpret_cast<Input_T*>(mass);
+    // Loop over fields in vector
+    for (size_t field = 0, end = f.size(); field < end; ++field) {
+      // Choose the MIP level to check
+      const size_t numLevels  = f[field].field->numLevels();
+      size_t       level      = 0;
+      Box3i        dvsBounds;
+      // Infinite bounds?
+      if (wsBounds.isInfinite()) {
+        // Use the coarsest level
+        level = numLevels - 1;
+        dvsBounds = f[field].field->mipLevel(level)->dataWindow();
       } else {
-        *data = detail::compositeMax(*data, thisData);
+        for (size_t i = 0; i < numLevels; ++i) {
+          // Update current level
+          level = i;
+#if 0
+          dvsBounds = transformWsBounds(f[field], wsBounds);
+#else
+          // Data window of current level
+          const Box3i dw = f[field].field->mipLevel(level)->dataWindow();
+          Box3d vsBounds;
+          if (f[field].doOsToWs) {
+            Box3d osBounds;
+            transformBounds(f[field].wsToOs, wsBounds, osBounds);
+            worldToVoxel(f[field].field->mipLevel(level)->mapping().get(), 
+                         osBounds, vsBounds);
+          } else {
+            worldToVoxel(f[field].field->mipLevel(level)->mapping().get(), 
+                         wsBounds, vsBounds);
+          }
+          dvsBounds = clipBounds(discreteBounds(vsBounds), dw);
+#endif
+          // If size of dvsBounds is <= 2, stop
+          Imath::V3i size = dvsBounds.size();
+          if (std::max(size.x, std::max(size.y, size.z)) <= 4) {
+            break;
+          }
+        }
+      }
+      // Compute size of voxel
+      const V3d wsVoxelSize = 
+        f[field].field->mipLevel(level)->mapping()->wsVoxelSize(0, 0, 0);
+      const float wsVoxelVolume = wsVoxelSize.x * wsVoxelSize.y * wsVoxelSize.z;
+      // Level chosen. Run loop
+      for (int k = dvsBounds.min.z; k <= dvsBounds.max.z; ++k) {
+        for (int j = dvsBounds.min.y; j <= dvsBounds.max.y; ++j) {
+          for (int i = dvsBounds.min.x; i <= dvsBounds.max.x; ++i) {
+            // Sample and remap
+            const Data_T val = f[field].field->fastMipValue(level, i, j, k);
+            if (f[field].valueRemapOp) {
+              *massData += f[field].valueRemapOp->remap(val) * wsVoxelVolume;
+            } else {
+              *massData += val * wsVoxelVolume;
+            }
+          }
+        }
       }
     }
   }
 
   static void getMinMaxTemporal(const WrapperVec_T &f, 
                                 const Box3d &wsBounds, float *min, float *max);
-
+  
+  static void getMassTemporal(const WrapperVec_T &f, 
+                              const Box3d &wsBounds, float *mass);
+  
   static void getMinWsVoxelSize(const WrapperVec_T &f, float &sizeMin);
 };
 
@@ -1279,21 +1435,15 @@ void FieldSampler<WrapperVec_T, Dims_T>::getMinMaxTemporal
     // Store min/max for values in current field
     Input_T thisMin(std::numeric_limits<float>::max());
     Input_T thisMax(-std::numeric_limits<float>::max());
-    // Data window
-    const Box3i dw = f[field].field->dataWindow();
     // Transform corners to voxel space and compute bounds
-    Box3i dvsBounds;
-    if (wsBounds.isInfinite()) {
-      dvsBounds = dw;
-    } else {
-      Box3d vsBounds;
-      worldToVoxel(f[field].mapping, wsBounds, vsBounds);
-      dvsBounds = clipBounds(discreteBounds(vsBounds), dw);
-      // Early termination if no intersection
-      if (!dw.intersects(dvsBounds)) {
-        return;
-      }
+    Box3i dvsBounds = transformWsBounds(f[field], wsBounds);
+    // If there are no voxels to visit in dvsBounds, skip to next field.
+    // (This makes sure the udpate to minData/maxData below doesn't happen
+    // without thisMin/thisMax getting updated first).
+    if (dvsBounds.isEmpty()) {
+      continue;
     }
+    // Visit voxels
     for (int k = dvsBounds.min.z; k <= dvsBounds.max.z; ++k) {
       for (int j = dvsBounds.min.y; j <= dvsBounds.max.y; ++j) {
         for (int i = dvsBounds.min.x; i <= dvsBounds.max.x; ++i) {
@@ -1313,8 +1463,47 @@ void FieldSampler<WrapperVec_T, Dims_T>::getMinMaxTemporal
       }
     }
     // With each iteration, update overlapping max
-    *minData = detail::min(*minData, thisMin);
-    *maxData = detail::compositeMax(*maxData, thisMax);
+    if (detail::hasMinMax(*minData, *maxData)) {
+      *minData = detail::compositeMin(*minData, thisMin);
+      *maxData = detail::compositeMax(*maxData, thisMax);
+    }
+  }
+}
+
+//----------------------------------------------------------------------------//
+
+template <typename WrapperVec_T, int Dims_T>
+void FieldSampler<WrapperVec_T, Dims_T>::getMassTemporal
+(const WrapperVec_T &f,
+ const Box3d &wsBounds,
+ float *mass)
+{
+  Input_T *massData = reinterpret_cast<Input_T*>(mass);
+
+  for (size_t field = 0, end = f.size(); field < end; ++field) {
+    // Compute size of voxel
+    const V3d   wsVoxelSize   = f[field].mapping->wsVoxelSize(0,0,0);
+    const float wsVoxelVolume = wsVoxelSize.x * wsVoxelSize.y * wsVoxelSize.z;
+    // Transform corners to voxel space and compute bounds
+    Box3i dvsBounds = transformWsBounds(f[field], wsBounds);
+    // Visit voxels
+    for (int k = dvsBounds.min.z; k <= dvsBounds.max.z; ++k) {
+      for (int j = dvsBounds.min.y; j <= dvsBounds.max.y; ++j) {
+        for (int i = dvsBounds.min.x; i <= dvsBounds.max.x; ++i) {
+          
+          const Data_T *sampleValues = 
+            detail::sampleValues(*f[field].field, i, j, k);
+          const size_t sEnd = 
+            detail::numSamples(*f[field].field, i, j, k);
+          
+          for (size_t s = 0; s < sEnd; ++s) {
+            // Output is cast to float
+            const Input_T val = static_cast<Input_T>(sampleValues[s]);
+            *massData += val * wsVoxelVolume;
+          }
+        }
+      }
+    }
   }
 }
 

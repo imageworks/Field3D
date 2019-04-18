@@ -79,7 +79,7 @@ class CubicGenericFieldInterp;
 
 /* \class LinearSparseFieldInterp
    \ingroup field
-   \brief Linear interpolator optimized for fields with a fastValue function
+   \brief Linear interpolator optimized for fields with a fastValue function.
 */
 
 //----------------------------------------------------------------------------//
@@ -111,7 +111,8 @@ public:
 
   // Main methods --------------------------------------------------------------
 
-  value_type sample(const SparseField<Data_T> &field, const V3d &vsP,
+  template <template <typename> class Field_T>
+  value_type sample(const Field_T<Data_T> &field, const V3d &vsP,
                     const float time = 0.0f) const
   {
     // Voxel coords
@@ -406,6 +407,9 @@ public:
   //! Checks if a voxel is in an allocated block
   bool voxelIsInAllocatedBlock(int i, int j, int k) const;
 
+  //! Allocates a given block
+  void allocateBlock(int bi, int bj, int bk);
+
   //! Checks if a block is allocated
   bool blockIsAllocated(int bi, int bj, int bk) const;
 
@@ -475,10 +479,10 @@ public:
   // Threading-related ---------------------------------------------------------
 
   //! Number of 'grains' to use with threaded access
-  size_t numGrains() const;
+  virtual size_t numGrains() const;
   //! Bounding box of the given 'grain'
   //! \return Whether the grain is contiguous in memory
-  bool   getGrainBounds(const size_t idx, Box3i &vsBounds) const;
+  virtual bool   getGrainBounds(const size_t idx, Box3i &vsBounds) const;
 
   // From Field base class -----------------------------------------------------
 
@@ -706,6 +710,41 @@ Box3i blockCoords(const Box3i &dvsBounds, const SparseField<Data_T> *f)
 //----------------------------------------------------------------------------//
 
 namespace Sparse {
+
+inline int blockId(const int blockI, const int blockJ, const int blockK,
+                   const int blockResX, const int blockXYSize)
+{
+  return blockK * blockXYSize + blockJ * blockResX + blockI;
+}
+
+inline void applyDataWindowOffset(int &i, int &j, int &k, const Box3i &dw)
+{
+  i -= dw.min.x;
+  j -= dw.min.y;
+  k -= dw.min.z;
+}
+
+inline void getVoxelInBlock(int i, int j, int k,
+                            int &vi, int &vj, int &vk, int blockOrder)
+{
+  assert(i >= 0);
+  assert(j >= 0);
+  assert(k >= 0);
+  vi = i & ((1 << blockOrder) - 1);
+  vj = j & ((1 << blockOrder) - 1);
+  vk = k & ((1 << blockOrder) - 1);
+}
+
+inline void getBlockCoord(int i, int j, int k, int &bi, int &bj, int &bk, 
+                          int blockOrder)
+{
+  assert(i >= 0);
+  assert(j >= 0);
+  assert(k >= 0);
+  bi = i >> blockOrder;
+  bj = j >> blockOrder;
+  bk = k >> blockOrder;
+}
 
 //! Checks if all the values in the SparseBlock are equal.
 //! Used by SparseField::releaseBlocks().
@@ -1515,6 +1554,16 @@ bool SparseField<Data_T>::blockIsAllocated(int bi, int bj, int bk) const
 //----------------------------------------------------------------------------//
 
 template <class Data_T>
+void SparseField<Data_T>::allocateBlock(int bi, int bj, int bk)
+{
+  Block &block = m_blocks[blockId(bi, bj, bk)];
+  const size_t blockSize = 1 << m_blockOrder << m_blockOrder << m_blockOrder;
+  block.resize(blockSize, m_enforceThreadSafety);
+}
+
+//----------------------------------------------------------------------------//
+
+template <class Data_T>
 const Data_T SparseField<Data_T>::getBlockEmptyValue(int bi, int bj, int bk) const
 {
   return m_blocks[blockId(bi, bj, bk)].emptyValue;
@@ -1925,7 +1974,8 @@ void SparseField<Data_T>::setupBlocks()
 template <class Data_T>
 int SparseField<Data_T>::blockId(int blockI, int blockJ, int blockK) const
 {
-  return blockK * m_blockXYSize + blockJ * m_blockRes.x + blockI;
+  return Sparse::blockId(blockI, blockJ, blockK, m_blockRes.x, 
+                         m_blockXYSize);
 }
 
 //----------------------------------------------------------------------------//

@@ -223,6 +223,13 @@ namespace detail {
     typedef MIPSparseField<Data_T> type;
   };
 
+  //! Specialization for csparse field
+  template <typename Data_T>
+  struct MIPInstance<CSparseField<Data_T> >
+  {
+    typedef MIPCSparseField<Data_T> type;
+  };
+
   //! Specialization for temporal field
   template <typename Data_T>
   struct MIPInstance<TemporalField<Data_T> >

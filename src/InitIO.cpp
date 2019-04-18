@@ -43,6 +43,7 @@
 
 #include "InitIO.h"
 
+#include "CSparseFieldIO.h"
 #include "DenseFieldIO.h"
 #include "SparseFieldIO.h"
 #include "MACFieldIO.h"
@@ -71,6 +72,7 @@ void initIO()
 
   ClassFactory &factory = ClassFactory::singleton();
 
+  factory.registerFieldIO(CSparseFieldIO::create);
   factory.registerFieldIO(DenseFieldIO::create);
   factory.registerFieldIO(SparseFieldIO::create);
   factory.registerFieldIO(MACFieldIO::create);

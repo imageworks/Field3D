@@ -292,6 +292,14 @@ public:
     return res.x * res.y * res.z;
   }
 
+  // Threading functions, optionally implemented in subclasses -----------------
+
+  //! Number of 'grains' to use with threaded access
+  virtual size_t numGrains() const;
+  //! Bounding box of the given 'grain'
+  //! \return Whether the grain is contiguous in memory
+  virtual bool getGrainBounds(const size_t idx, Box3i &vsBounds) const;
+
 protected:
 
   // Typedefs ------------------------------------------------------------------

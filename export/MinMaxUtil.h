@@ -67,17 +67,16 @@ FIELD3D_NAMESPACE_OPEN
 //----------------------------------------------------------------------------//
 
 //! Constructs a min/max MIP representation of the given field.
-template <typename MIPField_T>
-std::pair<typename MIPField_T::Ptr, typename MIPField_T::Ptr>
-makeMinMax(const typename MIPField_T::NestedType &base, 
-           const float resMult, const size_t numThreads);
+template <typename Field_T>
+std::pair<typename MIPField<Field_T>::Ptr, typename MIPField<Field_T>::Ptr>
+makeMinMax(const Field_T &base, const float resMult, const size_t numThreads);
 
 //! Constructs a min/max MIP representation of the given TemporalField.
 template <typename Data_T>
 std::pair<typename MIPField<SparseField<Data_T> >::Ptr,
           typename MIPField<SparseField<Data_T> >::Ptr>
-makeMinMax(const typename TemporalField<Data_T>::Ptr &base, 
-           const float resMult, const size_t numThreads);
+makeMinMaxTemporal(const typename TemporalField<Data_T>::Ptr &base, 
+                   const float resMult, const size_t numThreads);
 
 //----------------------------------------------------------------------------//
 // Constants
@@ -92,11 +91,11 @@ extern const char* k_maxSuffix;
 // Function implementations
 //----------------------------------------------------------------------------//
 
-template <typename MIPField_T>
-std::pair<typename MIPField_T::Ptr, typename MIPField_T::Ptr>
-makeMinMax(const typename MIPField_T::NestedType &base, 
-           const float resMult, const size_t numThreads)
+template <typename Field_T>
+std::pair<typename MIPField<Field_T>::Ptr, typename MIPField<Field_T>::Ptr>
+makeMinMax(const Field_T &base, const float resMult, const size_t numThreads)
 {
+  typedef MIPField<Field_T>                    MIPField_T;
   typedef typename MIPField_T::Ptr             MipPtr;
   typedef typename MIPField_T::NestedType      Field;
   typedef typename MIPField_T::NestedType::Ptr FieldPtr;
@@ -114,13 +113,21 @@ makeMinMax(const typename MIPField_T::NestedType &base,
   res.y = std::max(res.y, 2);
   res.z = std::max(res.z, 2);
 
+  // If the new res matches the srcRes, skip resampling.
+  if (res == srcRes) {
+    result.first  = makeMIP<MIPField_T, MinFilter>(base, 2, numThreads);
+    result.second = makeMIP<MIPField_T, MaxFilter>(base, 2, numThreads);
+
+    return result;
+  }
+
   // Storage for min/max fields
   FieldPtr minSrc(new Field);
   FieldPtr maxSrc(new Field);
 
   // Resample 
-  resample(base, *minSrc, res, MinFilter());
-  resample(base, *maxSrc, res, MaxFilter());
+  resample(base, *minSrc, res, MinFilter(), numThreads);
+  resample(base, *maxSrc, res, MaxFilter(), numThreads);
 
   // Second, generate MIP representations ---
 
@@ -132,11 +139,24 @@ makeMinMax(const typename MIPField_T::NestedType &base,
 
 //----------------------------------------------------------------------------//
 
+//! Specialization for CSparseField
+template <typename Data_T>
+std::pair<typename MIPField<SparseField<Data_T> >::Ptr, 
+          typename MIPField<SparseField<Data_T> >::Ptr>
+makeMinMaxCompressed(const CSparseField<Data_T> &base, 
+                     const float resMult, const size_t numThreads)
+{
+  typename SparseField<Data_T>::Ptr sparse = base.decompress();
+  return makeMinMax(*sparse, resMult, numThreads);
+}
+
+//----------------------------------------------------------------------------//
+
 template <typename Data_T>
 std::pair<typename MIPField<SparseField<Data_T> >::Ptr,
           typename MIPField<SparseField<Data_T> >::Ptr>
-makeMinMax(const typename TemporalField<Data_T>::Ptr &base, 
-           const float resMult, const size_t numThreads)
+makeMinMaxTemporal(const typename TemporalField<Data_T>::Ptr &base, 
+                   const float resMult, const size_t numThreads)
 {
   typedef SparseField<Data_T>     Field;
   typedef typename Field::Ptr     FieldPtr;
@@ -165,8 +185,8 @@ makeMinMax(const typename TemporalField<Data_T>::Ptr &base,
   FieldPtr maxSrc(new Field);
 
   // Resample 
-  resample(*baseMin, *minSrc, res, MinFilter());
-  resample(*baseMax, *maxSrc, res, MaxFilter());
+  resample(*baseMin, *minSrc, res, MinFilter(), numThreads);
+  resample(*baseMax, *maxSrc, res, MaxFilter(), numThreads);
 
   // Second, generate MIP representations ---
 

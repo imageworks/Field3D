@@ -138,12 +138,15 @@ MIPFieldIO::read(hid_t layerGroup, const std::string &filename,
 
   bool isTemporal = false;
   bool isSparse   = false;
+  bool isCSparse  = false;
   bool isDense    = false;
 
   if (baseType == "TemporalField") {
     isTemporal = true;
   } else if (baseType == "SparseField") {
     isSparse = true;
+  } else if (baseType == "CSparseField") {
+    isCSparse = true;
   } else if (baseType == "DenseField") {
     isDense = true;
   }
@@ -187,6 +190,12 @@ MIPFieldIO::read(hid_t layerGroup, const std::string &filename,
                                            layerPath, typeEnum);
   if (isSparse && isDouble && components == 3 && typeEnum == DataTypeVecDouble)
     result = readInternal<SparseField, V3d>(layerGroup, filename, 
+                                           layerPath, typeEnum);
+  if (isCSparse && isFloat && components == 1 && typeEnum == DataTypeFloat)
+    result = readInternal<CSparseField, float>(layerGroup, filename, 
+                                             layerPath, typeEnum);
+  if (isCSparse && isFloat && components == 3 && typeEnum == DataTypeVecFloat)
+    result = readInternal<CSparseField, V3f>(layerGroup, filename, 
                                            layerPath, typeEnum);
   if (isTemporal && isHalf && components == 1 && typeEnum == DataTypeHalf)
     result = readInternal<TemporalField, half>(layerGroup, filename, 
@@ -259,12 +268,15 @@ MIPFieldIO::read(const OgIGroup &layerGroup, const std::string &filename,
 
   bool isTemporal = false;
   bool isSparse   = false;
+  bool isCSparse  = false;
   bool isDense    = false;
 
   if (baseTypeAttr.value() == "TemporalField") {
     isTemporal = true;
   } else if (baseTypeAttr.value() == "SparseField") {
     isSparse = true;
+  } else if (baseTypeAttr.value() == "CSparseField") {
+    isCSparse = true;
   } else if (baseTypeAttr.value() == "DenseField") {
     isDense = true;
   }
@@ -314,6 +326,14 @@ MIPFieldIO::read(const OgIGroup &layerGroup, const std::string &filename,
                                                     layerPath, typeEnum);
       } else if (typeEnum == F3DVec64) {
         result = readInternal<SparseField, vec64_t>(layerGroup, filename, 
+                                                    layerPath, typeEnum);
+      }
+    } else if (isCSparse) {
+      if (typeEnum == F3DFloat32) {
+        result = readInternal<CSparseField, float32_t>(layerGroup, filename, 
+                                                      layerPath, typeEnum);
+      } else if (typeEnum == F3DVec32) {
+        result = readInternal<CSparseField, vec32_t>(layerGroup, filename, 
                                                     layerPath, typeEnum);
       }
     } else if (isTemporal) {
@@ -370,6 +390,7 @@ MIPFieldIO::write(hid_t layerGroup, FieldBase::Ptr field)
     field_dynamic_cast<MIPField<DenseField<V3f> > >(field);
   MIPField<DenseField<V3d> >::Ptr vecDoubleDenseField = 
     field_dynamic_cast<MIPField<DenseField<V3d> > >(field);
+
   MIPField<SparseField<half> >::Ptr halfSparseField = 
     field_dynamic_cast<MIPField<SparseField<half> > >(field);
   MIPField<SparseField<float> >::Ptr floatSparseField = 
@@ -382,6 +403,12 @@ MIPFieldIO::write(hid_t layerGroup, FieldBase::Ptr field)
     field_dynamic_cast<MIPField<SparseField<V3f> > >(field);
   MIPField<SparseField<V3d> >::Ptr vecDoubleSparseField = 
     field_dynamic_cast<MIPField<SparseField<V3d> > >(field);
+
+  MIPField<CSparseField<float> >::Ptr floatCSparseField = 
+    field_dynamic_cast<MIPField<CSparseField<float> > >(field);
+  MIPField<CSparseField<V3f> >::Ptr vecFloatCSparseField = 
+    field_dynamic_cast<MIPField<CSparseField<V3f> > >(field);
+
   MIPField<TemporalField<half> >::Ptr halfTemporalField = 
     field_dynamic_cast<MIPField<TemporalField<half> > >(field);
   MIPField<TemporalField<float> >::Ptr floatTemporalField = 
@@ -433,6 +460,12 @@ MIPFieldIO::write(hid_t layerGroup, FieldBase::Ptr field)
   else if (vecDoubleSparseField) {
     success = writeInternal<SparseField, V3d>(layerGroup, vecDoubleSparseField);
   }
+  else if (floatCSparseField) {
+    success = writeInternal<CSparseField, float>(layerGroup, floatCSparseField);
+  }
+  else if (vecFloatCSparseField) {
+    success = writeInternal<CSparseField, V3f>(layerGroup, vecFloatCSparseField);
+  }
   else if (floatTemporalField) {
     success = writeInternal<TemporalField, float>(layerGroup, floatTemporalField);
   }
@@ -479,6 +512,7 @@ MIPFieldIO::write(OgOGroup &layerGroup, FieldBase::Ptr field)
     field_dynamic_cast<MIPField<DenseField<V3f> > >(field);
   MIPField<DenseField<V3d> >::Ptr vecDoubleDenseField = 
     field_dynamic_cast<MIPField<DenseField<V3d> > >(field);
+
   MIPField<SparseField<half> >::Ptr halfSparseField = 
     field_dynamic_cast<MIPField<SparseField<half> > >(field);
   MIPField<SparseField<float> >::Ptr floatSparseField = 
@@ -491,6 +525,12 @@ MIPFieldIO::write(OgOGroup &layerGroup, FieldBase::Ptr field)
     field_dynamic_cast<MIPField<SparseField<V3f> > >(field);
   MIPField<SparseField<V3d> >::Ptr vecDoubleSparseField = 
     field_dynamic_cast<MIPField<SparseField<V3d> > >(field);
+
+  MIPField<CSparseField<float> >::Ptr floatCSparseField = 
+    field_dynamic_cast<MIPField<CSparseField<float> > >(field);
+  MIPField<CSparseField<V3f> >::Ptr vecFloatCSparseField = 
+    field_dynamic_cast<MIPField<CSparseField<V3f> > >(field);
+  
   MIPField<TemporalField<half> >::Ptr halfTemporalField = 
     field_dynamic_cast<MIPField<TemporalField<half> > >(field);
   MIPField<TemporalField<float> >::Ptr floatTemporalField = 
@@ -541,6 +581,12 @@ MIPFieldIO::write(OgOGroup &layerGroup, FieldBase::Ptr field)
   }
   else if (vecDoubleSparseField) {
     success = writeInternal<SparseField, V3d>(layerGroup, vecDoubleSparseField);
+  }
+  else if (floatCSparseField) {
+    success = writeInternal<CSparseField, float>(layerGroup, floatCSparseField);
+  }
+  else if (vecFloatCSparseField) {
+    success = writeInternal<CSparseField, V3f>(layerGroup, vecFloatCSparseField);
   }
   else if (floatTemporalField) {
     success = writeInternal<TemporalField, float>(layerGroup, floatTemporalField);

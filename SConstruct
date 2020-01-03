@@ -36,7 +36,7 @@ from BuildSupport import *
 
 # ------------------------------------------------------------------------------
 
-env = Environment()
+env = Environment(CXXFLAGS="-std=c++11")
 
 Export("env")
 

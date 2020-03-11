@@ -46,6 +46,7 @@
 
 //----------------------------------------------------------------------------//
 
+#include <boost/scoped_ptr.hpp>
 #include <boost/thread/mutex.hpp>
 #include <boost/foreach.hpp>
 
@@ -119,7 +120,7 @@ private:
   //! The cache itself. Maps a 'key' to a weak pointer and a raw pointer.
   Cache m_cache;
   //! The singleton instance
-  static FieldCache *ms_singleton;
+  static boost::scoped_ptr<FieldCache> ms_singleton;
   //! Mutex to prevent multiple allocaation of the singleton
   static boost::mutex ms_creationMutex;
   //! Mutex to prevent reading from and writing to the cache concurrently.
@@ -134,8 +135,8 @@ template <typename Data_T>
 FieldCache<Data_T>& FieldCache<Data_T>::singleton()
 {
   boost::mutex::scoped_lock lock(ms_creationMutex);
-  if (!ms_singleton) {
-    ms_singleton = new FieldCache;
+  if (ms_singleton.get() == NULL) {
+    ms_singleton.reset(new FieldCache);
   }
   return *ms_singleton;
 }

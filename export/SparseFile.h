@@ -46,6 +46,7 @@
 
 //----------------------------------------------------------------------------//
 
+#include <boost/scoped_ptr.hpp>
 #include <deque>
 #include <list>
 #include <vector>
@@ -494,7 +495,7 @@ private:
   SparseFileManager();
 
   //! Pointer to singleton
-  static SparseFileManager *ms_singleton;
+  static boost::scoped_ptr<SparseFileManager> ms_singleton;
 
   //! Adds the newly loaded block to the cache, managed by the paging algorithm
   void addBlockToCache(DataTypeEnum blockType, int fileId, int blockIdx);

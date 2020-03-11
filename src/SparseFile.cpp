@@ -57,7 +57,7 @@ FIELD3D_NAMESPACE_OPEN
 // Static instances
 //----------------------------------------------------------------------------//
 
-SparseFileManager *SparseFileManager::ms_singleton = 0;
+boost::scoped_ptr<SparseFileManager> SparseFileManager::ms_singleton;
 
 //----------------------------------------------------------------------------//
 // SparseFileManager
@@ -65,8 +65,8 @@ SparseFileManager *SparseFileManager::ms_singleton = 0;
 
 SparseFileManager & SparseFileManager::singleton()
 { 
-  if (!ms_singleton) {
-    ms_singleton = new SparseFileManager;
+  if (ms_singleton.get() == NULL) {
+    ms_singleton.reset(new SparseFileManager);
   }
   return *ms_singleton;
 }

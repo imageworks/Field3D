@@ -221,13 +221,13 @@ public:
     size_t blockIdx;
     {
       boost::mutex::scoped_lock lock(m_state.compressMutex);
-      blockIdx = m_state.nextBlockToCompress;
+      blockIdx = m_state.nextBlockToCompress++;
       // Step counter to next
       while (m_state.nextBlockToCompress < m_state.numBlocks) {
-        m_state.nextBlockToCompress++;
         if (m_state.blocks[m_state.nextBlockToCompress].isAllocated) {
           break;
         }
+        m_state.nextBlockToCompress++;
       }
     }
     // Loop over blocks until we run out
@@ -261,24 +261,25 @@ public:
         // Do the writing
         m_state.data.addData(cmpLen, &m_cache[0]);
         // Let next block write
+        m_state.nextBlockToWrite++;
         while (m_state.nextBlockToWrite < m_state.numBlocks){
           // Increment to next
-          m_state.nextBlockToWrite++;
           if (m_state.blocks[m_state.nextBlockToWrite].isAllocated) {
             break;
           }
+          m_state.nextBlockToWrite++;
         }
       }
       // Get next block idx
       {
         boost::mutex::scoped_lock lock(m_state.compressMutex);
-        blockIdx = m_state.nextBlockToCompress;
+        blockIdx = m_state.nextBlockToCompress++;
         // Step counter to next
         while (m_state.nextBlockToCompress < m_state.numBlocks) {
-          m_state.nextBlockToCompress++;
           if (m_state.blocks[m_state.nextBlockToCompress].isAllocated) {
             break;
           }
+          m_state.nextBlockToCompress++;
         }
       }
     }

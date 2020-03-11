@@ -37,8 +37,8 @@
 #  ILMBASE_FOUND - true if ILMBASE was found on the system
 #  ILMBASE_LIBRARY_DIRS - the full set of library directories
 
-FIND_PATH ( Ilmbase_Base_Dir include/OpenEXR/IlmBaseConfig.h
-  ENV ILMBASE_ROOT
+FIND_PATH ( Ilmbase_Base_Dir NAMES include/OpenEXR/IlmBaseConfig.h
+  PATHS ${ILMBASE_ROOT}
   )
 
 IF ( Ilmbase_Base_Dir )
@@ -47,7 +47,7 @@ IF ( Ilmbase_Base_Dir )
     ${Ilmbase_Base_Dir}/include
     ${Ilmbase_Base_Dir}/include/OpenEXR
     CACHE STRING "ILMBase include directories")
-  SET ( ILMBASE_LIBRARY_DIRS ${Ilmbase_Base_Dir}/lib
+  SET ( ILMBASE_LIBRARY_DIRS ${Ilmbase_Base_Dir}/lib64
     CACHE STRING "ILMBase library directories")
   SET ( ILMBASE_FOUND TRUE )
 

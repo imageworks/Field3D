@@ -259,13 +259,13 @@ def addField3DInstall(env, pathToRoot):
 # ------------------------------------------------------------------------------
 
 def numCPUs():
-    if os.sysconf_names.has_key("SC_NPROCESSORS_ONLN"):
+    if "SC_NPROCESSORS_ONLN" in os.sysconf_names:
         nCPUs = os.sysconf("SC_NPROCESSORS_ONLN")
         if isinstance(nCPUs, int) and nCPUs > 0:
             return nCPUs
     else: 
         return int(os.popen2("sysctl -n hw.ncpu")[1].read())
-    if os.environ.has_key("NUMBER_OF_PROCESSORS"):
+    if "NUMBER_OF_PROCESSORS" in os.environ:
          nCPUs = int(os.environ["NUMBER_OF_PROCESSORS"]);
          if nCPUs > 0:
              return nCPUs
@@ -282,14 +282,14 @@ def setDylibInternalPath(target, source, env):
     cmd = "install_name_tool "
     cmd += "-id " + os.path.abspath(tgtName) + "  "
     cmd += tgtName
-    print cmd
+    print(cmd)
     os.system(cmd)
 
 # ------------------------------------------------------------------------------
 
 def bakeMathLibHeader(target, source, env):
     if len(target) != 1 or len(source) != 1:
-        print "Wrong number of arguments to bakeTypesIncludeFile"
+        print("Wrong number of arguments to bakeTypesIncludeFile")
         return
     out = open(str(target[0]), "w")
     inFile = open(str(source[0]))
